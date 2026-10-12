@@ -1,0 +1,41 @@
+{
+  "hop": "baseline",
+  "discourse_version": "3.4.0.beta4-dev",
+  "branch": "safety-net/baseline",
+  "commit": "bcdda72bd8",
+  "ran_at": "2026-10-12T19:19:36.418Z",
+  "verdict": "pass",
+  "layer_a": {
+    "examples": 26,
+    "failures": 0,
+    "failed": []
+  },
+  "layer_b": {
+    "passed": 106,
+    "failed": 0,
+    "unverified": 0,
+    "skipped": 0,
+    "changed_vs_baseline": [],
+    "failed_checks": []
+  },
+  "layer_c": {
+    "passed": 18,
+    "total": 30,
+    "failed": [
+      "TC004 - Open registration form",
+      "TC008 - Reject duplicate email",
+      "TC023 - Posts search and group filter",
+      "TC024 - Posts feed filtered by group",
+      "TC026 - Post card metadata and actions",
+      "TC028 - Posts search results",
+      "TC032 - Select group filters feed",
+      "TC033 - Group filter excludes inaccessible groups",
+      "TC042 - Published post appears in target group",
+      "TC047 - Open full post detail",
+      "TC048 - Prepare post reply",
+      "TC100 - Logout blocks protected screens"
+    ],
+    "regressions": [],
+    "compared_with_baseline": true
+  }
+}
