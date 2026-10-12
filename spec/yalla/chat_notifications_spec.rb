@@ -1,0 +1,161 @@
+# frozen_string_literal: true
+
+# Yalla safety net: chat notifications.
+#
+# These tests pin down how chat notifications behave on production today
+# (tag baseline/prod-3.4.0.beta4-dev). They must pass unchanged after every
+# upgrade hop. If one fails after a hop, a behaviour the app relies on changed.
+#
+# Run with: LOAD_PLUGINS=1 bin/rspec spec/yalla
+RSpec.describe "Yalla safety net: chat notifications", type: :request do
+  fab!(:sender) { Fabricate(:user) }
+  fab!(:member) { Fabricate(:user) }
+  fab!(:channel) { Fabricate(:category_channel) }
+
+  before do
+    SiteSetting.chat_enabled = true
+    SiteSetting.chat_allowed_groups = Group::AUTO_GROUPS[:everyone]
+  end
+
+  def join(user, **attrs)
+    Fabricate(:user_chat_channel_membership, user: user, chat_channel: channel, **attrs)
+  end
+
+  def run_watching_job(message, mentioned_user_ids: [])
+    Jobs::Chat::NotifyWatching.new.execute(
+      chat_message_id: message.id,
+      mentioned_user_ids: mentioned_user_ids,
+    )
+  end
+
+  def chat_notifications_for(user)
+    Notification.where(user: user, notification_type: Notification.types[:chat_message])
+  end
+
+  describe "new channel memberships" do
+    it "default to notifying always, on desktop and on mobile" do
+      membership = Chat::UserChatChannelMembership.new
+
+      expect(membership.desktop_notification_level).to eq("always")
+      expect(membership.mobile_notification_level).to eq("always")
+    end
+  end
+
+  describe "a message in a channel the member watches" do
+    before { join(sender) }
+
+    let!(:membership) do
+      join(member, notification_level: :always, mobile_notification_level: :always)
+    end
+    let!(:message) { Fabricate(:chat_message, chat_channel: channel, user: sender) }
+
+    it "creates a chat_message notification record for the member" do
+      expect { run_watching_job(message) }.to change { chat_notifications_for(member).count }.by(1)
+
+      data = JSON.parse(chat_notifications_for(member).last.data)
+      expect(data).to include(
+        "chat_message_id" => message.id,
+        "chat_channel_id" => channel.id,
+        "sender" => sender.username,
+        "message" => message.message,
+        "is_direct_message_channel" => false,
+      )
+    end
+
+    # The Lexicon plugin listens to this event to send chat push notifications
+    # (discourse-lexicon-plugin/plugin.rb). If it stops firing, chat pushes stop
+    # silently.
+    it "fires :created_chat_notification for the Lexicon plugin" do
+      events = DiscourseEvent.track_events(:created_chat_notification) { run_watching_job(message) }
+
+      expect(events.size).to eq(1)
+      payload, user_id, notification_type = events.first[:params]
+      expect(user_id).to eq(member.id)
+      expect(notification_type).to eq(Notification.types[:chat_message])
+      expect(payload).to include(chat_message_id: message.id, sender: sender.username)
+    end
+  end
+
+  describe "a member who turned mobile notifications off" do
+    before { join(sender) }
+
+    let!(:membership) do
+      join(member, notification_level: :always, mobile_notification_level: :never)
+    end
+    let!(:message) { Fabricate(:chat_message, chat_channel: channel, user: sender) }
+
+    it "gets no notification and no Lexicon event" do
+      events = DiscourseEvent.track_events(:created_chat_notification) { run_watching_job(message) }
+
+      expect(chat_notifications_for(member).count).to eq(0)
+      expect(events).to be_empty
+    end
+  end
+
+  describe "messages sent before the member joined" do
+    before { join(sender) }
+
+    it "are not counted as unread" do
+      Fabricate(:chat_message, chat_channel: channel, user: sender, created_at: 1.hour.ago)
+      join(member)
+
+      unread = Chat::ChannelUnreadsQuery.call(channel_ids: [channel.id], user_id: member.id).first
+      expect(unread.unread_count).to eq(0)
+    end
+
+    it "does count messages sent after joining" do
+      join(member, created_at: 1.hour.ago)
+      Fabricate(:chat_message, chat_channel: channel, user: sender)
+
+      unread = Chat::ChannelUnreadsQuery.call(channel_ids: [channel.id], user_id: member.id).first
+      expect(unread.unread_count).to eq(1)
+    end
+  end
+
+  describe "chat serializers the app reads" do
+    it "includes admin on chatable users" do
+      admin = Fabricate(:admin)
+      json =
+        Chat::ChatableUserSerializer.new(admin, scope: Guardian.new(member), root: false).as_json
+
+      expect(json[:admin]).to eq(true)
+    end
+
+    it "includes ignored_usernames on the user serializer" do
+      ignored = Fabricate(:user)
+      Fabricate(:ignored_user, user: member, ignored_user: ignored)
+
+      json = UserSerializer.new(member, scope: Guardian.new(member), root: false).as_json
+      expect(json[:ignored_usernames]).to contain_exactly(ignored.username)
+    end
+
+    # Prose (availableUsersQuery.ts) reads groups[].users[].model with no guard:
+    # if `users` disappears, the "new chat" screen breaks.
+    it "includes each group's users, with admin, in /chat/api/chatables" do
+      SiteSetting.direct_message_enabled_groups = Group::AUTO_GROUPS[:everyone]
+      group = Fabricate(:public_group, name: "peer_mentors")
+      admin = Fabricate(:admin)
+      group.add(admin)
+      group.add(member)
+      sign_in(member)
+
+      get "/chat/api/chatables.json", params: { term: "peer_mentors" }
+
+      expect(response.status).to eq(200)
+      json_group = response.parsed_body["groups"].find { |g| g["model"]["name"] == "peer_mentors" }
+      expect(json_group["users"].map { |u| u["identifier"] }).to include(
+        "u-#{admin.id}",
+        "u-#{member.id}",
+      )
+      json_admin = json_group["users"].find { |u| u["identifier"] == "u-#{admin.id}" }
+      expect(json_admin["type"]).to eq("user")
+      expect(json_admin["model"]).to include("username" => admin.username, "admin" => true)
+    end
+
+    it "says you cannot chat with yourself on your own user card" do
+      json = UserCardSerializer.new(member, scope: Guardian.new(member), root: false).as_json
+
+      expect(json[:can_chat_user]).to eq(false)
+    end
+  end
+end

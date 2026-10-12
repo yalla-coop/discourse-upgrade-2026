@@ -90,3 +90,7 @@ openapi/*
 
 # direnv.net
 .direnv
+
+# Contract check credentials (never commit)
+/contract/.local/
+/contract/reports/last-run.json
