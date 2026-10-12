@@ -1,0 +1,962 @@
+{
+  "label": "baseline",
+  "env": "docker",
+  "writes": true,
+  "ran_at": "2026-10-12T17:16:57.547Z",
+  "results": [
+    {
+      "id": 1,
+      "area": "Auth",
+      "name": "CSRF token",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 2,
+      "area": "Auth",
+      "name": "Log in",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 3,
+      "area": "Auth",
+      "name": "Honeypot challenge, old path (gone, Prose falls back)",
+      "result": "PASS",
+      "status": 404,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 4,
+      "area": "Auth",
+      "name": "Honeypot challenge, new path",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 5,
+      "area": "Auth",
+      "name": "Current session (token refresh)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 13,
+      "area": "Auth",
+      "name": "Check username is available",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 7,
+      "area": "Auth",
+      "name": "Forgot password (sends an email)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 8,
+      "area": "Auth",
+      "name": "Register a new account (with honeypot)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 15,
+      "area": "Users",
+      "name": "Own profile (UserDetail)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 15,
+      "area": "Users",
+      "name": "Own profile: unread notifications lookup",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 15,
+      "area": "Users",
+      "name": "Another member's profile (UserLite)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 16,
+      "area": "Users",
+      "name": "Edit profile (writes back the current values)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 23,
+      "area": "Users",
+      "name": "Set user status",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 25,
+      "area": "Users",
+      "name": "Ignore another member",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 15,
+      "area": "Users",
+      "name": "Own profile shows the status and the ignored member",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 25,
+      "area": "Users",
+      "name": "Stop ignoring the other member (cleanup)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 24,
+      "area": "Users",
+      "name": "Clear user status (cleanup)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 26,
+      "area": "Users",
+      "name": "Search users",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 26,
+      "area": "Users",
+      "name": "Search users finds messageable groups",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 27,
+      "area": "Users",
+      "name": "User activity",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 28,
+      "area": "Users",
+      "name": "All badges",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 29,
+      "area": "Users",
+      "name": "Single badge",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 34,
+      "area": "Topics",
+      "name": "Latest topic list",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 34,
+      "area": "Topics",
+      "name": "Top topic list",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 34,
+      "area": "Topics",
+      "name": "Top topic list with a period (old URL, redirect)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 34,
+      "area": "Topics",
+      "name": "Category topic list",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 34,
+      "area": "Topics",
+      "name": "Tag topic list",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 34,
+      "area": "Topics",
+      "name": "Category + tag topic list",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 35,
+      "area": "Topics",
+      "name": "Topic detail",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 36,
+      "area": "Topics",
+      "name": "Topic detail from a post number",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 37,
+      "area": "Topics",
+      "name": "Topic posts by id (topicDetail with postIds)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 37,
+      "area": "Topics",
+      "name": "Topic posts (pinnedPosts)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 42,
+      "area": "Topics",
+      "name": "Private messages inbox",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 43,
+      "area": "Topics",
+      "name": "Private messages sent",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 41,
+      "area": "Topics",
+      "name": "Post read timings",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 44,
+      "area": "Posts",
+      "name": "Single post (first post, with poll and link)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 44,
+      "area": "Posts",
+      "name": "Single post (reply by another member)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 47,
+      "area": "Posts",
+      "name": "Post raw",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 48,
+      "area": "Posts",
+      "name": "Post cooked",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 49,
+      "area": "Posts",
+      "name": "Replies to a post",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 50,
+      "area": "Posts",
+      "name": "Post reply history (replyingTo)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 46,
+      "area": "Posts",
+      "name": "Create a topic (newTopic)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 38,
+      "area": "Posts",
+      "name": "Edit topic title",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 45,
+      "area": "Posts",
+      "name": "Edit post",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 39,
+      "area": "Posts",
+      "name": "Delete the topic created above",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 46,
+      "area": "Posts",
+      "name": "Reply to a topic",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 51,
+      "area": "Posts",
+      "name": "Post action (like type, same response as a flag)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 52,
+      "area": "Posts",
+      "name": "Bookmark a post the way Prose sends it (post_id only)",
+      "result": "PASS",
+      "status": 400,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 52,
+      "area": "Posts",
+      "name": "Bookmark a post (bookmarkable_id + type)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 53,
+      "area": "Posts",
+      "name": "Delete the bookmark",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 46,
+      "area": "Posts",
+      "name": "Create a private message (newPrivateMessage)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 40,
+      "area": "Posts",
+      "name": "Leave a private message",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 56,
+      "area": "Polls & reactions",
+      "name": "Close a poll",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 56,
+      "area": "Polls & reactions",
+      "name": "Reopen the poll",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 54,
+      "area": "Polls & reactions",
+      "name": "Vote in a poll",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 55,
+      "area": "Polls & reactions",
+      "name": "Remove the poll vote",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 57,
+      "area": "Polls & reactions",
+      "name": "Toggle a reaction on (heart)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 58,
+      "area": "Polls & reactions",
+      "name": "Users who reacted to a post",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 57,
+      "area": "Polls & reactions",
+      "name": "Toggle the reaction off again",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 59,
+      "area": "Search, categories & site",
+      "name": "Search",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 60,
+      "area": "Search, categories & site",
+      "name": "Tag search",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 61,
+      "area": "Search, categories & site",
+      "name": "Category list with subcategories",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 62,
+      "area": "Search, categories & site",
+      "name": "Show category (member)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 62,
+      "area": "Search, categories & site",
+      "name": "Show private category (admin, group_permissions)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 63,
+      "area": "Search, categories & site",
+      "name": "Site",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 64,
+      "area": "Search, categories & site",
+      "name": "Site settings (client)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 65,
+      "area": "Search, categories & site",
+      "name": "About stats",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 66,
+      "area": "Search, categories & site",
+      "name": "Root URL answers with x-discourse headers",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 30,
+      "area": "Notifications",
+      "name": "Notifications list",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 31,
+      "area": "Notifications",
+      "name": "Mark a notification read",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": "prep-32",
+      "area": "Notifications",
+      "name": "Read the topic's current notification level",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 32,
+      "area": "Notifications",
+      "name": "Set topic notification level (unchanged)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": "prep-33",
+      "area": "Notifications",
+      "name": "Read the category's current notification level",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 33,
+      "area": "Notifications",
+      "name": "Set category notification level (unchanged)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 71,
+      "area": "Chat",
+      "name": "My chat channels",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 72,
+      "area": "Chat",
+      "name": "Chatables (users available for direct messages)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 75,
+      "area": "Chat",
+      "name": "Open the direct message with the other member",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 81,
+      "area": "Chat",
+      "name": "Send a chat message (old-style route)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 76,
+      "area": "Chat",
+      "name": "Edit a chat message",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 82,
+      "area": "Chat",
+      "name": "React to a chat message (old-style route)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 73,
+      "area": "Chat",
+      "name": "Chat messages, latest page (direct message)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 73,
+      "area": "Chat",
+      "name": "Chat messages around a target message (category channel)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 74,
+      "area": "Chat",
+      "name": "Channel memberships",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 82,
+      "area": "Chat",
+      "name": "Remove the reaction (cleanup)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 77,
+      "area": "Chat",
+      "name": "Mark chat messages read",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 79,
+      "area": "Chat",
+      "name": "Chat notification level (writes the current level back)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 81,
+      "area": "Chat",
+      "name": "Other member sends a message to flag (setup)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 78,
+      "area": "Chat",
+      "name": "Flag a chat message",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": "cleanup-78",
+      "area": "Chat",
+      "name": "Delete the flagged test message (cleanup, not a Prose call)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": "cleanup-81",
+      "area": "Chat",
+      "name": "Delete the sent test message (cleanup, not a Prose call)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 69,
+      "area": "Uploads",
+      "name": "Upload an image (avatar type, as the profile screen does)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 70,
+      "area": "Uploads",
+      "name": "Look up upload URLs",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 18,
+      "area": "Uploads",
+      "name": "Pick the uploaded avatar",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": "cleanup-18",
+      "area": "Uploads",
+      "name": "Reset the avatar to the system avatar (cleanup, same endpoint)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 83,
+      "area": "Lexicon push",
+      "name": "Token-removal endpoint check (route absent in the plugin)",
+      "result": "PASS",
+      "status": 404,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 86,
+      "area": "Lexicon push",
+      "name": "Subscribe a push token",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 85,
+      "area": "Lexicon push",
+      "name": "Unsubscribe the push token (cleanup, as logout does)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 87,
+      "area": "Lexicon push",
+      "name": "Admin push (route absent in the plugin)",
+      "result": "PASS",
+      "status": 404,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 67,
+      "area": "Admin",
+      "name": "Groups list",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 88,
+      "area": "Admin",
+      "name": "Admin user detail",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 89,
+      "area": "Admin",
+      "name": "Active users filtered by email",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 90,
+      "area": "Admin",
+      "name": "New users filtered by email",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 91,
+      "area": "Admin",
+      "name": "Admin site settings",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 93,
+      "area": "Admin",
+      "name": "Member's email (group welcome email)",
+      "result": "PASS",
+      "status": 200,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 6,
+      "area": "Logout",
+      "name": "Log out",
+      "result": "PASS",
+      "status": 404,
+      "problems": [],
+      "unverified": []
+    },
+    {
+      "id": 6,
+      "area": "Logout",
+      "name": "Session is gone after logout",
+      "result": "PASS",
+      "status": 404,
+      "problems": [],
+      "unverified": []
+    }
+  ]
+}

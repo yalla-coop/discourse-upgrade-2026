@@ -1,0 +1,22 @@
+{
+  "hop": "baseline",
+  "discourse_version": "3.4.0.beta4-dev",
+  "branch": "safety-net/baseline",
+  "commit": "eeb36c20e3",
+  "ran_at": "2026-10-12T18:40:16.954Z",
+  "verdict": "pass",
+  "layer_a": {
+    "examples": 26,
+    "failures": 0,
+    "failed": []
+  },
+  "layer_b": {
+    "passed": 106,
+    "failed": 0,
+    "unverified": 0,
+    "skipped": 0,
+    "changed_vs_baseline": [],
+    "failed_checks": []
+  },
+  "layer_c": null
+}
