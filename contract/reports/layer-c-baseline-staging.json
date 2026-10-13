@@ -40,5 +40,7 @@
   },
   "flaky": {
     "TC003 - Review legal links": "failed once waiting for the button after returning from the browser; passed in 4 other runs, including 2 standalone re-runs"
-  }
+  },
+  "app_branch": "codex/high-priority-staging-tests",
+  "app_commit": "8482d824f7"
 }

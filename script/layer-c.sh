@@ -17,7 +17,9 @@
 # empty SendGrid / Sentry / staging keys, so nothing real is contacted.
 #
 # CONTAINER picks the hop container (default ft-baseline). APP_REPO defaults to
-# ~/yalla/forward-trust-community-mobile-app.
+# ~/yalla/forward-trust-community-mobile-app. The script never switches its
+# branch: it tests whatever is checked out, and records the app branch and
+# commit with every run, so results from different app versions are flagged.
 #
 # DATA picks which Discourse data the flows run on:
 #   DATA=seed     (default) the small contract seed; uses contract/.local/docker.json
@@ -61,7 +63,7 @@ start_prose() {
   local admin_user
   key="$(node -e 'console.log(require(process.argv[1]).admin.api_key)' "$KEY_FILE")"
   admin_user="$(node -e 'console.log(require(process.argv[1]).admin.username)' "$KEY_FILE")"
-  pkill -f "forward-trust-community-mobile-app/api.*src/index.ts" >/dev/null 2>&1
+  pkill -f "$APP_REPO/api.*src/index.ts" >/dev/null 2>&1
   (
     cd "$APP_REPO/api" || exit 1
     PROSE_DISCOURSE_HOST="http://localhost:3000" \
@@ -221,6 +223,7 @@ needs_build() {
 
 run_flows() {
   local build_flag="" log="$LOGS/maestro-last.log"
+  echo "Testing the app as checked out: $(git -C "$APP_REPO" rev-parse --abbrev-ref HEAD) @ $(git -C "$APP_REPO" rev-parse --short HEAD)"
   if needs_build; then
     build_flag="--build"
     say "Building the Android app for the local Prose (one time, about 10-20 minutes)"
@@ -233,6 +236,12 @@ run_flows() {
     echo "$(git -C "$APP_REPO" rev-parse HEAD) http://localhost:$PROSE_PORT" > "$LOGS/android-build.stamp"
   fi
   node "$REPO/contract/maestro-summary.mjs" "$log" "$LOGS/layer-c-last.json"
+  # Record which app version the flows tested.
+  node -e '
+    const fs = require("fs"); const [file, branch, commit] = process.argv.slice(1);
+    const c = JSON.parse(fs.readFileSync(file, "utf8")); c.app_branch = branch; c.app_commit = commit;
+    fs.writeFileSync(file, JSON.stringify(c, null, 2));
+  ' "$LOGS/layer-c-last.json" "$(git -C "$APP_REPO" rev-parse --abbrev-ref HEAD)" "$(git -C "$APP_REPO" rev-parse --short HEAD)"
   return "$status"
 }
 
@@ -249,7 +258,7 @@ run_all() {
 }
 
 stop_all() {
-  pkill -f "forward-trust-community-mobile-app/api.*src/index.ts" >/dev/null 2>&1
+  pkill -f "$APP_REPO/api.*src/index.ts" >/dev/null 2>&1
   docker rm -f "$PROXY" >/dev/null 2>&1
   echo "Stopped Prose and the port forward (the emulator keeps running for the next run)."
 }

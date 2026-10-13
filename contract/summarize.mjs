@@ -81,10 +81,15 @@ async function layerC() {
   const flaky = Object.keys(baseline?.flaky || {});
   const newlyFailing = baseline ? (baseline.passed_flows || []).filter((name) => c.failed.includes(name)) : [];
   const regressions = newlyFailing.filter((name) => !flaky.includes(name));
+  const appChanged = Boolean(baseline?.app_commit && c.app_commit && baseline.app_commit !== c.app_commit);
   return {
     passed: c.passed,
     total: c.total,
     failed: c.failed,
+    app_branch: c.app_branch,
+    app_commit: c.app_commit,
+    app_changed_since_baseline: appChanged,
+    baseline_app: baseline?.app_commit ? `${baseline.app_branch} @ ${baseline.app_commit}` : null,
     regressions,
     flaky_failed: newlyFailing.filter((name) => flaky.includes(name)),
     compared_with_baseline: Boolean(baseline),
@@ -124,6 +129,11 @@ if (c) {
           (c.regressions.length ? `, newly failing: ${c.regressions.join(", ")}` : "") +
           (c.compared_with_baseline ? "" : " (no Layer C baseline yet)"),
   );
+  if (c.app_changed_since_baseline) {
+    console.log(
+      `  WARNING: the app tested (${c.app_branch} @ ${c.app_commit}) is not the app the Layer C baseline used (${c.baseline_app}). Differences may come from the app, not the upgrade.`,
+    );
+  }
 }
 console.log(`Run recorded: results/runs/${path.basename(file)}  (verdict: ${verdict.toUpperCase()})`);
 process.exitCode = verdict === "pass" ? 0 : 1;
