@@ -4,7 +4,7 @@
 
 Setup: core reset to stock upstream cfa281a697 (`git diff --stat cfa281a697 -- app lib config db plugins/chat ':!lib/tasks/fix_notification_levels.rake'` prints nothing), the empty plugin skeleton installed, container `ft-plugin-baseline`, hop `plugin-baseline`.
 
-Layer A: 30 examples, 24 failures. The 6 that pass on stock: plugin loads, "does count messages sent after joining", "includes ignored_usernames on the user serializer" (stock sends it on your own profile), "says you cannot chat with yourself", `/c/{id}/show.json` is included for admins only, "does not email the owner when a user resets their password". The failing list below is the to-do list for Tasks 3-8.
+Layer A: 31 examples, 23 failures. The 6 that pass on stock: plugin loads, "does count messages sent after joining", "includes ignored_usernames on the user serializer" (stock sends it on your own profile), "says you cannot chat with yourself", `/c/{id}/show.json` is included for admins only, "does not email the owner when a user resets their password". The failing list below is the to-do list for Tasks 3-8.
 
 Failing Layer A tests (spec/yalla):
 
@@ -33,16 +33,8 @@ Failing Layer A tests (spec/yalla):
   - messages sent before the member joined are not counted as unread (:130)
   - chat serializers: includes admin on chatable users (:148)
   - chat serializers: includes each group's users, with admin, in /chat/api/chatables (:166)
-- rate_limits_spec.rb
-  - keeps the per-IP and API limits high enough for Prose (:11)
 
-Rate limit test on stock core: it FAILS (got 20, expected 1000000). The env file
-`deploy/forward-trust.env` does not help here, because in the test environment
-Discourse uses `BlankProvider` (app/models/global_setting.rb), which ignores
-DISCOURSE_* environment variables and reads only `config/discourse_defaults.conf`.
-The env file does reach the server used by Layer B (non-test environment). So the
-rate limit spec cannot pass on stock core as written; it needs reworking (see
-concerns in the Task 2 report).
+Rate limit spec: it checks `deploy/forward-trust.env` (the test environment ignores DISCOURSE_* env vars), so both its examples pass on stock core. An earlier version asserted GlobalSetting values and could not pass.
 
 Layer B: 95 passed, 11 failed. Checks that changed from the baseline (PASS -> FAIL):
 
