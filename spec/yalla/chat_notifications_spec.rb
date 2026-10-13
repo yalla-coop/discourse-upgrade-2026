@@ -135,6 +135,21 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
       expect(unread.unread_count).to eq(0)
     end
 
+    it "are not counted as unread when the member is auto-joined in bulk" do
+      channel.update!(auto_join_users: true)
+      member.update!(last_seen_at: 1.hour.ago)
+      member.user_option.update!(chat_enabled: true)
+      Fabricate(:chat_message, chat_channel: channel, user: sender, created_at: 1.hour.ago)
+
+      Chat::AutoJoinChannels.call(params: { user_id: member.id, channel_id: channel.id })
+
+      expect(Chat::UserChatChannelMembership.exists?(user: member, chat_channel: channel)).to eq(
+        true,
+      )
+      unread = Chat::ChannelUnreadsQuery.call(channel_ids: [channel.id], user_id: member.id).first
+      expect(unread.unread_count).to eq(0)
+    end
+
     it "does count messages sent after joining" do
       join(member, created_at: 1.hour.ago)
       Fabricate(:chat_message, chat_channel: channel, user: sender)
