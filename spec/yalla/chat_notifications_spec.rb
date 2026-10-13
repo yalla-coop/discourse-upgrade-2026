@@ -81,6 +81,15 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
       expect(notification_type).to eq(Notification.types[:chat_message])
       expect(payload).to include(chat_message_id: message.id, sender: sender.username)
     end
+
+    it "creates exactly one notification and one event per member" do
+      events = lexicon_events_for(member) { notify_new(message) }
+
+      expect(
+        chat_notifications_for(member).where("data::json->>'chat_message_id' = ?", message.id.to_s).count,
+      ).to eq(1)
+      expect(events.size).to eq(1)
+    end
   end
 
   describe "a member who turned mobile notifications off" do
@@ -156,6 +165,50 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
 
       unread = Chat::ChannelUnreadsQuery.call(channel_ids: [channel.id], user_id: member.id).first
       expect(unread.unread_count).to eq(1)
+    end
+  end
+
+  describe "existing memberships when the plugin is installed" do
+    before { join(sender) }
+
+    # Production has memberships whose pre-join messages were hidden by edited
+    # SQL. With stock SQL they would suddenly count as unread, so the plugin's
+    # one-time migration marks them read.
+    it "backfill marks pre-join messages read for existing memberships" do
+      Fabricate(:chat_message, chat_channel: channel, user: sender, created_at: 2.hours.ago)
+      membership = join(member, created_at: 1.hour.ago)
+      membership.update_column(:last_read_message_id, nil)
+      Fabricate(:chat_message, chat_channel: channel, user: sender)
+
+      DiscourseForwardTrust::ChatMessageNotifications.backfill_last_read!
+
+      unread = Chat::ChannelUnreadsQuery.call(channel_ids: [channel.id], user_id: member.id).first
+      expect(unread.unread_count).to eq(1)
+    end
+  end
+
+  # Ruling R13: production's chat summary email query is broken, so it has never
+  # sent these emails. The plugin keeps that (setting off by default).
+  describe "chat summary emails for members who are away" do
+    before do
+      join(sender)
+      join(member, created_at: 1.hour.ago)
+      member.update!(last_seen_at: 1.hour.ago)
+      member.user_option.update!(
+        chat_enabled: true,
+        chat_email_frequency: UserOption.chat_email_frequencies[:when_away],
+        email_level: UserOption.email_level_types[:always],
+      )
+      message =
+        Fabricate(:chat_message, chat_channel: channel, user: sender, message: "hi @#{member.username}")
+      notify_new(message)
+      ActionMailer::Base.deliveries.clear
+    end
+
+    it "sends none by default, even with an unread mention" do
+      Chat::Mailer.send_unread_mentions_summary
+
+      expect(ActionMailer::Base.deliveries.map(&:to).flatten).not_to include(member.email)
     end
   end
 
