@@ -252,5 +252,27 @@ RSpec.describe "Yalla safety net: core changes", type: :request do
 
       expect(mails_to(owner.email)).to be_empty
     end
+
+    # Deliberate fix: production crashed account activation here
+    # (NoMethodError: undefined method 'downcase' for nil).
+    it "uses the group name when the group has no full name" do
+      group = group_with_owner(full_name: nil)
+
+      expect { confirm(:signup) }.not_to raise_error
+
+      mail = mails_to(owner.email).last
+      expect(mail.subject).to eq("New user registered to your group")
+      expect(mail.body.to_s).to include(group.name)
+    end
+
+    it "does not email owners on a later password reset after a failed signup confirmation" do
+      group_with_owner(full_name: "North London Holding")
+      EmailToken.confirm("not-a-real-token", scope: EmailToken.scopes[:signup])
+      new_user.update!(active: true)
+
+      confirm(:password_reset)
+
+      expect(mails_to(owner.email)).to be_empty
+    end
   end
 end
