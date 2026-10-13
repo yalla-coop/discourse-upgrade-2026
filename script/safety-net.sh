@@ -4,6 +4,10 @@
 #   script/safety-net.sh            Layer A tests + Layer B contract checks (about 2 minutes)
 #   script/safety-net.sh full       A + B + Layer C: the real Android app through Maestro
 #                                   (boots the emulator, builds the app only when needed)
+#   STAGING_BACKUP=<file.tar.gz> script/safety-net.sh full
+#                                   same, but Layer C runs on a fresh restore of that
+#                                   staging backup (recommended: the flows were written
+#                                   for staging data); the server switches back after
 #   script/safety-net.sh tests      Layer A only: tests for our 19 custom changes
 #   script/safety-net.sh contract   Layer B only: every Prose -> Discourse call
 #   script/safety-net.sh up         just start the container and the Discourse server
@@ -82,8 +86,19 @@ record() {
 }
 
 layer_c() {
-  say "Layer C: Maestro flows on the real Android app"
-  CONTAINER="$CONTAINER" "$REPO/script/layer-c.sh" run
+  if [ -n "${STAGING_BACKUP:-}" ]; then
+    say "Layer C: restoring the staging backup for the app flows"
+    CONTAINER="$CONTAINER" "$REPO/script/restore-staging.sh" "$STAGING_BACKUP"
+    say "Layer C: Maestro flows on the real Android app (staging data)"
+    CONTAINER="$CONTAINER" DATA=staging "$REPO/script/layer-c.sh" run
+    say "Switching the server back to the test database"
+    docker exec "$CONTAINER" bash -lc 'pkill -f unicorn; pkill -f sidekiq' >/dev/null 2>&1
+    sleep 3
+    up
+  else
+    say "Layer C: Maestro flows on the real Android app"
+    CONTAINER="$CONTAINER" "$REPO/script/layer-c.sh" run
+  fi
 }
 
 case "${1:-all}" in
@@ -118,9 +133,11 @@ case "${1:-all}" in
     say "Summary"
     [ $a -eq 0 ] && echo "  Layer A (our changes):    PASS" || echo "  Layer A (our changes):    FAIL"
     [ $b -eq 0 ] && echo "  Layer B (API contract):   PASS" || echo "  Layer B (API contract):   FAIL"
+    c_baseline="$REPO/contract/reports/layer-c-baseline.json"
+    [ -n "${STAGING_BACKUP:-}" ] && c_baseline="$REPO/contract/reports/layer-c-baseline-staging.json"
     record --maestro "$REPO/contract/.local/layer-c-last.json" \
-      --maestro-baseline "$REPO/contract/reports/layer-c-baseline.json"
+      --maestro-baseline "$c_baseline"
     exit $?
     ;;
-  *) sed -n 2,19p "$0"; exit 2 ;;
+  *) sed -n 2,23p "$0"; exit 2 ;;
 esac
