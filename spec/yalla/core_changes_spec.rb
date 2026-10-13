@@ -104,24 +104,32 @@ RSpec.describe "Yalla safety net: core changes", type: :request do
       expect(post.excerpt_for_topic).to include('href="https://example.com/guide"')
     end
 
-    it "keeps links even when a caller asks to strip them" do
-      excerpt =
-        PrettyText.excerpt(
-          '<p>See <a href="https://example.com/guide">the guide</a></p>',
-          100,
-          strip_links: true,
-        )
+    let(:link_html) { '<p>See <a href="https://example.com/guide">the guide</a></p>' }
+    let(:video_html) do
+      '<p>Watch this</p><div class="video-placeholder-container" data-video-src="/uploads/default/original/1X/clip.mp4"></div>'
+    end
+
+    it "ExcerptParser keeps links even when a caller asks to strip them" do
+      excerpt = ExcerptParser.get_excerpt(link_html, 100, { strip_links: true })
 
       expect(excerpt).to include('href="https://example.com/guide"')
     end
 
-    it "turns uploaded videos into a [Video](url) link" do
-      html =
-        '<p>Watch this</p><div class="video-placeholder-container" data-video-src="/uploads/default/original/1X/clip.mp4"></div>'
-
-      expect(PrettyText.excerpt(html, 200)).to include(
+    it "ExcerptParser turns uploaded videos into a [Video](url) link" do
+      expect(ExcerptParser.get_excerpt(video_html, 200, {})).to include(
         "[Video](/uploads/default/original/1X/clip.mp4)",
       )
+    end
+
+    # Production's PrettyText.excerpt comes from the Lexicon plugin, which only
+    # loads with eager loading (as in production). Tests above pin the
+    # ExcerptParser change carried by this plugin; these two pin Lexicon's override.
+    it "PrettyText excerpts are plain text (Lexicon's override in production)" do
+      expect(PrettyText.excerpt(link_html, 100, strip_links: true)).to eq("See the guide")
+    end
+
+    it "PrettyText describes an uploaded video as 'uploaded a video' (Lexicon)" do
+      expect(PrettyText.excerpt(video_html, 200)).to eq("uploaded a video")
     end
   end
 
