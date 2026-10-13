@@ -82,6 +82,14 @@ RSpec.describe "Yalla safety net: core changes", type: :request do
       json_category = response.parsed_body["categories"].find { |c| c["id"] == category.id }
       expect(json_category["group_permissions"]).to be_present
     end
+
+    it "is not added to webhook category payloads for a member who cannot edit the category" do
+      category = Fabricate(:category)
+
+      json = WebHookCategorySerializer.new(category, scope: Guardian.new(user), root: false).as_json
+
+      expect(json).not_to have_key(:group_permissions)
+    end
   end
 
   describe "post previews keep full HTML, links and images" do
