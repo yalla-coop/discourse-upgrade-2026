@@ -92,7 +92,7 @@ Decision key: **Keep** = carry forward with the same behaviour. **Rewrite** = be
 ### Not in git: `lib/tasks/fix_notification_levels.rake`
 
 - This sits untracked in the old working copy (`~/yalla/discourse`) and was never committed. It moves group categories from Watching to Watching First Post.
-- Commit it to the new repo so it isn't lost.
+- Commit it to the new repo so it isn't lost. Done: it now lives in the plugin, `plugins/discourse-forward-trust/lib/tasks/fix_notification_levels.rake` (Discourse loads plugin rake tasks).
 
 ## Recommendation: move custom code into one in-house plugin
 
