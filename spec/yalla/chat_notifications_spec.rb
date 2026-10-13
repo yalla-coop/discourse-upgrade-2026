@@ -189,5 +189,18 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
 
       expect(json[:can_chat_user]).to eq(false)
     end
+
+    it "says you cannot chat with yourself even when direct messages are allowed, but can chat with someone else" do
+      SiteSetting.direct_message_enabled_groups = Group::AUTO_GROUPS[:everyone]
+      guardian = Guardian.new(member)
+
+      [UserCardSerializer, HiddenProfileSerializer].each do |serializer|
+        own = serializer.new(member, scope: guardian, root: false).as_json
+        other = serializer.new(sender, scope: guardian, root: false).as_json
+
+        expect(own[:can_chat_user]).to eq(false), "#{serializer} for yourself"
+        expect(other[:can_chat_user]).to eq(true), "#{serializer} for someone else"
+      end
+    end
   end
 end
