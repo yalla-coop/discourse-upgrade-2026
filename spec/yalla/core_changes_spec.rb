@@ -154,6 +154,15 @@ RSpec.describe "Yalla safety net: core changes", type: :request do
       json = TopicListItemSerializer.new(topic, scope: Guardian.new(other), root: false).as_json
       expect(json[:flagged_by_user]).to eq(false)
     end
+
+    # Deliberate fix: production's ListableTopicSerializer called
+    # flagged_by_user?(nil) for logged-out viewers and raised. The plugin
+    # returns false instead.
+    it "is false for a logged-out viewer in search results" do
+      json = SearchTopicListItemSerializer.new(topic, scope: Guardian.new, root: false).as_json
+
+      expect(json[:flagged_by_user]).to eq(false)
+    end
   end
 
   describe "search results" do
