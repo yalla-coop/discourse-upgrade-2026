@@ -1,0 +1,44 @@
+{
+  "data": "restored staging backup yalla-community-2026-10-13-135532-v20250205104150.tar.gz (script/restore-staging.sh)",
+  "recorded": "2026-10-13",
+  "passed": 29,
+  "total": 30,
+  "passed_flows": [
+    "A-AUTH-01 - Member login",
+    "TC001 - App launch readiness",
+    "TC002 - Intro page",
+    "TC003 - Review legal links",
+    "TC004 - Open registration form",
+    "TC006 - Register terms disclaimer",
+    "TC007 - Invalid email format",
+    "TC008 - Reject duplicate email",
+    "TC022 - Post-approval home access",
+    "TC023 - Posts search and group filter",
+    "TC024 - Posts feed filtered by group",
+    "TC026 - Post card metadata and actions",
+    "TC027 - Bottom navigation",
+    "TC028 - Posts search results",
+    "TC029 - Posts search no results",
+    "TC031 - Group filter lists available groups",
+    "TC032 - Select group filters feed",
+    "TC033 - Group filter excludes inaccessible groups",
+    "TC034 - Open new post composer",
+    "TC036 - Change target group for new post",
+    "TC038 - Post can proceed without a tag",
+    "TC040 - Post requires a title",
+    "TC041 - Post description preview",
+    "TC042 - Published post appears in target group",
+    "TC047 - Open full post detail",
+    "TC048 - Prepare post reply",
+    "TC064 - Open Chat list",
+    "TC083 - Open Notifications list",
+    "TC099 - Logout clears session"
+  ],
+  "failed": [],
+  "not_run_locally": {
+    "TC100 - Logout blocks protected screens": "its helper script refuses to run unless the Discourse host contains 'staging' (deliberate safety guard)"
+  },
+  "flaky": {
+    "TC003 - Review legal links": "failed once waiting for the button after returning from the browser; passed in 4 other runs, including 2 standalone re-runs"
+  }
+}

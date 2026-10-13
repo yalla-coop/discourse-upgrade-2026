@@ -18,6 +18,13 @@
 #
 # CONTAINER picks the hop container (default ft-baseline). APP_REPO defaults to
 # ~/yalla/forward-trust-community-mobile-app.
+#
+# DATA picks which Discourse data the flows run on:
+#   DATA=seed     (default) the small contract seed; uses contract/.local/docker.json
+#                 and the contract_* test accounts
+#   DATA=staging  a restored staging backup (docs/upgrade/05-backup-restore.md);
+#                 uses contract/.local/staging-data.json and the accounts from the
+#                 app repo's staging.env, with PROSE_URL pointed at the LOCAL Prose
 set -uo pipefail
 
 CONTAINER="${CONTAINER:-ft-baseline}"
@@ -26,6 +33,12 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LOGS="$REPO/contract/.local"
 PROXY="ft-discourse-api"
 PROSE_PORT=8929
+DATA="${DATA:-seed}"
+case "$DATA" in
+  seed) KEY_FILE="$LOGS/docker.json"; MAESTRO_ENV="docker" ;;
+  staging) KEY_FILE="$LOGS/staging-data.json"; MAESTRO_ENV="docker-staging" ;;
+  *) echo "DATA must be seed or staging"; exit 2 ;;
+esac
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 export PATH="$PATH:$ANDROID_HOME/platform-tools:$HOME/.maestro/bin"
 ADB="$ANDROID_HOME/platform-tools/adb"
@@ -45,7 +58,9 @@ forward() {
 
 start_prose() {
   local key
-  key="$(node -e 'console.log(require(process.argv[1]).admin.api_key)' "$LOGS/docker.json")"
+  local admin_user
+  key="$(node -e 'console.log(require(process.argv[1]).admin.api_key)' "$KEY_FILE")"
+  admin_user="$(node -e 'console.log(require(process.argv[1]).admin.username)' "$KEY_FILE")"
   pkill -f "forward-trust-community-mobile-app/api.*src/index.ts" >/dev/null 2>&1
   (
     cd "$APP_REPO/api" || exit 1
@@ -55,7 +70,7 @@ start_prose() {
     SETTINGS_ADMIN_API_KEY="$key" \
     ADD_USERS_TO_GROUP_API_KEY="$key" \
     GET_USER_BY_ADMIN_API_KEY="$key" \
-    SETTINGS_API_USERNAME="contract_admin" \
+    SETTINGS_API_USERNAME="$admin_user" \
     STAGING_SETTINGS_ADMIN_API_KEY="" \
     STAGING_ADD_USERS_TO_GROUP_API_KEY="" \
     STAGING_GET_USER_BY_ADMIN_API_KEY="" \
@@ -81,11 +96,20 @@ start_prose() {
 }
 
 write_env() {
-  local file="$APP_REPO/.maestro/env/docker.env"
-  # Android emulators reach this Mac at 10.0.2.2.
-  cat > "$file" <<EOF
+  local file="$APP_REPO/.maestro/env/$MAESTRO_ENV.env"
+  if [ "$DATA" = staging ]; then
+    # Staging's test accounts exist in the restored copy with the same passwords.
+    # Only the Prose address changes, to the local Prose.
+    { echo "# Restored staging data on the local Docker copy (written by discourse-upgrade/script/layer-c.sh). Git-ignored."
+      grep -vE "^PROSE_URL=" "$APP_REPO/.maestro/env/staging.env"
+      echo "PROSE_URL=http://localhost:$PROSE_PORT"
+    } > "$file"
+  else
+    # localhost:8929 works for the app (adb reverse, see ensure_emulator) and for
+    # the flows' helper scripts, which call Prose from this Mac.
+    cat > "$file" <<EOF
 # Local Docker hop (written by discourse-upgrade/script/layer-c.sh). Git-ignored.
-PROSE_URL=http://10.0.2.2:$PROSE_PORT
+PROSE_URL=http://localhost:$PROSE_PORT
 E2E_EMAIL=contract_member@example.com
 E2E_EMAIL2=contract_member2@example.com
 E2E_EMAIL3=
@@ -95,7 +119,8 @@ E2E_ADMIN_EMAIL=contract_admin@example.com
 E2E_ADMIN_PASSWORD=contract-checks-2026!
 E2E_DUPLICATE_EMAIL=contract_member@example.com
 EOF
-  git -C "$APP_REPO" check-ignore -q "$file" && echo "Wrote .maestro/env/docker.env (git-ignored)" \
+  fi
+  git -C "$APP_REPO" check-ignore -q "$file" && echo "Wrote .maestro/env/$MAESTRO_ENV.env (git-ignored)" \
     || echo "WARNING: $file is not git-ignored. Do not commit it."
 }
 
@@ -146,7 +171,16 @@ EOF
 }
 
 
-booted_device() { "$ADB" devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1; exit }'; }
+# The emulator running our AVD (another emulator may be running too).
+booted_device() {
+  local serial
+  for serial in $("$ADB" devices | awk '$2 == "device" && $1 ~ /^emulator-/ { print $1 }'); do
+    if [ "$("$ADB" -s "$serial" emu avd name 2>/dev/null | tr -d '\r' | head -1)" = "$AVD" ]; then
+      echo "$serial"
+      return
+    fi
+  done
+}
 
 ensure_emulator() {
   local device
@@ -160,21 +194,27 @@ ensure_emulator() {
     "$ADB" wait-for-device
   fi
   for _ in $(seq 1 90); do
-    [ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break
+    device="$(booted_device)"
+    [ -n "$device" ] && [ "$("$ADB" -s "$device" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && break
     sleep 2
   done
   device="$(booted_device)"
   [ -n "$device" ] || { echo "The emulator did not boot. See contract/.local/emulator.log"; return 1; }
-  echo "Emulator ready: $device"
+  # The app and the flows' helper scripts both use http://localhost:8929. adb
+  # reverse makes the emulator's localhost:8929 lead to this Mac's.
+  "$ADB" -s "$device" reverse "tcp:$PROSE_PORT" "tcp:$PROSE_PORT" >/dev/null
+  # Pin Maestro (via run.sh) to this emulator, in case another one is running.
+  export E2E_DEVICE="$device"
+  echo "Emulator ready: $device (localhost:$PROSE_PORT forwarded to this Mac)"
 }
 
 needs_build() {
   # Rebuild when forced, when the app isn't installed, or when the app code or
   # the Prose address changed since the last local build.
   local stamp="$LOGS/android-build.stamp" want
-  want="$(git -C "$APP_REPO" rev-parse HEAD) http://10.0.2.2:$PROSE_PORT"
+  want="$(git -C "$APP_REPO" rev-parse HEAD) http://localhost:$PROSE_PORT"
   [ "${BUILD:-0}" = 1 ] && return 0
-  "$ADB" shell pm path "$APP_ID" >/dev/null 2>&1 || return 0
+  "$ADB" -s "$E2E_DEVICE" shell pm path "$APP_ID" >/dev/null 2>&1 || return 0
   [ "$(cat "$stamp" 2>/dev/null)" = "$want" ] || return 0
   return 1
 }
@@ -187,10 +227,10 @@ run_flows() {
   else
     say "Reusing the installed app build"
   fi
-  (cd "$APP_REPO" && .maestro/run.sh docker --platform android $build_flag) 2>&1 | tee "$log"
+  (cd "$APP_REPO" && .maestro/run.sh "$MAESTRO_ENV" --platform android $build_flag) 2>&1 | tee "$log"
   local status="${PIPESTATUS[0]}"
   if [ -n "$build_flag" ] && grep -qE "\[(Passed|Failed)\]" "$log"; then
-    echo "$(git -C "$APP_REPO" rev-parse HEAD) http://10.0.2.2:$PROSE_PORT" > "$LOGS/android-build.stamp"
+    echo "$(git -C "$APP_REPO" rev-parse HEAD) http://localhost:$PROSE_PORT" > "$LOGS/android-build.stamp"
   fi
   node "$REPO/contract/maestro-summary.mjs" "$log" "$LOGS/layer-c-last.json"
   return "$status"

@@ -77,12 +77,16 @@ async function layerC() {
     baseline = c;
     console.log(`Layer C baseline saved: ${path.relative(process.cwd(), args["maestro-baseline"])}`);
   }
-  const regressions = baseline ? (baseline.passed_flows || []).filter((name) => c.failed.includes(name)) : [];
+  // Flows the baseline marks flaky are reported, but don't fail the run.
+  const flaky = Object.keys(baseline?.flaky || {});
+  const newlyFailing = baseline ? (baseline.passed_flows || []).filter((name) => c.failed.includes(name)) : [];
+  const regressions = newlyFailing.filter((name) => !flaky.includes(name));
   return {
     passed: c.passed,
     total: c.total,
     failed: c.failed,
     regressions,
+    flaky_failed: newlyFailing.filter((name) => flaky.includes(name)),
     compared_with_baseline: Boolean(baseline),
   };
 }
