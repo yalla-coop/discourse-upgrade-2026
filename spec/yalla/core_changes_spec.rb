@@ -7,7 +7,9 @@
 # baseline/prod-3.4.0.beta4-dev). They must pass unchanged after every upgrade
 # hop. If one fails after a hop, a behaviour the app relies on changed.
 #
-# Run with: LOAD_PLUGINS=1 bin/rspec spec/yalla
+# Run with: LOAD_PLUGINS=1 CI=1 bin/rspec spec/yalla
+# CI=1 turns on Rails eager loading, as in production (script/safety-net.sh
+# sets it too). Some plugin load-order behaviour only shows with it.
 RSpec.describe "Yalla safety net: core changes", type: :request do
   fab!(:user)
 
