@@ -63,7 +63,7 @@ RSPEC_OUT="$(mktemp)"
 
 tests() {
   say "Layer A: tests for our 19 custom changes (spec/yalla)"
-  "${IN[@]}" bin/rspec spec/yalla 2>&1 | tee "$RSPEC_OUT"
+  "${IN[@]:0:2}" -e CI=1 "${IN[@]:2}" bin/rspec spec/yalla 2>&1 | tee "$RSPEC_OUT"
   return "${PIPESTATUS[0]}"
 }
 
