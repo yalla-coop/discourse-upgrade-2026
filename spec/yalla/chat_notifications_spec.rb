@@ -82,6 +82,22 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
       expect(payload).to include(chat_message_id: message.id, sender: sender.username)
     end
 
+    # Production waited 5 seconds so an active reader's client can advance
+    # last_read first; otherwise people get pushed messages they are reading.
+    # Plugin-specific (names the plugin's job), so it can't run on production code.
+    it "waits 5 seconds before deciding who to notify" do
+      freeze_time
+      Jobs.run_later!
+
+      expect_enqueued_with(
+        job: Jobs::DiscourseForwardTrust::ChatMessageNotifications,
+        args: {
+          chat_message_id: message.id,
+        },
+        at: Time.zone.now + 5.seconds,
+      ) { Chat::Notifier.new(message, message.created_at).notify_new }
+    end
+
     it "creates exactly one notification and one event per member" do
       events = lexicon_events_for(member) { notify_new(message) }
 
@@ -180,7 +196,11 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
       membership.update_column(:last_read_message_id, nil)
       Fabricate(:chat_message, chat_channel: channel, user: sender)
 
-      DiscourseForwardTrust::ChatMessageNotifications.backfill_last_read!
+      # Runs the migration's own SQL (it has already run on this database).
+      require Rails.root.join(
+                "plugins/discourse-forward-trust/db/migrate/20261013120001_forward_trust_backfill_chat_last_read",
+              )
+      ForwardTrustBackfillChatLastRead.new.up
 
       unread = Chat::ChannelUnreadsQuery.call(channel_ids: [channel.id], user_id: member.id).first
       expect(unread.unread_count).to eq(1)
