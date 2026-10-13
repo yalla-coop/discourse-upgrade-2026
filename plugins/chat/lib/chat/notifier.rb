@@ -29,9 +29,8 @@
 module Chat
   class Notifier
     class << self
-      def user_has_seen_message?(membership, chat_message_id, created_at)
-        (membership.last_read_message_id || 0) >= chat_message_id &&
-          membership.created_at <= created_at
+      def user_has_seen_message?(membership, chat_message_id)
+        (membership.last_read_message_id || 0) >= chat_message_id
       end
 
       def push_notification_tag(type, chat_channel_id)
@@ -76,7 +75,8 @@ module Chat
 
       notify_creator_of_inaccessible_mentions(inaccessible)
 
-      notify_watching_users(mentioned_users: all_mentioned_user_ids << @user.id)
+      notify_mentioned_users(to_notify)
+      notify_watching_users(except: all_mentioned_user_ids << @user.id)
 
       to_notify
     end
@@ -375,15 +375,11 @@ module Chat
       )
     end
 
-    def notify_watching_users(mentioned_users: [])
+    def notify_watching_users(except: [])
       Jobs.enqueue_in(
         5.seconds,
         Jobs::Chat::NotifyWatching,
-        {
-          chat_message_id: @chat_message.id,
-          mentioned_user_ids: mentioned_users,
-          timestamp: @timestamp.to_s,
-        },
+        { chat_message_id: @chat_message.id, except_user_ids: except, timestamp: @timestamp.to_s },
       )
     end
   end

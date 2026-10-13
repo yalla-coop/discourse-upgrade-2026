@@ -60,7 +60,7 @@ class UserProfile < ActiveRecord::Base
   end
 
   def bio_summary
-    bio_excerpt(500, strip_links: false, text_entities: true)
+    bio_excerpt(500, strip_links: true, text_entities: true)
   end
 
   def recook_bio

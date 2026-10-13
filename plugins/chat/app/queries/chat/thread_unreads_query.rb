@@ -50,7 +50,6 @@ module Chat
           AND chat_messages.user_id != :user_id
           AND user_chat_thread_memberships.user_id = :user_id
           AND chat_messages.id > COALESCE(user_chat_thread_memberships.last_read_message_id, 0)
-          AND chat_messages.created_at > user_chat_thread_memberships.created_at
           AND chat_messages.deleted_at IS NULL
           AND chat_messages.thread_id IS NOT NULL
           AND chat_messages.id != chat_threads.original_message_id

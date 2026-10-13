@@ -62,7 +62,6 @@ module Chat
         LEFT JOIN notifications n ON n.id = cmn.notification_id AND n.user_id = uccm.user_id
         WHERE NOT uccm.muted 
         AND (uccm.last_read_message_id IS NULL OR cm.first_unread_id > uccm.last_read_message_id)
-        AND chat_messages.created_at > uccm.created_at
         AND (uccm.last_unread_mention_when_emailed_id IS NULL OR cm.first_unread_id > uccm.last_unread_mention_when_emailed_id)
         AND (
             (cc.chatable_type = 'DirectMessage' AND eu.allow_private_messages) OR 

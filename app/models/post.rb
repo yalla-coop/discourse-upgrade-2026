@@ -530,8 +530,7 @@ class Post < ActiveRecord::Base
 
   def self.excerpt(cooked, maxlength = nil, options = {})
     maxlength ||= SiteSetting.post_excerpt_maxlength
-    # PrettyText.excerpt(cooked, maxlength, options)
-    cooked
+    PrettyText.excerpt(cooked, maxlength, options)
   end
 
   # Strip out most of the markup
@@ -543,8 +542,8 @@ class Post < ActiveRecord::Base
     Post.excerpt(
       cooked,
       SiteSetting.topic_excerpt_maxlength,
-      strip_links: false,
-      strip_images: false,
+      strip_links: true,
+      strip_images: true,
       post: self,
     )
   end

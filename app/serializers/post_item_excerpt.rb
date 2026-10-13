@@ -6,12 +6,12 @@ module PostItemExcerpt
   end
 
   def cooked
-    @cooked ||= object.cooked || object.excerpt || PrettyText.cook(object.raw)
+    @cooked ||= object.cooked || PrettyText.cook(object.raw)
   end
 
   def excerpt
     return nil unless cooked
-    @excerpt ||= @excerpt || cooked
+    @excerpt ||= PrettyText.excerpt(cooked, 300, keep_emoji_images: true)
   end
 
   def truncated

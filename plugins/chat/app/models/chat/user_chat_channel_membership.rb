@@ -3,7 +3,7 @@
 module Chat
   class UserChatChannelMembership < ActiveRecord::Base
     self.table_name = "user_chat_channel_memberships"
-    # self.ignored_columns = %w[desktop_notification_level mobile_notification_level] # TODO: Remove once 20241003122030_add_notification_level_to_user_chat_channel_memberships has been promoted to pre-deploy
+    self.ignored_columns = %w[desktop_notification_level mobile_notification_level] # TODO: Remove once 20241003122030_add_notification_level_to_user_chat_channel_memberships has been promoted to pre-deploy
 
     NOTIFICATION_LEVELS = { never: 0, mention: 1, always: 2 }
 
@@ -12,8 +12,6 @@ module Chat
     belongs_to :chat_channel, class_name: "Chat::Channel", foreign_key: :chat_channel_id
 
     enum :notification_level, NOTIFICATION_LEVELS, prefix: :notifications
-    enum :desktop_notification_level, NOTIFICATION_LEVELS, prefix: :desktop_notifications
-    enum :mobile_notification_level, NOTIFICATION_LEVELS, prefix: :mobile_notifications
     enum :join_mode, { manual: 0, automatic: 1 }
 
     def mark_read!(new_last_read_id = nil)
