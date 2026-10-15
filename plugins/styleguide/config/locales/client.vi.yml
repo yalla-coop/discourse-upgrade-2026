@@ -37,7 +37,7 @@ vi:
         navigation_stacked:
           title: "Điều hướng ngăn xếp"
         categories_list:
-          title: "Danh sách Danh mục"
+          title: "Danh sách Chuyên mục"
         topic_link:
           title: "Liên kết chủ đề"
         topic_list_item:
@@ -59,15 +59,15 @@ vi:
         topic_notifications:
           title: "Thông báo chủ đề"
         post:
-          title: "Bài đăng"
+          title: "Tút"
         topic_map:
           title: "Bản đồ chủ đề"
         site_header:
           title: "Tiêu đề trang web"
-        suggested_topics:
-          title: "Chủ đề tương tự"
+        more_topics:
+          title: "Thêm chủ đề"
         post_menu:
-          title: "Menu Bài Đăng"
+          title: "Menu tút"
         modal:
           title: "Cửa sổ bật lên"
           header: "Phương thức Tiêu đề"

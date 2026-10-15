@@ -101,7 +101,7 @@ RSpec.describe Search do
     before { SiteSetting.tagging_enabled = true }
 
     context "with staff tags" do
-      fab!(:hidden_tag) { Fabricate(:tag) }
+      fab!(:hidden_tag, :tag)
       let!(:staff_tag_group) do
         Fabricate(:tag_group, permissions: { "staff" => 1 }, tag_names: [hidden_tag.name])
       end
@@ -179,36 +179,38 @@ RSpec.describe Search do
 
   describe "custom_eager_load" do
     fab!(:topic)
-    fab!(:post) { Fabricate(:post, topic: topic) }
+    fab!(:post) { Fabricate(:post, topic:) }
+
+    let(:enabled?) { true }
+    let(:record) { described_class.execute("test").posts[0].topic }
 
     before do
       SearchIndexer.enable
       SearchIndexer.index(topic, force: true)
+      described_class.custom_topic_eager_load([:topic_users], enabled: method(:enabled?))
+      described_class.custom_topic_eager_load(enabled: method(:enabled?)) { [:bookmarks] }
     end
 
+    after { described_class.instance_variable_set(:@custom_topic_eager_loads, []) }
+
     it "includes custom tables" do
-      begin
-        SiteSetting.tagging_enabled = false
-        expect(Search.execute("test").posts[0].topic.association(:category).loaded?).to be true
-        expect(Search.execute("test").posts[0].topic.association(:tags).loaded?).to be false
+      expect(record.association(:topic_users)).to be_loaded
+      expect(record.association(:bookmarks)).to be_loaded
+    end
 
-        SiteSetting.tagging_enabled = true
-        Search.custom_topic_eager_load([:topic_users])
-        Search.custom_topic_eager_load() { [:bookmarks] }
+    context "when tables/blocks are disabled" do
+      let(:enabled?) { false }
 
-        expect(Search.execute("test").posts[0].topic.association(:tags).loaded?).to be true
-        expect(Search.execute("test").posts[0].topic.association(:topic_users).loaded?).to be true
-        expect(Search.execute("test").posts[0].topic.association(:bookmarks).loaded?).to be true
-      ensure
-        SiteSetting.tagging_enabled = false
-        Search.instance_variable_set(:@custom_topic_eager_loads, [])
+      it "does not include custom tables" do
+        expect(record.association(:topic_users)).not_to be_loaded
+        expect(record.association(:bookmarks)).not_to be_loaded
       end
     end
   end
 
   describe "users" do
     fab!(:user) { Fabricate(:user, username: "DonaldDuck") }
-    fab!(:user2) { Fabricate(:user) }
+    fab!(:user2, :user)
 
     before do
       SearchIndexer.enable
@@ -287,6 +289,64 @@ RSpec.describe Search do
 
         result = Search.execute("revolver_ocelot", guardian: Guardian.new(Fabricate(:admin)))
         expect(result.users).to contain_exactly(suspended_user)
+      end
+    end
+
+    context "when SiteSetting.enable_names is disabled" do
+      fab!(:evil_trout) { Fabricate(:user, username: "evil_trout", name: "John Doe") }
+
+      before do
+        SiteSetting.enable_names = false
+        SearchIndexer.index(evil_trout, force: true)
+      end
+
+      it "finds users by their usernames only" do
+        result = Search.execute("evil", guardian: Guardian.new(user2))
+        expect(result.users).to contain_exactly(evil_trout)
+
+        result = Search.execute("trout", guardian: Guardian.new(user2))
+        expect(result.users).to contain_exactly(evil_trout)
+
+        result = Search.execute("evil_trout", guardian: Guardian.new(user2))
+        expect(result.users).to contain_exactly(evil_trout)
+
+        result = Search.execute("john", guardian: Guardian.new(user2))
+        expect(result.users).to be_empty
+
+        result = Search.execute("doe", guardian: Guardian.new(user2))
+        expect(result.users).to be_empty
+
+        result = Search.execute("john doe", guardian: Guardian.new(user2))
+        expect(result.users).to be_empty
+      end
+    end
+
+    context "when SiteSetting.enable_names is enabled" do
+      fab!(:evil_trout) { Fabricate(:user, username: "evil_trout", name: "John Doe") }
+
+      before do
+        SiteSetting.enable_names = true
+        SearchIndexer.index(evil_trout, force: true)
+      end
+
+      it "finds users by their usernames and names" do
+        result = Search.execute("evil", guardian: Guardian.new(user2))
+        expect(result.users).to contain_exactly(evil_trout)
+
+        result = Search.execute("trout", guardian: Guardian.new(user2))
+        expect(result.users).to contain_exactly(evil_trout)
+
+        result = Search.execute("evil_trout", guardian: Guardian.new(user2))
+        expect(result.users).to contain_exactly(evil_trout)
+
+        result = Search.execute("john", guardian: Guardian.new(user2))
+        expect(result.users).to contain_exactly(evil_trout)
+
+        result = Search.execute("doe", guardian: Guardian.new(user2))
+        expect(result.users).to contain_exactly(evil_trout)
+
+        result = Search.execute("john doe", guardian: Guardian.new(user2))
+        expect(result.users).to contain_exactly(evil_trout)
       end
     end
   end
@@ -1913,6 +1973,22 @@ RSpec.describe Search do
       expect(Search.execute("test after:jan").posts).to contain_exactly(post_1, post_2)
     end
 
+    it "supports before/after filters and is not affected by the `search_recent_regular_posts_offset_post_id` site setting" do
+      post_1 = Fabricate(:post, created_at: Time.zone.parse("2000-06-24"), like_count: 15)
+      post_2 = Fabricate(:post, created_at: Time.zone.parse("2000-06-26"), like_count: 5)
+
+      SiteSetting.search_recent_regular_posts_offset_post_id = post_2.id
+      # Disable pagination as we are only concerned about the posts returned in the first page.
+      SiteSetting.search_page_size = 1
+
+      expect(
+        Search
+          .execute("after:2000-01-01 before:2001-01-01 order:likes", search_type: :full_page)
+          .posts
+          .map(&:id),
+      ).to contain_exactly(post_1.id)
+    end
+
     it "supports in:first, user:, @username" do
       post_1 = Fabricate(:post, raw: "hi this is a test 123 123", topic: topic)
       post_2 = Fabricate(:post, raw: "boom boom shake the room test", topic: topic)
@@ -1944,8 +2020,8 @@ RSpec.describe Search do
     context "when searching for posts made by users of a group" do
       fab!(:topic) { Fabricate(:topic, created_at: 3.months.ago) }
       fab!(:user)
-      fab!(:user_2) { Fabricate(:user) }
-      fab!(:user_3) { Fabricate(:user) }
+      fab!(:user_2, :user)
+      fab!(:user_3, :user)
       fab!(:group) { Fabricate(:group, name: "Like_a_Boss").tap { |g| g.add(user) } }
       fab!(:group_2) { Fabricate(:group).tap { |g| g.add(user_2) } }
       let!(:post) { Fabricate(:post, raw: "hi this is a test 123 123", topic: topic, user: user) }
@@ -2834,18 +2910,37 @@ RSpec.describe Search do
         raw: "this is the first post about advanced filter with length more than 50 chars",
       )
     end
-    let!(:post1) { Fabricate(:post, raw: "this is the second post about advanced filter") }
+    let!(:post1) { Fabricate(:post, raw: "another post about advanced filter min_chars:50") }
 
-    it "allows to define custom filter" do
-      expect(Search.new("advanced").execute.posts).to eq([post1, post0])
+    context "with custom filters" do
+      let(:enabled?) { true }
+      let(:posts) { described_class.new("advanced min_chars:50").execute.posts }
 
-      Search.advanced_filter(/^min_chars:(\d+)$/) do |posts, match|
-        posts.where("(SELECT LENGTH(p2.raw) FROM posts p2 WHERE p2.id = posts.id) >= ?", match.to_i)
+      before do
+        described_class.advanced_filter(
+          /^min_chars:(\d+)$/,
+          enabled: method(:enabled?),
+        ) do |posts, match|
+          posts.where(
+            "(SELECT LENGTH(p2.raw) FROM posts p2 WHERE p2.id = posts.id) >= ?",
+            match.to_i,
+          )
+        end
       end
 
-      expect(Search.new("advanced min_chars:50").execute.posts).to eq([post0])
-    ensure
-      Search.advanced_filters.delete(/^min_chars:(\d+)$/)
+      after { described_class.advanced_filters.delete(/^min_chars:(\d+)$/) }
+
+      it "applies the custom filter" do
+        expect(posts).to contain_exactly(post0)
+      end
+
+      context "when the filter is disabled" do
+        let(:enabled?) { false }
+
+        it "does not apply the custom filter" do
+          expect(posts).to contain_exactly(post1) # matches `min_chars:50` as a normal word
+        end
+      end
     end
 
     it "forces custom filters matchers to be case insensitive" do
@@ -2860,14 +2955,29 @@ RSpec.describe Search do
       Search.advanced_filters.delete(/^MIN_CHARS:(\d+)$/)
     end
 
-    it "allows to define custom order" do
-      expect(Search.new("advanced").execute.posts).to eq([post1, post0])
+    context "with custom order" do
+      let(:enabled?) { true }
+      let(:posts) { described_class.new("advanced order:chars").execute.posts }
 
-      Search.advanced_order(:chars) { |posts| posts.reorder("MAX(LENGTH(posts.raw)) DESC") }
+      before do
+        described_class.advanced_order(:chars, enabled: method(:enabled?)) do
+          _1.reorder("MAX(LENGTH(posts.raw)) DESC")
+        end
+      end
 
-      expect(Search.new("advanced order:chars").execute.posts).to eq([post0, post1])
-    ensure
-      Search.advanced_orders.delete(:chars)
+      after { described_class.advanced_orders.delete(:chars) }
+
+      it "applies custom order" do
+        expect(posts).to eq([post0, post1])
+      end
+
+      context "when the callback is disabled" do
+        let(:enabled?) { false }
+
+        it "does not apply custom order" do
+          expect(posts).to eq([post1, post0])
+        end
+      end
     end
   end
 
@@ -2990,7 +3100,6 @@ RSpec.describe Search do
 
   context "when max_duplicate_search_index_terms limits duplication" do
     before { SearchIndexer.enable }
-
     after { SearchIndexer.disable }
 
     it "correctly ranks topics" do
@@ -3033,5 +3142,122 @@ RSpec.describe Search do
       expect(sql).to include("ORDER BY posts.created_at DESC")
       expect(sql).to match(/where.*topics.closed/i)
     end
+  end
+
+  describe "bot search" do
+    fab!(:bot)
+    fab!(:bot_topic) { Fabricate(:topic, title: "this is a topic by a bot") }
+    fab!(:bot_post) do
+      Fabricate(:post, user: bot, topic: bot_topic, raw: "this is a regular post by a bot")
+    end
+
+    fab!(:human_post) { Fabricate(:post, topic: topic, raw: "this is a regular post not by a bot") }
+
+    before do
+      SearchIndexer.enable
+      SearchIndexer.index(bot_post, force: true)
+      SearchIndexer.index(human_post, force: true)
+    end
+
+    it "works as expected" do
+      # include bot posts by default
+      results = Search.execute("bot", guardian: Guardian.new)
+      expect(results.posts).to contain_exactly(bot_post, human_post)
+
+      # bots only
+      results = Search.execute("bot in:bot", guardian: Guardian.new)
+      expect(results.posts).to contain_exactly(bot_post)
+
+      # allows searching for human only
+      results = Search.execute("bot in:human", guardian: Guardian.new)
+      expect(results.posts).to contain_exactly(human_post)
+    end
+  end
+
+  describe "whisper search" do
+    fab!(:topic2, :topic)
+    fab!(:user)
+    fab!(:whisperer, :user)
+    fab!(:whisperers_group, :group)
+    fab!(:regular_post) do
+      Fabricate(:post, topic: topic, raw: "this is a regular post with whisper content")
+    end
+    fab!(:whisper_post) do
+      Fabricate(
+        :post,
+        topic: topic2,
+        raw: "this is a whisper post",
+        post_type: Post.types[:whisper],
+      )
+    end
+
+    before do
+      SiteSetting.whispers_allowed_groups = "#{Group::AUTO_GROUPS[:staff]}|#{whisperers_group.id}"
+      whisperers_group.add(whisperer)
+      SearchIndexer.enable
+      [regular_post, whisper_post].each { |post| SearchIndexer.index(post, force: true) }
+    end
+
+    it "works as expected" do
+      # note this is simple enough, saving up on all the reindexing over and over
+      # by running in a big batch
+
+      # anon
+      results = Search.execute("whisper", guardian: Guardian.new(user))
+      expect(results.posts).to contain_exactly(regular_post)
+
+      # staff
+      results = Search.execute("whisper", guardian: Guardian.new(admin))
+      expect(results.posts).to contain_exactly(regular_post, whisper_post)
+
+      # whisperer
+      results = Search.execute("whisper", guardian: Guardian.new(whisperer))
+      expect(results.posts).to contain_exactly(regular_post, whisper_post)
+
+      # in:whispers
+      results = Search.execute("whisper in:whispers", guardian: Guardian.new(admin))
+      expect(results.posts).to contain_exactly(whisper_post)
+
+      results = Search.execute("whisper in:whispers", guardian: Guardian.new(user))
+      expect(results.posts).to be_empty
+
+      # in:regular
+      results = Search.execute("whisper in:regular", guardian: Guardian.new(admin))
+      expect(results.posts).to contain_exactly(regular_post)
+
+      results = Search.execute("content in:regular", guardian: Guardian.new(admin))
+      expect(results.posts).to contain_exactly(regular_post)
+    end
+  end
+
+  it "orders posts by the timestamp of the user's last visit to each topic" do
+    user = Fabricate(:user)
+
+    post2 = nil
+    freeze_time 2.hours.ago do
+      post2 = Fabricate(:post, raw: "Read order term")
+      TopicUser.update_last_read(user, post2.topic.id, post2.post_number, 1, 0)
+    end
+
+    post1 = nil
+    freeze_time 1.hour.ago do
+      post1 = Fabricate(:post, raw: "Read order term")
+      TopicUser.update_last_read(user, post1.topic.id, post1.post_number, 1, 0)
+    end
+
+    _unread_post = Fabricate(:post, raw: "Read order term")
+
+    result = Search.execute("Read order term order:read", guardian: Guardian.new(user))
+    expect(result.posts.map(&:id)).to eq([post1.id, post2.id])
+
+    result = Search.execute("Read order term r", guardian: Guardian.new(user))
+
+    # also allow for the r shortcul like we have l
+    expect(result.posts.map(&:id)).to eq([post1.id, post2.id])
+
+    result = Search.execute("Read order term r", guardian: Guardian.new)
+
+    # no op on anon - all included
+    expect(result.posts.map(&:id).length).to eq(3)
   end
 end

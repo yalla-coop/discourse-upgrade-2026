@@ -244,6 +244,7 @@ class Search
     @valid = true
     @page = @opts[:page]
     @search_all_pms = false
+    @matched_advanced_filter_names = []
 
     term = Search.clean_term(term)
 
@@ -364,24 +365,24 @@ class Search
     @results
   end
 
-  def self.advanced_order(trigger, &block)
-    advanced_orders[trigger] = block
+  def self.advanced_order(trigger, enabled: -> { true }, &block)
+    advanced_orders[trigger] = { block:, enabled: }
   end
 
   def self.advanced_orders
     @advanced_orders ||= {}
   end
 
-  def self.advanced_filter(trigger, &block)
-    advanced_filters[trigger] = block
+  def self.advanced_filter(trigger, name: nil, enabled: -> { true }, &block)
+    advanced_filters[trigger] = { block:, name:, enabled: }
   end
 
   def self.advanced_filters
     @advanced_filters ||= {}
   end
 
-  def self.custom_topic_eager_load(tables = nil, &block)
-    (@custom_topic_eager_loads ||= []) << (tables || block)
+  def self.custom_topic_eager_load(tables = nil, enabled: -> { true }, &block)
+    (@custom_topic_eager_loads ||= []) << { tables:, block:, enabled: }
   end
 
   def self.custom_topic_eager_loads
@@ -414,6 +415,19 @@ class Search
   advanced_filter(/\Ain:tagged\z/i) do |posts|
     posts.where("EXISTS (SELECT 1 FROM topic_tags WHERE topic_tags.topic_id = posts.topic_id)")
   end
+
+  advanced_filter(/\Ain:bots?\z/i) { |posts| posts.where("posts.user_id < 0") }
+  advanced_filter(/\Ain:humans?\z/i) { |posts| posts.where("posts.user_id >= 0") }
+
+  advanced_filter(/\Ain:whispers?\z/i) do |posts|
+    if @guardian.can_see_whispers?
+      posts.where(post_type: Post.types[:whisper])
+    else
+      posts.where("1 = 0")
+    end
+  end
+
+  advanced_filter(/\Ain:regular\z/i) { |posts| posts.where(post_type: Post.types[:regular]) }
 
   advanced_filter(/\Ain:untagged\z/i) do |posts|
     posts.joins(
@@ -742,7 +756,9 @@ class Search
     end
   end
 
-  advanced_filter(/\Abefore:(.*)\z/i) do |posts, match|
+  BEFORE_ADVANCED_FILTER_NAME = "before"
+
+  advanced_filter(/\Abefore:(.*)\z/i, name: BEFORE_ADVANCED_FILTER_NAME) do |posts, match|
     if date = Search.word_to_date(match)
       posts.where("posts.created_at < ?", date)
     else
@@ -750,7 +766,9 @@ class Search
     end
   end
 
-  advanced_filter(/\Aafter:(.*)\z/i) do |posts, match|
+  AFTER_ADVANCED_FILTER_NAME = "after"
+
+  advanced_filter(/\Aafter:(.*)\z/i, name: AFTER_ADVANCED_FILTER_NAME) do |posts, match|
     if date = Search.word_to_date(match)
       posts.where("posts.created_at > ?", date)
     else
@@ -846,13 +864,24 @@ class Search
       else
         posts = posts.order("posts.like_count DESC")
       end
+    elsif @order == :read && @guardian.user
+      posts =
+        posts.joins(
+          "JOIN topic_users tu ON tu.topic_id = posts.topic_id AND tu.user_id = #{@guardian.user.id.to_i}",
+        ).where("tu.last_visited_at IS NOT NULL")
+
+      if aggregate_search
+        posts = posts.order("MAX(tu.last_visited_at) DESC")
+      else
+        posts = posts.reorder("tu.last_visited_at DESC")
+      end
     elsif allow_relevance_search
       posts = sort_by_relevance(posts, type_filter: type_filter, aggregate_search: aggregate_search)
     end
 
     if @order
-      advanced_order = Search.advanced_orders&.fetch(@order, nil)
-      posts = advanced_order.call(posts) if advanced_order
+      advanced_order = Search.advanced_orders[@order]
+      posts = advanced_order[:block].call(posts) if advanced_order.try(:[], :enabled).try(:call)
     end
 
     posts
@@ -902,19 +931,27 @@ class Search
 
         found = false
 
-        Search.advanced_filters.each do |matcher, block|
+        Search.advanced_filters.each do |matcher, options|
+          block = options[:block]
+          name = options[:name]
+          next unless options[:enabled].call
+
           case_insensitive_matcher =
             Regexp.new(matcher.source, matcher.options | Regexp::IGNORECASE)
 
           cleaned = word.gsub(/["']/, "")
           if cleaned =~ case_insensitive_matcher
             (@filters ||= []) << [block, $1]
+            @matched_advanced_filter_names << name if name
             found = true
           end
         end
 
         if word == "l"
           @order = :latest
+          nil
+        elsif word == "r"
+          @order = :read if @guardian.user
           nil
         elsif word =~ /\Aorder:\w+\z/i
           @order = word.downcase.gsub("order:", "").to_sym
@@ -1043,13 +1080,16 @@ class Search
   def user_search
     return if SiteSetting.hide_user_profiles_from_public && !@guardian.user
 
+    # Exlude B weight from search which is the weight `User#name` is indexed with in `SearchIndexer.update_users_index`
+    query = ts_query("simple", weight_filter: SiteSetting.enable_names ? nil : "AC")
+
     users =
       User
         .includes(:user_search_data)
         .references(:user_search_data)
         .where(active: true)
         .where(staged: false)
-        .where("user_search_data.search_data @@ #{ts_query("simple")}")
+        .where("user_search_data.search_data @@ #{query}")
         .order("CASE WHEN username_lower = '#{@original_term.downcase}' THEN 0 ELSE 1 END")
         .order("last_posted_at DESC")
         .limit(limit)
@@ -1414,7 +1454,10 @@ class Search
   def aggregate_post_sql(opts)
     min_id =
       if SiteSetting.search_recent_regular_posts_offset_post_id > 0
-        if %w[all_topics private_message].include?(opts[:type_filter])
+        if %w[all_topics private_message].include?(opts[:type_filter]) ||
+             @matched_advanced_filter_names.any? { |name|
+               [BEFORE_ADVANCED_FILTER_NAME, AFTER_ADVANCED_FILTER_NAME].include?(name)
+             }
           0
         else
           SiteSetting.search_recent_regular_posts_offset_post_id
@@ -1459,7 +1502,6 @@ class Search
 
   def aggregate_search(opts = {})
     post_sql = aggregate_post_sql(opts)
-
     added = 0
 
     aggregate_posts(post_sql[:default]).each do |p|
@@ -1501,8 +1543,9 @@ class Search
     topic_eager_loads << :tags if SiteSetting.tagging_enabled
 
     Search.custom_topic_eager_loads.each do |custom_loads|
+      next unless custom_loads[:enabled].call
       topic_eager_loads.concat(
-        custom_loads.is_a?(Array) ? custom_loads : custom_loads.call(search_pms: @search_pms).to_a,
+        custom_loads[:tables] || custom_loads[:block].call(search_pms: @search_pms).to_a,
       )
     end
 

@@ -413,6 +413,16 @@ RSpec.describe EmailUpdater do
     end
   end
 
+  context "when a moderator tries to change another user's email" do
+    let(:moderator) { Fabricate(:moderator) }
+    let(:user) { Fabricate(:user, email: old_email) }
+    let(:updater) { EmailUpdater.new(guardian: moderator.guardian, user: user) }
+
+    it "raises an invalid access error" do
+      expect { updater.change_to(new_email) }.to raise_error(Discourse::InvalidAccess)
+    end
+  end
+
   context "when hide_email_address_taken is enabled" do
     before { SiteSetting.hide_email_address_taken = true }
 
@@ -434,6 +444,36 @@ RSpec.describe EmailUpdater do
           user_id: existing.id,
         },
       ) { updater.change_to(existing.email) }
+    end
+  end
+
+  context "when changing back to original email" do
+    let(:plus_email_1) { "new.email+11@example.com" }
+    let(:plus_email_2) { "new.email+22@example.com" }
+    let(:user) { Fabricate(:user, email: old_email) }
+    let(:updater) { EmailUpdater.new(guardian: user.guardian, user: user) }
+
+    before do
+      SiteSetting.normalize_emails = false
+      SiteSetting.require_change_email_confirmation = true
+    end
+
+    it "shows correct old email" do
+      updater.change_to(plus_email_1)
+      updater.confirm(updater.change_req.old_email_token&.token)
+      updater.confirm(updater.change_req.new_email_token&.token)
+
+      updater.change_to(old_email)
+      updater.confirm(updater.change_req.old_email_token&.token)
+      updater.confirm(updater.change_req.new_email_token&.token)
+
+      updater.change_to(plus_email_2)
+      updater.confirm(updater.change_req.old_email_token&.token)
+      updater.confirm(updater.change_req.new_email_token&.token)
+
+      updater.change_to(old_email)
+      expect(updater.change_req.old_email).to eq(plus_email_2)
+      expect(updater.change_req.old_email_token.email).to eq(plus_email_2)
     end
   end
 end

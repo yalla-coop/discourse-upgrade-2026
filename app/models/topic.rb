@@ -11,6 +11,7 @@ class Topic < ActiveRecord::Base
   include Trashable
   include Searchable
   include LimitedEdit
+  include Localizable
   extend Forwardable
 
   EXTERNAL_ID_MAX_LENGTH = 50
@@ -365,7 +366,7 @@ class Topic < ActiveRecord::Base
   scope :exclude_scheduled_bump_topics, -> { where.not(id: TopicTimer.scheduled_bump_topics) }
 
   scope :secured,
-        lambda { |guardian = nil|
+        lambda { |guardian = nil, include_uncategorized: true|
           ids = guardian.secure_category_ids if guardian
 
           # Query conditions
@@ -376,8 +377,10 @@ class Topic < ActiveRecord::Base
               ["NOT read_restricted"]
             end
 
+          uncategorized_condition = "topics.category_id IS NULL OR" if include_uncategorized
+
           where(
-            "topics.category_id IS NULL OR topics.category_id IN (SELECT id FROM categories WHERE #{condition[0]})",
+            "#{uncategorized_condition} topics.category_id IN (SELECT id FROM categories WHERE #{condition[0]})",
             condition[1],
           )
         }
@@ -413,6 +416,8 @@ class Topic < ActiveRecord::Base
       inherit_auto_close_from_category
       inherit_slow_mode_from_category
     end
+
+    self.locale = nil if locale.blank?
   end
 
   after_save do
@@ -704,9 +709,10 @@ class Topic < ActiveRecord::Base
   end
 
   MAX_SIMILAR_BODY_LENGTH = 200
+  SIMILAR_TOPIC_SEARCH_LIMIT = 10
+  SIMILAR_TOPIC_LIMIT = 3
 
   def self.similar_to(title, raw, user = nil)
-    return [] if SiteSetting.max_similar_results == 0
     return [] if title.blank?
 
     raw = raw.presence || ""
@@ -757,7 +763,7 @@ class Topic < ActiveRecord::Base
         .where("c.topic_id IS NULL")
         .where("topics.category_id NOT IN (#{excluded_category_ids_sql})")
         .order("ts_rank(search_data, #{tsquery}) DESC")
-        .limit(SiteSetting.max_similar_results * 3)
+        .limit(SIMILAR_TOPIC_SEARCH_LIMIT)
 
     candidate_ids = candidates.pluck(:id)
 
@@ -768,7 +774,7 @@ class Topic < ActiveRecord::Base
         .joins("JOIN posts AS p ON p.topic_id = topics.id AND p.post_number = 1")
         .where("topics.id IN (?)", candidate_ids)
         .order("similarity DESC")
-        .limit(SiteSetting.max_similar_results)
+        .limit(SIMILAR_TOPIC_LIMIT)
 
     if raw.present?
       similars.select(
@@ -1016,7 +1022,7 @@ class Topic < ActiveRecord::Base
 
   cattr_accessor :update_featured_topics
 
-  def changed_to_category(new_category)
+  def changed_to_category(new_category, silent: nil)
     return true if new_category.blank? || Category.exists?(topic_id: id)
 
     if new_category.id == SiteSetting.uncategorized_category_id &&
@@ -1048,7 +1054,9 @@ class Topic < ActiveRecord::Base
         CategoryUser.auto_watch(category_id: new_category.id, topic_id: self.id)
         CategoryUser.auto_track(category_id: new_category.id, topic_id: self.id)
 
-        if !SiteSetting.disable_category_edit_notifications && (post = self.ordered_posts.first)
+        skip_alert = silent || SiteSetting.disable_category_edit_notifications
+
+        if !skip_alert && (post = self.ordered_posts.first)
           notified_user_ids = [post.user_id, post.last_editor_id].uniq
           DB.after_commit do
             Jobs.enqueue(
@@ -1125,7 +1133,7 @@ class Topic < ActiveRecord::Base
     new_post
   end
 
-  def change_category_to_id(category_id)
+  def change_category_to_id(category_id, silent: nil)
     return false if private_message?
 
     new_category_id = category_id.to_i
@@ -1139,7 +1147,7 @@ class Topic < ActiveRecord::Base
 
     reviewables.update_all(category_id: new_category_id)
 
-    changed_to_category(cat)
+    changed_to_category(cat, silent: silent)
   end
 
   def remove_allowed_group(removed_by, name)
@@ -1382,10 +1390,15 @@ class Topic < ActiveRecord::Base
     Jobs.cancel_scheduled_job(:remove_banner, topic_id: self.id)
   end
 
-  def banner
+  def banner(guardian = nil)
     post = self.ordered_posts.first
 
-    { html: post.cooked, key: self.id, url: self.url }
+    html = post.cooked
+    if (guardian && ContentLocalization.show_translated_post?(post, guardian))
+      html = post.get_localization&.cooked.presence || html
+    end
+
+    { html:, key: self.id, url: self.url }
   end
 
   cattr_accessor :slug_computed_callbacks
@@ -1910,11 +1923,13 @@ class Topic < ActiveRecord::Base
     @is_category_topic ||= Category.exists?(topic_id: self.id.to_i)
   end
 
-  def reset_bumped_at(post_id = nil)
+  def reset_bumped_at(post_or_post_id = nil)
     post =
-      (
-        if post_id
-          Post.find_by(id: post_id)
+      if post_or_post_id.is_a?(Post)
+        post_or_post_id
+      else
+        if post_or_post_id
+          Post.find_by(id: post_or_post_id)
         else
           ordered_posts.where(
             user_deleted: false,
@@ -1922,7 +1937,7 @@ class Topic < ActiveRecord::Base
             post_type: Post.types[:regular],
           ).last || first_post
         end
-      )
+      end
 
     return if !post
 
@@ -2030,14 +2045,14 @@ class Topic < ActiveRecord::Base
       invited_by,
       "topic-invitations-per-day",
       SiteSetting.max_topic_invitations_per_day,
-      1.day.to_i,
+      1.day,
     ).performed!
 
     RateLimiter.new(
       invited_by,
       "topic-invitations-per-minute",
       SiteSetting.max_topic_invitations_per_minute,
-      1.day.to_i,
+      1.minute,
     ).performed!
   end
 
@@ -2120,6 +2135,14 @@ class Topic < ActiveRecord::Base
     fields.push(*DiscoursePluginRegistry.public_editable_topic_custom_fields)
     fields.push(*DiscoursePluginRegistry.staff_editable_topic_custom_fields) if guardian.is_staff?
     fields
+  end
+
+  def has_localization?(locale = I18n.locale)
+    localizations.exists?(locale: locale.to_s.sub("-", "_"))
+  end
+
+  def in_user_locale?
+    LocaleNormalizer.is_same?(locale, I18n.locale)
   end
 
   private
@@ -2231,6 +2254,7 @@ end
 #  bannered_until            :datetime
 #  external_id               :string
 #  visibility_reason_id      :integer
+#  locale                    :string(20)
 #
 # Indexes
 #
@@ -2239,6 +2263,7 @@ end
 #  idxtopicslug                            (slug) WHERE ((deleted_at IS NULL) AND (slug IS NOT NULL))
 #  index_topics_on_bannered_until          (bannered_until) WHERE (bannered_until IS NOT NULL)
 #  index_topics_on_bumped_at_public        (bumped_at) WHERE ((deleted_at IS NULL) AND ((archetype)::text <> 'private_message'::text))
+#  index_topics_on_category_id             (category_id) WHERE ((deleted_at IS NULL) AND ((archetype)::text <> 'private_message'::text))
 #  index_topics_on_created_at_and_visible  (created_at,visible) WHERE ((deleted_at IS NULL) AND ((archetype)::text <> 'private_message'::text))
 #  index_topics_on_external_id             (external_id) UNIQUE WHERE (external_id IS NOT NULL)
 #  index_topics_on_id_and_deleted_at       (id,deleted_at)

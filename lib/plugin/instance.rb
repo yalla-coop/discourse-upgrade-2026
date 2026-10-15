@@ -103,6 +103,11 @@ class Plugin::Instance
     @idx = 0
   end
 
+  # Keys can only be lowercase letters
+  # Example usage:
+  #   plugin.register_anonymous_cache_key :onlylowercase do
+  #     @request.cookies["cookie_name"].present? ? "1" : "0"
+  #   end
   def register_anonymous_cache_key(key, &block)
     key_method = "key_#{key}"
     add_to_class(Middleware::AnonymousCache::Helper, key_method, &block)
@@ -115,6 +120,7 @@ class Plugin::Instance
       label: label,
       location: location,
       use_new_show_route: opts.fetch(:use_new_show_route, false),
+      auto_generated: false,
     }
   end
 
@@ -122,13 +128,12 @@ class Plugin::Instance
     route = self.admin_route
 
     if route.blank?
-      return if !any_settings?
-
+      return if !any_settings? || has_only_enabled_setting?
       route = default_admin_route
     end
 
     route
-      .slice(:location, :label, :use_new_show_route)
+      .slice(:location, :label, :use_new_show_route, :auto_generated)
       .tap do |admin_route|
         path = admin_route[:use_new_show_route] ? "show" : admin_route[:location]
         admin_route[:full_location] = "adminPlugins.#{path}"
@@ -136,11 +141,15 @@ class Plugin::Instance
   end
 
   def any_settings?
-    return false if !configurable?
+    configurable? && plugin_settings.values.length.positive?
+  end
 
-    SiteSetting
-      .all_settings(filter_plugin: self.name)
-      .any? { |s| s[:setting] != @enabled_site_setting }
+  def has_only_enabled_setting?
+    any_settings? && plugin_settings.values.one?
+  end
+
+  def plugin_settings
+    @plugin_settings ||= SiteSetting.plugins.select { |_, plugin_name| plugin_name == self.name }
   end
 
   def configurable?
@@ -272,8 +281,8 @@ class Plugin::Instance
   # Ensure proper input sanitization before using it in a query.
   #
   # Example usage:
-  #   add_filter_custom_filter("word_count") do |scope, value|
-  #     scope.where(word_count: value)
+  #   add_filter_custom_filter("word_count") do |scope, value, guardian|
+  #     scope.where(word_count: value) if guardian.admin?
   #   end
   def add_filter_custom_filter(name, &block)
     DiscoursePluginRegistry.register_custom_filter_mapping({ name => block }, self)
@@ -284,7 +293,7 @@ class Plugin::Instance
   #     scope.where("word_count = 42")
   #   end
   def register_custom_filter_by_status(status, &block)
-    TopicsFilter.add_filter_by_status(status, &block)
+    TopicsFilter.add_filter_by_status(status, enabled: method(:enabled?), &block)
   end
 
   # Allows to define custom search order. Example usage:
@@ -292,7 +301,7 @@ class Plugin::Instance
   #     posts.reorder("(SELECT LENGTH(raw) FROM posts WHERE posts.topic_id = subquery.topic_id) DESC")
   #   end
   def register_search_advanced_order(trigger, &block)
-    Search.advanced_order(trigger, &block)
+    Search.advanced_order(trigger, enabled: method(:enabled?), &block)
   end
 
   # Allows to define custom search filters. Example usage:
@@ -300,7 +309,7 @@ class Plugin::Instance
   #     posts.where("(SELECT LENGTH(p2.raw) FROM posts p2 WHERE p2.id = posts.id) >= ?", match.to_i)
   #   end
   def register_search_advanced_filter(trigger, &block)
-    Search.advanced_filter(trigger, &block)
+    Search.advanced_filter(trigger, enabled: method(:enabled?), &block)
   end
 
   # Allows to define TopicView posts filters. Example usage:
@@ -308,7 +317,7 @@ class Plugin::Instance
   #     posts.where(wiki: true)
   #   end
   def register_topic_view_posts_filter(trigger, &block)
-    TopicView.add_custom_filter(trigger, &block)
+    TopicView.add_custom_filter(trigger, enabled: method(:enabled?), &block)
   end
 
   # Allows to add more user IDs to the list of preloaded users. This can be
@@ -318,7 +327,7 @@ class Plugin::Instance
   #     user_ids << Discourse::SYSTEM_USER_ID
   #   end
   def register_topic_list_preload_user_ids(&block)
-    TopicList.on_preload_user_ids(&block)
+    TopicList.on_preload_user_ids(enabled: method(:enabled?), &block)
   end
 
   # Allow to eager load additional tables in Search. Useful to avoid N+1 performance problems.
@@ -329,7 +338,7 @@ class Plugin::Instance
   # OR
   #   register_search_topic_eager_load(%i(example_table))
   def register_search_topic_eager_load(tables = nil, &block)
-    Search.custom_topic_eager_load(tables, &block)
+    Search.custom_topic_eager_load(tables, enabled: method(:enabled?), &block)
   end
 
   # Request a new size for topic thumbnails
@@ -350,7 +359,7 @@ class Plugin::Instance
   #     end
   #   end
   def register_site_categories_callback(&block)
-    Site.add_categories_callbacks(&block)
+    Site.add_categories_callbacks(enabled: method(:enabled?), &block)
   end
 
   def register_upload_unused(&block)
@@ -727,8 +736,7 @@ class Plugin::Instance
   end
 
   def register_email_poller(poller)
-    plugin = self
-    DiscoursePluginRegistry.register_mail_poller(poller) if plugin.enabled?
+    DiscoursePluginRegistry.register_mail_poller(poller) if enabled?
   end
 
   def register_asset(file, opts = nil)
@@ -781,7 +789,7 @@ class Plugin::Instance
     js = "(function(){#{js}})();" if js.present?
 
     result = []
-    result << [css, "css"] if css.present?
+    result << [css, "scss"] if css.present?
     result << [js, "js"] if js.present?
 
     result.map do |asset, extension|
@@ -805,9 +813,6 @@ class Plugin::Instance
 
     seed_data.each { |key, value| DiscoursePluginRegistry.register_seed_data(key, value) }
 
-    # Allow plugins to `register_asset` for images under /assets
-    Rails.configuration.assets.paths << File.dirname(path) + "/assets"
-
     # Automatically include rake tasks
     Rake.add_rakelib(File.dirname(path) + "/lib/tasks")
 
@@ -830,6 +835,7 @@ class Plugin::Instance
     end
 
     write_extra_js!
+    ensure_images_symlink!
   end
 
   def auth_provider(opts)
@@ -887,6 +893,9 @@ class Plugin::Instance
   def register_reviewable_type(reviewable_type_class)
     return unless reviewable_type_class < Reviewable
     extend_list_method(Reviewable, :types, reviewable_type_class)
+    if reviewable_type_class.method_defined?(:scrub)
+      extend_list_method(Reviewable, :scrubbable_types, reviewable_type_class)
+    end
   end
 
   def extend_list_method(klass, method, new_attributes)
@@ -1340,31 +1349,36 @@ class Plugin::Instance
     end
   end
 
+  # This method allows plugins to preload topic associations when loading topics
+  # that make use of topic_list.
+  #
+  # @param fields [Symbol, Array<Symbol>, Hash] The topic associations to preload.
+  #
+  # @example
+  #   register_topic_preloader_associations(:first_post)
+  #   register_topic_preloader_associations([:first_post, :topic_embeds])
+  #   register_topic_preloader_associations({ first_post: :uploads })
+  #   register_topic_preloader_associations({ first_post: :uploads }) do
+  #     SiteSetting.some_setting_enabled?
+  #   end
+  #
+  # @return [void]
+  def register_topic_preloader_associations(fields, &condition)
+    DiscoursePluginRegistry.register_topic_preloader_association({ fields:, condition: }, self)
+  end
+
   protected
 
   def self.js_path
-    File.expand_path "#{Rails.root}/app/assets/javascripts/plugins"
-  end
-
-  def legacy_asset_paths
-    [
-      "#{Plugin::Instance.js_path}/#{directory_name}.js.erb",
-      "#{Plugin::Instance.js_path}/#{directory_name}_extra.js.erb",
-    ]
+    File.expand_path "#{Rails.root}/app/assets/generated"
   end
 
   def extra_js_file_path
-    @extra_js_file_path ||= "#{Plugin::Instance.js_path}/#{directory_name}_extra.js"
+    @extra_js_file_path ||=
+      "#{Plugin::Instance.js_path}/#{directory_name}/plugins/#{directory_name}_extra.js"
   end
 
   def write_extra_js!
-    # No longer used, but we want to make sure the files are no longer present
-    # so they don't accidently get compiled by Sprockets.
-    legacy_asset_paths.each do |path|
-      File.delete(path)
-    rescue Errno::ENOENT
-    end
-
     contents = javascript_includes.map { |js| File.read(js) }
 
     if contents.present?
@@ -1373,6 +1387,21 @@ class Plugin::Instance
     else
       begin
         File.delete(extra_js_file_path)
+      rescue Errno::ENOENT
+      end
+    end
+  end
+
+  def ensure_images_symlink!
+    link_from = "#{Rails.root}/app/assets/generated/#{directory_name}/images"
+    link_target = "#{directory}/assets/images"
+
+    if Dir.exist? link_target
+      ensure_directory(link_from)
+      Discourse::Utils.atomic_ln_s(link_target, link_from)
+    else
+      begin
+        File.delete(link_from)
       rescue Errno::ENOENT
       end
     end
@@ -1399,7 +1428,6 @@ class Plugin::Instance
         ""
       opts[:server_locale_file] = Dir["#{root_path}/config/locales/server*.#{locale}.yml"].first ||
         ""
-      opts[:js_locale_file] = File.join(root_path, "assets/locales/#{locale}.js.erb")
 
       locale_chain = opts[:fallbackLocale] ? [locale, opts[:fallbackLocale]] : [locale]
       lib_locale_path = File.join(root_path, "lib/javascripts/locale")
@@ -1417,7 +1445,6 @@ class Plugin::Instance
 
       if valid_locale?(opts)
         DiscoursePluginRegistry.register_locale(locale, opts)
-        Rails.configuration.assets.precompile << "locales/#{locale}.js"
       else
         msg = "Invalid locale! #{opts.inspect}"
         # The logger isn't always present during boot / parsing locales from plugins
@@ -1434,8 +1461,17 @@ class Plugin::Instance
     reloadable_patch { NewPostManager.add_plugin_payload_attribute(attribute_name) }
   end
 
-  def register_topic_preloader_associations(fields)
-    DiscoursePluginRegistry.register_topic_preloader_association(fields, self)
+  ##
+  # Allows plugins to preload topic associations when loading categories with topics.
+  #
+  # @param fields [Array<Symbol>] The topic associations to preload.
+  #
+  # @example Preload custom topic associations
+  #
+  #   register_category_list_topics_preloader_associations(%i[some_topic_association some_other_topic_association])
+  #
+  def register_category_list_topics_preloader_associations(associations)
+    DiscoursePluginRegistry.register_category_list_topics_preloader_association(associations, self)
   end
 
   private
@@ -1447,7 +1483,12 @@ class Plugin::Instance
 
   def setting_category_name
     return if setting_category.blank? || setting_category == "plugins"
-    I18n.t("admin_js.admin.site_settings.categories.#{setting_category}")
+    I18n.t("admin_js.#{setting_category_label}")
+  end
+
+  def setting_category_label
+    return if setting_category.blank? || setting_category == "plugins"
+    "admin.site_settings.categories.#{setting_category}"
   end
 
   def validate_directory_column_name(column_name)
@@ -1478,8 +1519,7 @@ class Plugin::Instance
 
   def valid_locale?(custom_locale)
     File.exist?(custom_locale[:client_locale_file]) &&
-      File.exist?(custom_locale[:server_locale_file]) &&
-      File.exist?(custom_locale[:js_locale_file]) && custom_locale[:moment_js]
+      File.exist?(custom_locale[:server_locale_file]) && custom_locale[:moment_js]
   end
 
   def find_locale_file(locale_chain, path)
@@ -1495,6 +1535,11 @@ class Plugin::Instance
   end
 
   def default_admin_route
-    { label: "#{name.underscore}.title", location: name, use_new_show_route: true }
+    {
+      label: setting_category_label || "#{name.underscore}.title",
+      location: name,
+      use_new_show_route: true,
+      auto_generated: true,
+    }
   end
 end

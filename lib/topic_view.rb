@@ -76,8 +76,8 @@ class TopicView
     wpcf.flatten.uniq
   end
 
-  def self.add_custom_filter(key, &blk)
-    custom_filters[key] = blk
+  def self.add_custom_filter(key, enabled: -> { true }, &block)
+    custom_filters[key] = { block:, enabled: }
   end
 
   def self.custom_filters
@@ -929,6 +929,7 @@ class TopicView
         :deleted_by,
         :incoming_email,
         :image_upload,
+        :localizations,
       )
 
     @posts = @posts.includes({ user: :user_status }) if SiteSetting.enable_user_status
@@ -1016,7 +1017,11 @@ class TopicView
     end
 
     if @filter.present? && @filter.to_s != "summary" && TopicView.custom_filters[@filter].present?
-      @filtered_posts = TopicView.custom_filters[@filter].call(@filtered_posts, self)
+      @filtered_posts =
+        TopicView.custom_filters[@filter][:block].call(
+          @filtered_posts,
+          self,
+        ) if TopicView.custom_filters[@filter][:enabled].call
     end
 
     if @best.present?

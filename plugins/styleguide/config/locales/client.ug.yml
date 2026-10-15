@@ -5,6 +5,11 @@
 # https://translate.discourse.org/
 
 ug:
+  admin_js:
+    admin:
+      site_settings:
+        categories:
+          styleguide: "Discourse ئۇسلۇب قوللانمىسى"
   js:
     styleguide:
       title: "ئۇسلۇب يېتەكچىسى"
@@ -25,6 +30,8 @@ ug:
           title: "Datum / tyd insette"
         menus:
           title: "تىزىملىك"
+        multi_select:
+          title: "كۆپ تاللاش"
         toasts:
           title: "ئۇچۇر رامكىسى"
         font_scale:
@@ -82,8 +89,8 @@ ug:
           title: "تېما خەرىتىسى"
         site_header:
           title: "بېكەت بېشى"
-        suggested_topics:
-          title: "تەۋسىيە تېما"
+        more_topics:
+          title: "تېخىمۇ كۆپ تېما"
         post_menu:
           title: "يازما تىزىملىكى"
         modal:

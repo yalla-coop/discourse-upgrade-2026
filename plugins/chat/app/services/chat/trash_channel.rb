@@ -57,12 +57,17 @@ module Chat
 
     def soft_delete_channel(guardian:, channel:)
       channel.trash!(guardian.user)
+      DiscourseEvent.trigger(:chat_channel_trashed, channel, guardian.user)
     end
 
     def log_channel_deletion(guardian:, channel:)
       StaffActionLogger.new(guardian.user).log_custom(
         DELETE_CHANNEL_LOG_KEY,
-        { chat_channel_id: channel.id, chat_channel_name: channel.title(guardian.user) },
+        {
+          chat_channel_id: channel.id,
+          chat_channel_name: channel.title(guardian.user),
+          category_id: channel.category_channel? ? channel.chatable_id : nil,
+        },
       )
     end
 
