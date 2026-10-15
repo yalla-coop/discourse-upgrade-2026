@@ -14,7 +14,7 @@
     "decorator-transforms": "^2.3.0",
     "discourse": "workspace:0.0.0",
     "discourse-widget-hbs": "workspace:1.0.0",
-    "ember-cli-htmlbars": "^6.3.0",
+    "ember-cli-htmlbars": "^7.0.1",
     "ember-source": "~5.12.0",
     "ember-this-fallback": "^0.4.0",
     "handlebars": "^4.7.8",
