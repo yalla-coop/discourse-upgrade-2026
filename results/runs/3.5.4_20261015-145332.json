@@ -1,0 +1,37 @@
+{
+  "hop": "3.5.4",
+  "discourse_version": "3.5.4",
+  "branch": "hop/3.5.4",
+  "commit": "b42ca71395",
+  "ran_at": "2026-10-15T14:53:32.790Z",
+  "verdict": "fail",
+  "layer_a": {
+    "examples": 48,
+    "failures": 0,
+    "failed": []
+  },
+  "layer_b": {
+    "passed": 106,
+    "failed": 0,
+    "unverified": 0,
+    "skipped": 0,
+    "changed_vs_baseline": [],
+    "failed_checks": []
+  },
+  "layer_c": {
+    "passed": 28,
+    "total": 29,
+    "failed": [
+      "TC033 - Group filter excludes inaccessible groups"
+    ],
+    "app_branch": "main",
+    "app_commit": "cd077ee1b2",
+    "app_changed_since_baseline": true,
+    "baseline_app": "codex/high-priority-staging-tests @ 8482d824f7",
+    "regressions": [
+      "TC033 - Group filter excludes inaccessible groups"
+    ],
+    "flaky_failed": [],
+    "compared_with_baseline": true
+  }
+}

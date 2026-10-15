@@ -53,9 +53,13 @@ up() {
       docker exec "$CONTAINER" curl -s -o /dev/null -f http://localhost:3000/session/csrf.json && break
     done
   fi
-  if [ ! -f "$REPO/contract/.local/docker.json" ]; then
+  # Each hop container has its own database, so seed again when the container
+  # changes (the code folder, and with it docker.json, is shared between hops).
+  if [ ! -f "$REPO/contract/.local/docker.json" ] ||
+    [ "$(cat "$REPO/contract/.local/seeded-container" 2>/dev/null)" != "$CONTAINER" ]; then
     say "Seeding test data"
-    "${IN[@]}" bin/rails runner contract/seed/docker_seed.rb
+    "${IN[@]}" bin/rails runner contract/seed/docker_seed.rb &&
+      echo "$CONTAINER" > "$REPO/contract/.local/seeded-container"
   fi
 }
 
