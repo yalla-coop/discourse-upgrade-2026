@@ -21,11 +21,19 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
     Fabricate(:user_chat_channel_membership, user: user, chat_channel: channel, **attrs)
   end
 
-  def run_watching_job(message, mentioned_user_ids: [])
-    Jobs::Chat::NotifyWatching.new.execute(
-      chat_message_id: message.id,
-      mentioned_user_ids: mentioned_user_ids,
-    )
+  # Sends the notifications for a message the way Discourse does after it is
+  # created (Chat::Notifier#notify_new), running the resulting jobs straight
+  # away. The tests then check the outcome (notification rows and the event
+  # the Lexicon plugin listens to), whichever job produces it.
+  def notify_new(message)
+    Jobs.run_immediately!
+    Chat::Notifier.new(message, message.created_at).notify_new
+  end
+
+  def lexicon_events_for(user, &block)
+    DiscourseEvent
+      .track_events(:created_chat_notification, &block)
+      .select { |event| event[:params][1] == user.id }
   end
 
   def chat_notifications_for(user)
@@ -49,8 +57,8 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
     end
     let!(:message) { Fabricate(:chat_message, chat_channel: channel, user: sender) }
 
-    it "creates a chat_message notification record for the member" do
-      expect { run_watching_job(message) }.to change { chat_notifications_for(member).count }.by(1)
+    it "creates exactly one chat_message notification for the member" do
+      expect { notify_new(message) }.to change { chat_notifications_for(member).count }.by(1)
 
       data = JSON.parse(chat_notifications_for(member).last.data)
       expect(data).to include(
@@ -65,12 +73,11 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
     # The Lexicon plugin listens to this event to send chat push notifications
     # (discourse-lexicon-plugin/plugin.rb). If it stops firing, chat pushes stop
     # silently.
-    it "fires :created_chat_notification for the Lexicon plugin" do
-      events = DiscourseEvent.track_events(:created_chat_notification) { run_watching_job(message) }
+    it "fires :created_chat_notification once for the Lexicon plugin" do
+      events = lexicon_events_for(member) { notify_new(message) }
 
       expect(events.size).to eq(1)
-      payload, user_id, notification_type = events.first[:params]
-      expect(user_id).to eq(member.id)
+      payload, _user_id, notification_type = events.first[:params]
       expect(notification_type).to eq(Notification.types[:chat_message])
       expect(payload).to include(chat_message_id: message.id, sender: sender.username)
     end
@@ -85,9 +92,34 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
     let!(:message) { Fabricate(:chat_message, chat_channel: channel, user: sender) }
 
     it "gets no notification and no Lexicon event" do
-      events = DiscourseEvent.track_events(:created_chat_notification) { run_watching_job(message) }
+      events = lexicon_events_for(member) { notify_new(message) }
 
       expect(chat_notifications_for(member).count).to eq(0)
+      expect(events).to be_empty
+    end
+  end
+
+  describe "a member whose mobile level is 'mention'" do
+    before { join(sender) }
+
+    let!(:membership) do
+      join(member, notification_level: :always, mobile_notification_level: :mention)
+    end
+
+    it "is notified when mentioned" do
+      message =
+        Fabricate(:chat_message, chat_channel: channel, user: sender, message: "hi @#{member.username}")
+
+      events = lexicon_events_for(member) { notify_new(message) }
+
+      expect(events.size).to eq(1)
+    end
+
+    it "is not notified for a message that doesn't mention them" do
+      message = Fabricate(:chat_message, chat_channel: channel, user: sender, message: "hello all")
+
+      events = lexicon_events_for(member) { notify_new(message) }
+
       expect(events).to be_empty
     end
   end
