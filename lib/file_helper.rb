@@ -40,6 +40,20 @@ class FileHelper
     filename.match?(supported_playable_media_regexp)
   end
 
+  # https://guides.rubyonrails.org/security.html#file-uploads
+  def self.sanitize_filename(filename)
+    filename.strip.tap do |name|
+      # NOTE: File.basename doesn't work right with Windows paths on Unix
+      # get only the filename, not the whole path
+      name.sub! %r{\A.*(\\|/)}, ""
+      # Replace all non alphanumeric, underscore
+      # or periods with underscore
+      name.gsub! /[^\w\.\-]/, "_"
+      # Finally, replace all double underscores with a single one
+      name.gsub! /_+/, "_"
+    end
+  end
+
   class FakeIO
     attr_accessor :status
   end
@@ -172,6 +186,16 @@ class FileHelper
   def self.inline_images
     # SVG cannot safely be shown as a document
     @@inline_images ||= supported_images - %w[svg]
+  end
+
+  # files which are safe to serve inline (no script execution risk)
+  def self.inline_safe_files
+    @@inline_safe_files ||= inline_images | Set.new(%w[pdf]) | supported_video | supported_audio
+  end
+
+  def self.is_inline_safe?(filename)
+    return false if filename.blank?
+    filename.downcase.end_with?(*inline_safe_files.map { |ext| ".#{ext}" })
   end
 
   def self.supported_audio

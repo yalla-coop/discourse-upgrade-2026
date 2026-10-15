@@ -644,7 +644,21 @@ module DiscourseTagging
   end
 
   def self.hidden_tag_names(guardian = nil)
-    guardian&.is_staff? ? [] : Tag.where.not(id: visible_tags(guardian).select(:id)).pluck(:name)
+    if guardian&.is_staff?
+      []
+    else
+      # Hidden tags have at least one TagGroupPermission but must not have any for permitted groups
+      Tag
+        .where(id: TagGroupMembership.joins(tag_group: :tag_group_permissions).select(:tag_id))
+        .where.not(
+          id:
+            TagGroupPermission
+              .joins(tag_group: :tag_group_memberships)
+              .where(group_id: permitted_group_ids_query(guardian))
+              .select("tag_group_memberships.tag_id"),
+        )
+        .pluck(:name)
+    end
   end
 
   def self.permitted_group_ids_query(guardian = nil)
@@ -670,7 +684,7 @@ module DiscourseTagging
 
   # read-only tags for this user
   def self.readonly_tag_names(guardian = nil)
-    return [] if guardian&.is_staff?
+    return [] if guardian&.is_admin?
 
     query =
       Tag.joins(tag_groups: :tag_group_permissions).where(

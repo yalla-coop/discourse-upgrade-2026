@@ -143,7 +143,6 @@ lt:
         none: "Nieko"
       title: "pokalbis"
       title_capitalized: "Pokalbis"
-      exit: "atgal"
       channel_status:
         closed: "Uždaryta"
         open: "Atidaryti"
@@ -164,6 +163,7 @@ lt:
         tabs:
           members: Nariai
           settings: Nustatymai
+        remove_member: "Pašalinti"
       new_message_modal:
         no_items: "Nėra elementų"
         filter: "Filtruoti"

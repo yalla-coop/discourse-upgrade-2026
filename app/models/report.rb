@@ -27,6 +27,33 @@ class Report
     storage_stats: :storage_stats,
   }
 
+  HIDDEN_PAGEVIEW_REPORTS = %w[site_traffic page_view_legacy_total_reqs]
+
+  HIDDEN_LEGACY_PAGEVIEW_REPORTS = %w[
+    consolidated_page_views_browser_detection
+    page_view_anon_reqs
+    page_view_logged_in_reqs
+  ]
+
+  ADMIN_ONLY_REPORTS = %w[top_uploads]
+
+  def self.hidden?(type, admin:)
+    return true if !admin && ADMIN_ONLY_REPORTS.include?(type)
+    hidden_reports =
+      SiteSetting.use_legacy_pageviews ? HIDDEN_PAGEVIEW_REPORTS : HIDDEN_LEGACY_PAGEVIEW_REPORTS
+    hidden_reports.include?(type)
+  end
+
+  COLORS = {
+    turquoise: "#1EB8D1",
+    lime: "#9BC53D",
+    purple: "#721D8D",
+    magenta: "#E84A5F",
+    brown: "#8A6916",
+    yellow: "#FFCD56",
+  }
+
+  include Reports::AssociatedAccountsByProvider
   include Reports::Bookmarks
   include Reports::ConsolidatedApiRequests
   include Reports::ConsolidatedPageViews
@@ -149,14 +176,17 @@ class Report
     available_filters.delete(name)
   end
 
-  def add_category_filter
+  def add_category_filter(options = {})
     category_id = filters[:category].to_i if filters[:category].present?
-    add_filter("category", type: "category", default: category_id)
+    add_filter("category", { type: "category", default: category_id }.merge(options))
     return if category_id.blank?
 
     include_subcategories = filters[:include_subcategories]
     include_subcategories = !!ActiveRecord::Type::Boolean.new.cast(include_subcategories)
-    add_filter("include_subcategories", type: "bool", default: include_subcategories)
+    add_filter(
+      "include_subcategories",
+      { type: "bool", default: include_subcategories }.merge(options),
+    )
 
     [category_id, include_subcategories]
   end
@@ -464,14 +494,7 @@ class Report
   end
 
   def colors
-    {
-      turquoise: "#1EB8D1",
-      lime: "#9BC53D",
-      purple: "#721D8D",
-      magenta: "#E84A5F",
-      brown: "#8A6916",
-      yellow: "#FFCD56",
-    }
+    COLORS
   end
 
   private

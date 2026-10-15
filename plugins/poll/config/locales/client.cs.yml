@@ -5,6 +5,11 @@
 # https://translate.discourse.org/
 
 cs:
+  admin_js:
+    admin:
+      site_settings:
+        categories:
+          poll: "Discourse Poll"
   js:
     poll:
       voters:
@@ -139,7 +144,7 @@ cs:
           label: Typ
           regular: Jedna možnost
           multiple: Více možností
-          ranked_choice: Hodnocená volba
+          ranked_choice: Preferenční hlasování
           number: Číselné hodnocení
         poll_result:
           label: Zobrazit výsledky...

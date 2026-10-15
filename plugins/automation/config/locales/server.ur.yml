@@ -6,12 +6,11 @@
 
 ur:
   discourse_automation:
-    models:
-      fields:
-        invalid_field: فیلڈ کا جزو `%{component}` `%{target}:%{target_name}پر قابل استعمال نہیں ہے۔`
     triggerables:
       topic:
-        title: ٹاپک
+        title: موضوع
+      user_updated:
+        title: رکن اپ ڈیٹ کے بعد
     scriptables:
       pin_topic:
         title: ٹاپک پِن کریں

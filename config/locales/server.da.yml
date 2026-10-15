@@ -187,6 +187,9 @@ da:
       load_from_remote: "Der opstod en fejl ved indlæsningen af dette indlæg."
     site_settings:
       invalid_category_id: "Du angav en kategori, der ikke findes"
+      invalid_choice:
+        one: "'%{name}' er et ugyldigt valg."
+        other: "'%{name}' er ugyldige valg."
       default_categories_already_selected: "Du kan ikke vælge en kategori der er brugt i en anden liste."
       default_tags_already_selected: "Du kan ikke vælge et mærke, der bruges i en anden liste."
       s3_upload_bucket_is_required: "Du kan ikke aktivere overførsler til S3 med mindre du har angivet 's3_upload_bucket'."
@@ -428,49 +431,6 @@ da:
     until_posts:
       one: "%{count} indlæg"
       other: "%{count} indlæg"
-    "new-topic": |
-      Velkommen til %{site_name} &mdash; **Tak fordi du starter en ny samtale!**
-
-      - Lyder titlen interessant hvis du læser den højt? Er det et godt resumé?
-      - Hvem ville være interesseret i dette? Hvorfor er det vigtigt? Hvilken type svar ønsker du?
-      - Inkludér relevante ord i dit emne så andre kan *finde* det. For at gruppere dit emne med relaterede emner, så vælg en kategori (eller et mærke).
-
-      For mere info, [se vores retningslinjer](%{base_path}/guidelines). Dette panel vil kun blive vist for dit første %{education_posts_text}.
-    "new-reply": |
-      Velkommen til %{site_name} &mdash; **tak for at du deltager i samtalen!**
-
-      Husk venligst mens du skriver dit svar:
-
-      - Forbedrer dit svar samtalen på en eller anden måde?
-
-      - Behandl dine meddebattører med den samme respekt, som du ønsker at blive behandlet med.
-
-      - Det er godt med kritik, men husk at kritisere *ideer*, ikke personer.
-
-      For flere tips, [se vores retningslinier](%{base_path}/guidelines). Denne boks dukker kun op for dine første %{education_posts_text}.
-    avatar: |
-      ### Hvad med et billede til din konto?
-
-      Du har oprettet et par emner og svar, men dit profilbillede er ikke så unik som du er -- det er bare et bogstav.
-
-      Har du overvejet at **[gå til din brugerprofil](%{profile_path})** og overføre et billede, der repræsenterer dig?
-
-      Det er lettere at følge diskussioner og finde interessante mennesker i samtaler, hvor alle har et unikt profilbillede!
-    sequential_replies: |
-      ### Overvej at svare på flere indlæg på én gang
-
-      I stedet for at lave mange svar på stribe til et emne, bør du overveje at lave et enkelt svar, som indeholder citater fra tidligere indlæg eller @navn-referencer til tidligere indlæg.
-
-      Du kan redigere dit forrige svar for at tilføje et citat ved at markere teksten og vælge <b>citér svar</b>-knappen som dukker op.
-
-      Det er nemmere for alle at læse emner som har færre detaljerede svar i stedet for mange mindre, individuelle svar.
-    dominating_topic: Du har skrevet meget i dette emne! Overvej at give andre mulighed for at svare her og også diskutere tingene med hinanden.
-    too_many_replies: |
-      ### Du kan ikke skrive flere indlæg i dette emne
-
-      Beklager, men nye brugere er begrænset til %{newuser_max_replies_per_topic} svar inden for samme emne.
-
-      I stedet for at tilføje endnu et svar, bør du overveje at redigere et af dine eksisterende svar eller at besøge andre emner.
   activerecord:
     attributes:
       category:
@@ -589,8 +549,8 @@ da:
       email_already_used_in_category: "'%{email}' bruges allerede af kategorien '%{category_name}'."
       description_incomplete: "Kategori beskrivelsesindlægget skal have mindst et afsnit."
       permission_conflict: "Enhver gruppe, der har tilladelse til at få adgang til en underkategori, skal også have adgang til den overordnede kategori. Følgende grupper har adgang til en af underkategorierne, men ingen adgang til overordnet kategori: %{group_names}."
-      disallowed_topic_tags: "Dette emne har mærker der ikke er tilladt af denne kategori: '%{tags}“"
-      disallowed_tags_generic: "Dette emne har ikke tilladte mærker."
+      disallowed_topic_tags: "Dette emne har tags, der ikke er tilladt i denne kategori: '%{tags}'"
+      disallowed_tags_generic: "Dette emne har ikke-tilladte tags."
       slug_contains_non_ascii_chars: "indeholder ikke-ascii- tegn"
       is_already_in_use: "er allerede i brug"
     cannot_delete:
@@ -619,6 +579,9 @@ da:
     too_many_requests: "Du har udført denne handling for mange gange. Vent venligst %{time_left} før du prøver igen."
     by_type:
       first_day_replies_per_day: "Vi sætter pris på din entusiasme, bliv ved med det! Når det er sagt, så har du af hensyn til vores fællesskab nået det maksimale antal svar, som en ny bruger kan oprette på sin første dag. Vent venligst %{time_left} og du vil kunne oprette flere svar."
+      create_topic: "Du opretter emner lidt for hurtigt. Vent venligst %{time_left} før du prøver igen."
+      create_post: "Du svarer lidt for hurtigt. Vent venligst %{time_left} før du prøver igen."
+      topics_per_day: "Du har nået det maksimale antal nye emner pr. dag. Du kan oprette flere nye emner om %{time_left}."
     hours:
       one: "%{count} time"
       other: "%{count} timer"
@@ -794,8 +757,8 @@ da:
       short_description: "Bogmærk dette indlæg"
     like:
       title: "Like"
-      description: "Du 'Synes godt om' dette indlæg"
-      short_description: "Du 'synes godt om' dette indlæg"
+      description: "Synes godt om dette indlæg"
+      short_description: "Synes godt om dette indlæg"
   draft:
     sequence_conflict_error:
       title: "kladdefejl"
@@ -1249,7 +1212,7 @@ da:
     top_ignored_users:
       title: "Top Ignorerede / Tavse Brugere"
       labels:
-        ignored_user: Ignoreret Bruger
+        ignored_user: Ignoreret bruger
         mutes_count: Tavsheds tæller
       description: "Brugere, der er gjort tavse og/eller ignoreret af mange andre brugere."
     top_users_by_likes_received:
@@ -1513,7 +1476,6 @@ da:
     min_title_similar_length: "Minimumslængden af en titel før den vil blive kontrolleret for lignende emner."
     category_colors: "En liste med hexadecimal farveværdier som er tilladte for kategorier."
     dark_mode_none: "Ingen"
-    max_similar_results: "Hvor mange lignende emner der skal vises over editoren når du opretter et nyt emne. Sammenligning er baseret på titel og indhold."
     max_image_megapixels: "Maksimalt antal megapixel tilladt for et billede. Billeder med et højere antal megapixel vil blive afvist."
     title_prettify: "Undgå hyppige tastefejl i titlen, inklusive overforbrug af store bogstaver, første bogstav med småt, gentagne ! og ?, ekstra . i slutningen, etc."
     topic_post_like_heat_low: "Når forholdet imellem 'synes godt om' og indlæg overstiger dette tal, bliver antal indlæg let fremhævet."
@@ -1577,7 +1539,6 @@ da:
     user_selected_primary_groups: "Tillad brugere at indstille deres egen primære gruppe"
     allow_profile_backgrounds: "Tillad brugere at uploade en profil baggrund."
     enable_mobile_theme: "Mobile enheder bruger et mobilvenligt tema, med mulighed for at skifte til det fulde site. Deaktivér dette hvis du ønsker at anvende et brugerdefineret stylesheet som er fuldstændigt responsivt."
-    disable_avatar_education_message: "Deaktivér hjælpetekst for at skifte sin avatar."
     suppress_uncategorized_badge: "Vis ikke emblemet for ikke-kategoriserede emner i emnelister."
     topic_page_title_includes_category: "Emneside <a href='https://developer.mozilla.org/en-US/docs/Web/HTML/Element/title' target='_blank'>titelmærke</a> inkluderer kategorienavnet."
     short_progress_text_threshold: "Når antallet af indlæg overstiger dette tal viser statuslinjen kun det aktuelle indlægsnummer. Hvis du ændrer bredden af statuslinjen kan det være nødvendigt at opdatere denne værdi."
@@ -1606,24 +1567,24 @@ da:
     default_categories_tracking: "Liste over kategorier der som standard følges."
     default_categories_muted: "Liste over kategorier der som standard har tavshed."
     default_categories_normal: "Liste over kategorier som ikke er tavse som standard. Nyttigt når `mute_all_categories_by_default` webstedsindstilling er aktiveret."
-    mute_all_categories_by_default: "Indstil standardunderretningsniveauet for alle kategorier til tavshed. Kræv, at brugerne tilmelder sig kategorier for at de skal vises på 'seneste' og 'kategorisider'. Hvis du ønsker at ændre standardindstillingerne for anonyme brugere, skal du indstille 'default_category_settings'."
-    default_tags_watching: "Liste over mærker, der er overvåget som standard."
-    default_tags_tracking: "Liste over mærker, der spores som standard."
-    default_tags_muted: "Liste over mærker, der er tavse som standard."
-    default_tags_watching_first_post: "Liste over mærker, hvor første indlæg i hvert nyt emne vil blive overvåget som standard."
+    mute_all_categories_by_default: "Indstil standardniveauet for notifikationer for alle kategorier til tavshed. Kræv, at brugerne tilmelder sig kategorier for at de skal vises på 'seneste' og 'kategorisider'. Hvis du ønsker at ændre standardindstillingerne for anonyme brugere, skal du indstille 'default_category_settings'."
+    default_tags_watching: "Liste over tags, der er overvåget som standard."
+    default_tags_tracking: "Liste over tags, der spores som standard."
+    default_tags_muted: "Liste over tags, der er tavse som standard."
+    default_tags_watching_first_post: "Liste over tags, hvor første indlæg i hvert nyt emne vil blive overvåget som standard."
     revoke_api_keys_unused_days: "Antal dage siden en API-nøgle sidst blev brugt, før den automatisk tilbagekaldes (0 for aldrig)"
     revoke_api_keys_maxlife_days: "Antal dage før en API-nøgle tilbagekaldes automatisk (0 for aldrig)"
     allow_user_api_key_scopes: "Liste over tilladte anvendelsesområder for bruger-API-nøgler"
     revoke_user_api_keys_unused_days: "Antal dage siden en bruger-API-nøgle sidst blev brugt, før den automatisk tilbagekaldes (0 for aldrig)"
     revoke_user_api_keys_maxlife_days: "Antal dage før en bruger-API-nøgle automatisk tilbagekaldes (0 for aldrig)"
-    max_tags_per_topic: "Det maksimale antal mærker, der kan anvendes i et emne."
-    max_tag_search_results: "Ved søger efter mærker, skal der maksimalt vises følgende antal resultater."
-    max_tags_in_filter_list: "Maksimalt antal mærker, der skal vises i filter-rullelisten. De mest brugte mærker vil blive vist."
-    tags_sort_alphabetically: "Vis mærker i alfabetisk rækkefølge. Standard er at vise i rækkefølge efter popularitet."
-    tags_listed_by_group: "Vis mærker efter mærkegruppe på <a href='%{base_path}/tags' target='_blank'>Siden Mærker</a>."
-    suppress_overlapping_tags_in_list: "Hvis mærkerne matcher nøjagtige ord i emnetitler, skal du ikke vise mærket"
-    remove_muted_tags_from_latest: "Vis ikke emner, der kun er mærket med tavse mærker på den seneste emneliste."
-    force_lowercase_tags: "Tving alle nye mærker til at kun benytte små bogstaver."
+    max_tags_per_topic: "Det maksimale antal tags, der kan anvendes i et emne."
+    max_tag_search_results: "Ved søgning efter tags, skal der maksimalt vises følgende antal resultater."
+    max_tags_in_filter_list: "Maksimalt antal tags, der skal vises i filter-rullelisten. De mest brugte tags vil blive vist."
+    tags_sort_alphabetically: "Vis tags i alfabetisk rækkefølge. Standard er at vise i rækkefølge efter popularitet."
+    tags_listed_by_group: "Vis tags efter tag-gruppe på <a href='%{base_path}/tags' target='_blank'>Tags-siden</a>."
+    suppress_overlapping_tags_in_list: "Hvis tags matcher nøjagtige ord i emnetitler, skal tagget ikke vises"
+    remove_muted_tags_from_latest: "Vis ikke emner, der kun er tagget med tavse tags på den seneste emneliste."
+    force_lowercase_tags: "Tving alle nye tags til at kun benytte små bogstaver."
     shared_drafts_category: "Aktiver funktionen Delte kladder ved at angive en kategori for emneudkast. Emner i denne kategori vil blive undertrykt fra emnelister for personalebrugere."
     shared_drafts_min_trust_level: "Tillad brugere at se og redigere Delte kladder."
     shared_drafts_allowed_groups: "Tillad brugere i disse grupper at se og redigere delte kladder."
@@ -2865,7 +2826,6 @@ da:
     wcag_theme_name: "WCAG lys"
     wcag_dark: "WCAG Mørk"
     wcag_dark_theme_name: "WCAG Mørk"
-    default_theme_name: "Standard"
     light_theme_name: "Lys"
     dark_theme_name: "Mørk"
     neutral_theme_name: "Neutral"
@@ -2881,7 +2841,7 @@ da:
     Rediger det første indlæg i dette emne for at ændre indholdet af siden %{page_name}
   guidelines_topic:
     title: "OSS/Retningslinjer"
-    guidelines_title: "Retningslinier"
+    guidelines_title: "Retningslinjer"
   tos_topic:
     title: "Vilkår"
   privacy_topic:
@@ -3020,7 +2980,7 @@ da:
       long_description: |
         Dette emblem tildeles første gang du citerer et indlæg i dit svar. Citering af relevante dele af tidligere indlæg i dit svar hjælper med at holde sammen på diskussioner og fastholder emnet. Den nemmeste måde at citere er at fremhæve et afsnit i et indlæg og derefter trykke på en vilkårlig svarsknap. Citér generøst!
     read_guidelines:
-      name: Læste retningslinierne
+      name: Læste retningslinjerne
       description: Læste <a href="%{base_uri}/guidelines">retningslinjerne for fællesskabet</a>
       long_description: |
         Dette emblem tildes for at <a href="%{base_uri}/guidelines">læse fællesskabsretningslinjerne</a>. At følge og dele disse enkle retningslinjer hjælper med at opbygge et sikkert, sjovt og bæredygtigt samfund for alle. Husk altid, at der er et andet menneske, meget lig dig selv, på den anden side af skærmen. Vær sød!
@@ -3130,10 +3090,6 @@ da:
         Dette emblem tildeles for at besøge webstedet 365 på hinanden følgende dage. Wauw, det er mere end et helt år!
     badge_title_metadata: "%{display_name} emblem på %{site_title}"
   admin_login:
-    success: "E-mail Sendt"
-    errors:
-      unknown_email_address: "Ukendt e-mail-adresse."
-      invalid_token: "Ugyldigt token."
     email_input: "Admin E-Mail"
     submit_button: "Send E-Mail"
   performance_report:
@@ -3145,12 +3101,12 @@ da:
     restricted_tag_remove_disallowed: 'Du kan ikke fjerne mærket "%{tag}".'
     minimum_required_tags:
       one: "Du skal vælge mindst %{count}-mærke."
-      other: "Du skal vælge mindst %{count}-mærker."
+      other: "Du skal vælge mindst %{count} tags."
     upload_row_too_long: "CSV-filen skal have ét mærke pr. linje. Eventuelt kan mærket efterfølges af et komma og derefter navnet på mærkegruppen."
     forbidden:
       invalid:
         one: "Det mærke, du valgte, kan ikke bruges"
-        other: "Ingen af de mærker, du har valgt, kan bruges"
+        other: "Ingen af de tags, du har valgt, kan bruges"
       in_this_category: '"%{tag_name}" kan ikke bruges i denne kategori'
       restricted_to:
         one: '"%{tag_name}" er begrænset til kategorien "%{category_names}"'
@@ -3175,10 +3131,13 @@ da:
     title: "Gå ind i fejlsikret tilstand"
     enter: "Gå ind i fejlsikret tilstand"
     must_select: "Du skal vælge mindst én mulighed for at gå i fejlsikret tilstand."
+  dev_mode:
+    enter: "Enter"
   wizard:
     title: "Discourse Opsætning"
     step:
       introduction:
+        title: "Om dit websted"
         fields:
           title:
             placeholder: "Janes Sted"
@@ -3198,6 +3157,7 @@ da:
           chat_enabled:
             placeholder: "Aktiver chat"
       styling:
+        title: "Udseende og fornemmelse"
         fields:
           body_font:
             label: "Indholds skrifttype"
@@ -3209,18 +3169,24 @@ da:
             choices:
               latest:
                 label: "Seneste"
+                description: "Viser de senest aktive emner i alle kategorier, hvilket hjælper medlemmer med at holde sig opdateret om diskussioner, de er interesserede i."
       branding:
         title: "Webstedets logo"
         fields:
           logo:
             label: "Primært logo"
       corporate:
+        title: "Din organisation"
         fields:
+          company_name:
+            placeholder: "Eksempel-firma"
           governing_law:
+            label: "Gældende lov"
             placeholder: "Californiens lov"
           contact_url:
             placeholder: "https://www.example.dk/kontakt-os"
           city_for_disputes:
+            label: "By for tvister"
             placeholder: "San Francisco, Californien"
       invites:
         title: "Inviter hjælpere"
@@ -3281,35 +3247,49 @@ da:
         title: "Ja"
       agree_and_restore:
         description: "Gendan indlægget, så alle brugere kan se det."
-      delete_single:
-        title: "Slet"
       delete:
-        title: "Slet…"
+        title: "Slet"
+        complete: "Indlæg slettet."
+      delete_and_ignore:
+        complete: "Indlæg slettet."
       delete_and_ignore_replies:
         confirm: "Er du sikker på, at du også vil slette svarene på indlægget?"
+      delete_and_agree:
+        complete: "Indlæg slettet."
       delete_and_agree_replies:
         confirm: "Er du sikker på, at du også vil slette svarene på indlægget?"
       disagree_and_restore:
         description: "Gendan indlægget, så alle brugere kan se det."
       disagree:
         title: "Nej"
+        complete: "Rapportering ignoreret."
       ignore:
         title: "Ignorér"
+        complete: "Rapportering ignoreret."
       ignore_and_do_nothing:
         title: "Gøre ingenting"
+        complete: "Rapportering ignoreret."
       approve:
         title: "Godkend"
+        complete: "Indlæg godkendt."
       approve_post:
         title: "Godkend Indlæg"
+        complete: "Indlæg godkendt."
+      approve_post_closed:
+        title: "Godkend Indlæg"
+        complete: "Indlæg godkendt."
       reject_post:
         title: "Afvis Indlæg"
+        complete: "Indlæg afvist."
       approve_user:
         title: "Godkend Bruger"
+        complete: "Bruger godkendt."
       reject_user:
         title: "Slet Bruger…"
         delete:
           title: "Slet Bruger"
           description: "Brugeren vil blive slettet fra forummet."
+          complete: "Bruger slettet."
         block:
           title: "Slet og Blokér Bruger"
           description: "Brugeren vil blive slettet, og vi vil blokere deres IP og e-mail-adresse."
@@ -3318,6 +3298,7 @@ da:
         bundle_title: "Afvis…"
       delete_user:
         reason: "Slettet via gennemgangskø"
+        complete: "Bruger slettet."
   email_style:
     html_missing_placeholder: "HTML-skabelonen skal indeholde %{placeholder}"
   notification_level:

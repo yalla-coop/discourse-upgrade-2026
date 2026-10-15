@@ -302,7 +302,7 @@ ug:
         one: "%{count} ھۆججەت"
         other: "%{count} ھۆججەت"
       you_flagged: "بۇ ئۇچۇرنى پاش قىلدىڭىز"
-      exit: "كەينى"
+      exit: "سۆھبەتتىن چېكىن"
       channel_status:
         read_only_header: "قانال پەقەت ئوقۇلىدۇ"
         read_only: "پەقەت ئوقۇلىدۇ"
@@ -342,6 +342,7 @@ ug:
         tabs:
           members: ئەزا
           settings: تەڭشەك
+        remove_member: "چىقىرىۋەت"
       new_message_modal:
         title: ئۇچۇر يوللا
         add_user_long: <kbd>shift + چېكىش</kbd> ياكى <kbd>shift + enter</kbd><span>قوش @%{username}</span>
@@ -530,6 +531,7 @@ ug:
         select_emoji: "چىراي ئىپادە تاللا"
         system: "سىستېما"
         title: "كەلگەن تور ئىلمىكى"
+        header_description: "سىرتقى سىستېما كەلگەن تور ئىلمىكىنى ئىشلىتىپ ئۇچۇرنى ماشىنا ئادەم ئىشلەتكۈچى سۈپىتىدە بەلگىلەنگەن سۆھبەت قانىلىغا يوللاشتا قوللىنىدۇ"
         url: "تور ئادرېسى"
         url_instructions: "بۇ تور ئادرېسىنىڭ مەخپىي قىممىتى بار- ئۇنى بىخەتەر ساقلاڭ."
         username: "ئىشلەتكۈچى ئاتى"
@@ -642,6 +644,11 @@ ug:
       draft_channel_screen:
         header: "يېڭى ئۇچۇر"
         cancel: "ۋاز كەچ"
+      quick_reaction_type:
+        title: "بىر چېكىپ پاراڭلىشىش ئىنكاسى"
+        options:
+          frequent: "دائىم ئىشلىتىلىدىغان پاراڭلىشىش ئىنكاسى"
+          custom: "ئىختىيارى ئىنكاس"
     notifications:
       chat_invitation: "سۆھبەت قانىلىغا تەكلىپ قىلىندىڭىز"
       chat_invitation_html: "<span>%{username}</span> <span>سىزنى سۆھبەت قانىلىغا تەكلىپ قىلدى</span>"
@@ -699,7 +706,7 @@ ug:
           switch_channel_arrows: "%{shortcut} قانال ئالماشتۇر"
           switch__unread_channel_arrows: "%{shortcut} ئوقۇلمىغان قانالغا ئالماشتۇرىدۇ"
           open_quick_channel_selector: "%{shortcut} تېز قانال تاللىغۇچنى ئاچ"
-          open_insert_link_modal: "%{shortcut} ئۇلانما قىستۇر (كىرگۈزۈش كۆزنىكىلا)"
+          open_insert_link_modal: "%{shortcut} ئۇلانما قىستۇر (تەھرىرلىگۈچلا)"
           composer_bold: "%{shortcut} توم (كىرگۈزۈش كۆزنىكىلا)"
           composer_italic: "%{shortcut} يانتۇ (كىرگۈزۈش كۆزنىكىلا)"
           composer_code: "%{shortcut} كود (كىرگۈزۈش كۆزنىكىلا)"

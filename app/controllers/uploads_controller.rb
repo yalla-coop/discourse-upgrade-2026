@@ -29,7 +29,7 @@ class UploadsController < ApplicationController
       current_user,
       "uploads-per-minute",
       SiteSetting.max_uploads_per_minute,
-      1.minute.to_i,
+      1.minute,
     ).performed!
 
     type =
@@ -357,11 +357,13 @@ class UploadsController < ApplicationController
       content_type: MiniMime.lookup_by_filename(upload.original_filename)&.content_type,
     }
 
-    if !FileHelper.is_inline_image?(upload.original_filename)
+    if !FileHelper.is_inline_safe?(upload.original_filename)
       opts[:disposition] = "attachment"
     elsif params[:inline]
       opts[:disposition] = "inline"
     end
+
+    response.headers["Content-Security-Policy"] = "sandbox;"
 
     file_path = Discourse.store.path_for(upload)
     return render_404 unless file_path

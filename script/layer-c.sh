@@ -10,6 +10,7 @@
 #   script/layer-c.sh run      do everything: up, boot the emulator, build the app if
 #                              needed, run the Maestro flows, save the results, then down
 #                              (BUILD=1 forces a rebuild, WINDOW=1 shows the emulator)
+#                              (FLOWS="flows/<file>.yaml ..." runs only those flows)
 #
 # Prose runs from the app repo with settings passed on the command line. Its
 # .env (dotenv 8, which never overrides existing values) is not used for any of
@@ -230,7 +231,9 @@ run_flows() {
   else
     say "Reusing the installed app build"
   fi
-  (cd "$APP_REPO" && .maestro/run.sh "$MAESTRO_ENV" --platform android $build_flag) 2>&1 | tee "$log"
+  # FLOWS (optional) runs only the given flow files, e.g. FLOWS=flows/TC033-accessible-groups-only.yaml
+  # shellcheck disable=SC2086
+  (cd "$APP_REPO" && .maestro/run.sh "$MAESTRO_ENV" --platform android $build_flag ${FLOWS:-}) 2>&1 | tee "$log"
   local status="${PIPESTATUS[0]}"
   if [ -n "$build_flag" ] && grep -qE "\[(Passed|Failed)\]" "$log"; then
     echo "$(git -C "$APP_REPO" rev-parse HEAD) http://localhost:$PROSE_PORT" > "$LOGS/android-build.stamp"

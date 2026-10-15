@@ -1619,8 +1619,8 @@ RSpec.describe Report do
     end
 
     context "with data" do
-      fab!(:gwen) { Fabricate(:user) }
-      fab!(:martin) { Fabricate(:user) }
+      fab!(:gwen, :user)
+      fab!(:martin, :user)
 
       before do
         UserHistory.create(
@@ -1643,10 +1643,31 @@ RSpec.describe Report do
         tl3_reached = reports.data.find { |r| r[:req] == "tl3_reached" }
         tl4_reached = reports.data.find { |r| r[:req] == "tl4_reached" }
 
-        expect(tl1_reached[:data][0][:y]).to eql(0)
-        expect(tl2_reached[:data][0][:y]).to eql(1)
-        expect(tl3_reached[:data][0][:y]).to eql(0)
-        expect(tl4_reached[:data][0][:y]).to eql(1)
+        x = Time.now.at_midnight.strftime("%Y-%m-%d")
+        expect(tl1_reached).to eq(
+          color: Report::COLORS[:lime],
+          data: [{ x:, y: 0 }],
+          req: "tl1_reached",
+          label: I18n.t("reports.trust_level_growth.xaxis.tl1_reached"),
+        )
+        expect(tl2_reached).to eq(
+          color: Report::COLORS[:magenta],
+          data: [{ x:, y: 1 }],
+          req: "tl2_reached",
+          label: I18n.t("reports.trust_level_growth.xaxis.tl2_reached"),
+        )
+        expect(tl3_reached).to eq(
+          color: Report::COLORS[:yellow],
+          data: [{ x:, y: 0 }],
+          req: "tl3_reached",
+          label: I18n.t("reports.trust_level_growth.xaxis.tl3_reached"),
+        )
+        expect(tl4_reached).to eq(
+          color: Report::COLORS[:purple],
+          data: [{ x:, y: 1 }],
+          req: "tl4_reached",
+          label: I18n.t("reports.trust_level_growth.xaxis.tl4_reached"),
+        )
       end
     end
   end
@@ -1847,8 +1868,8 @@ RSpec.describe Report do
   describe "topic_view_stats" do
     let(:report) { Report.find("topic_view_stats") }
 
-    fab!(:topic_1) { Fabricate(:topic) }
-    fab!(:topic_2) { Fabricate(:topic) }
+    fab!(:topic_1, :topic)
+    fab!(:topic_2, :topic)
 
     include_examples "no data"
 
@@ -1925,6 +1946,64 @@ RSpec.describe Report do
             total_logged_in_views: 20,
             total_views: 29,
           )
+        end
+      end
+    end
+  end
+
+  describe ".hidden?" do
+    context "when admin is true" do
+      it "returns false for regular reports" do
+        expect(Report.hidden?("topics", admin: true)).to eq(false)
+      end
+
+      it "returns false for admin-only reports" do
+        Report::ADMIN_ONLY_REPORTS.each do |report_type|
+          expect(Report.hidden?(report_type, admin: true)).to eq(false)
+        end
+      end
+    end
+
+    context "when admin is false" do
+      it "returns false for regular reports" do
+        expect(Report.hidden?("topics", admin: false)).to eq(false)
+      end
+
+      it "returns true for admin-only reports" do
+        Report::ADMIN_ONLY_REPORTS.each do |report_type|
+          expect(Report.hidden?(report_type, admin: false)).to eq(true)
+        end
+      end
+    end
+
+    context "when use_legacy_pageviews is true" do
+      before { SiteSetting.use_legacy_pageviews = true }
+
+      it "hides pageview reports" do
+        Report::HIDDEN_PAGEVIEW_REPORTS.each do |report_type|
+          expect(Report.hidden?(report_type, admin: true)).to eq(true)
+        end
+      end
+
+      it "does not hide legacy pageview reports" do
+        Report::HIDDEN_LEGACY_PAGEVIEW_REPORTS.each do |report_type|
+          expect(Report.hidden?(report_type, admin: true)).to eq(false)
+        end
+      end
+    end
+
+    context "when use_legacy_pageviews is false" do
+      before { SiteSetting.use_legacy_pageviews = false }
+
+      it "does not hide pageview reports" do
+        Report::HIDDEN_PAGEVIEW_REPORTS.each do |report_type|
+          expect(Report.hidden?(report_type, admin: true)).to eq(false)
+        end
+      end
+
+      it "hides legacy pageview reports" do
+        Report::HIDDEN_LEGACY_PAGEVIEW_REPORTS.each do |report_type|
+          expect(Report.hidden?(report_type, admin: true)).to eq(true)
         end
       end
     end

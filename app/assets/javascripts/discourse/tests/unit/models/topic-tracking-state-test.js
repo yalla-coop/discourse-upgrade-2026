@@ -6,7 +6,6 @@ import { module, test } from "qunit";
 import sinon from "sinon";
 import { NotificationLevels } from "discourse/lib/notification-levels";
 import DiscourseURL from "discourse/lib/url";
-import Category from "discourse/models/category";
 import User from "discourse/models/user";
 import {
   fakeTime,
@@ -515,6 +514,53 @@ module("Unit | Model | topic-tracking-state", function (hooks) {
     );
   });
 
+  test("sync - all missing states are updated even when some topics match the server list", function (assert) {
+    const trackingState = this.store.createRecord("topic-tracking-state");
+
+    trackingState.loadStates([
+      {
+        topic_id: 100,
+        last_read_post_number: null,
+        notification_level: NotificationLevels.TRACKING,
+        created_in_new_period: true,
+      },
+      {
+        topic_id: 105,
+        last_read_post_number: null,
+        notification_level: NotificationLevels.TRACKING,
+        created_in_new_period: true,
+      },
+      {
+        topic_id: 106,
+        last_read_post_number: null,
+        notification_level: NotificationLevels.TRACKING,
+        created_in_new_period: true,
+      },
+    ]);
+
+    const list = {
+      topics: [
+        this.store.createRecord("topic", {
+          id: 100,
+          unseen: true,
+        }),
+      ],
+    };
+
+    trackingState.sync(list, "new");
+
+    assert.strictEqual(
+      trackingState.findState(105).last_read_post_number,
+      1,
+      "topic 105 marked as not new even though topic 100 was in server list"
+    );
+    assert.strictEqual(
+      trackingState.findState(106).last_read_post_number,
+      1,
+      "topic 106 marked as not new even though topic 100 was in server list"
+    );
+  });
+
   test("establishChannels - /delete MessageBus channel payloads processed", async function (assert) {
     const trackingState = this.store.createRecord("topic-tracking-state", {
       messageBus: MessageBus,
@@ -685,7 +731,9 @@ module("Unit | Model | topic-tracking-state", function (hooks) {
       slug: "baz",
       parent_category_id: bar.id,
     });
-    sinon.stub(Category, "list").returns([foo, bar, baz]);
+
+    const site = getOwner(this).lookup("service:site");
+    site.set("categories", [foo, bar, baz]);
 
     const trackingState = this.store.createRecord("topic-tracking-state");
     assert.deepEqual(Array.from(trackingState.getSubCategoryIds(1)), [1, 2, 3]);
@@ -713,7 +761,9 @@ module("Unit | Model | topic-tracking-state", function (hooks) {
       id: 4,
       slug: "qux",
     });
-    sinon.stub(Category, "list").returns([foo, bar, baz, qux]);
+
+    const site = getOwner(this).lookup("service:site");
+    site.set("categories", [foo, bar, baz, qux]);
 
     let currentUser = this.store.createRecord("user", {
       username: "chuck",
