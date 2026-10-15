@@ -180,7 +180,7 @@ GEM
     hashie (5.0.0)
     highline (3.1.2)
       reline
-    htmlentities (4.3.4)
+    htmlentities (4.4.2)
     http_accept_language (2.1.1)
     i18n (1.14.7)
       concurrent-ruby (~> 1.0)
