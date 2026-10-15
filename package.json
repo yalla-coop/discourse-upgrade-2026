@@ -6,7 +6,7 @@
   "license": "GPL-2.0-only",
   "devDependencies": {
     "@babel/plugin-proposal-decorators": "^7.25.9",
-    "@discourse/lint-configs": "^2.3.0",
+    "@discourse/lint-configs": "^2.3.1",
     "@discourse/moment-timezone-names-translations": "^1.0.0",
     "@fortawesome/fontawesome-free": "6.7.2",
     "@glint/core": "^1.5.2",
@@ -14,13 +14,13 @@
     "@glint/environment-ember-template-imports": "^1.5.2",
     "@glint/template": "^1.5.2",
     "@mixer/parallel-prettier": "^2.0.3",
-    "@swc/core": "^1.10.11",
+    "@swc/core": "^1.10.12",
     "chart.js": "3.5.1",
     "chartjs-plugin-datalabels": "2.2.0",
     "chrome-launcher": "^1.1.2",
     "chrome-remote-interface": "^0.33.2",
     "concurrently": "^9.1.2",
-    "ember-template-lint": "^6.0.0",
+    "ember-template-lint": "^6.1.0",
     "esbuild": "^0.24.2",
     "eslint": "^9.19.0",
     "jsdoc": "^4.0.4",
@@ -63,7 +63,7 @@
     "node": ">= 18",
     "npm": "please-use-pnpm",
     "yarn": "please-use-pnpm",
-    "pnpm": ">= 9"
+    "pnpm": "^9"
   },
   "pnpm": {
     "patchedDependencies": {
@@ -71,7 +71,7 @@
       "babel-plugin-debug-macros@0.3.4": "patches/babel-plugin-debug-macros@0.3.4.patch",
       "virtual-dom@2.1.1": "patches/virtual-dom@2.1.1.patch",
       "licensee@11.1.1": "patches/licensee@11.1.1.patch",
-      "content-tag@3.1.0": "patches/content-tag@3.1.0.patch",
+      "content-tag@3.1.1": "patches/content-tag@3.1.1.patch",
       "@ember-compat/tracked-built-ins@0.9.1": "patches/@ember-compat__tracked-built-ins@0.9.1.patch",
       "ember-source@5.12.0": "patches/ember-source@5.12.0.patch"
     },

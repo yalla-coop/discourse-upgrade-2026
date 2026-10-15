@@ -138,6 +138,13 @@ ug:
         never: "ھەرگىز"
       separate_sidebar_mode:
         title: "مۇنبەر ۋە سۆھبەتكە ئايرىم يان بالداق ھالىتىنى كۆرسىتىدۇ"
+      send_shortcut:
+        enter:
+          label: "Enter بېسىلسا يوللايدۇ"
+          description: "Shift + Enter بېسىلسا يېڭى قۇردىن باشلايدۇ"
+        meta_enter:
+          label: "%{meta_key} + Enter بېسىلسا يوللايدۇ"
+          description: "Enter بېسىلسا يېڭى قۇردىن باشلايدۇ"
       enable: "سۆھبەتنى قوزغات"
       flag: "پاش قىل"
       emoji: "چىراي ئىپادە قىستۇر"
@@ -163,6 +170,60 @@ ug:
           unreachable_multiple:
             one: "@%{group} ۋە باشقا %{count} گۇرۇپپا ئاتاشنقا يول قويمايدۇ."
             other: "@%{group} ۋە باشقا %{count} گۇرۇپپا ئاتاشنقا يول قويمايدۇ."
+          too_many_members_MF: |
+            { groupCount, plural,
+                 =1 {
+                      { isAdmin, select,
+                        true {
+                          { notificationLimit, plural,
+                              one {Mentioning @{group1} ئاتاش # ئىشلەتكۈچىنىڭ <a href="{siteSettingUrl}" target="_blank">ئۇقتۇرۇش چېكى</a> دىن ئېشىپ كەتتى.}
+                              other {Mentioning @{group1} ئاتاش # ئىشلەتكۈچىنىڭ <a href="{siteSettingUrl}" target="_blank">ئۇقتۇرۇش چېكى</a> دىن ئېشىپ كەتتى.}
+                          }
+                        }
+                        false {
+                          { notificationLimit, plural,
+                              one {@{group1} ئاتاش # ئىشلەتكۈچىنىڭ ئۇقتۇرۇش چېكىدىن ئېشىپ كەتتى.}
+                              other {@{group1} ئاتاش # ئىشلەتكۈچىنىڭ ئۇقتۇرۇش چېكىدىن ئېشىپ كەتتى.}
+                          }
+                        }
+                        other {}
+                      }
+                    }
+                 =2 {
+                      { isAdmin, select,
+                        true {
+                          { notificationLimit, plural,
+                              one {@{group1} ۋە @{group2} ئاتاش # ئىشلەتكۈچىنىڭ <a href="{siteSettingUrl}" target="_blank">ئۇقتۇرۇش چېكى</a> دىن ئېشىپ كەتتى.}
+                            other {@{group1} ۋە @{group2} ئاتاش # ئىشلەتكۈچىنىڭ <a href="{siteSettingUrl}" target="_blank">ئۇقتۇرۇش چېكى</a> دىن ئېشىپ كەتتى.}
+                          }
+                        }
+                        false {
+                          { notificationLimit, plural,
+                              one {@{group1} ۋە @{group2} ئاتاش # ئىشلەتكۈچىنىڭ ئۇقتۇرۇش چېكىدىن ئېشىپ كەتتى.}
+                            other {@{group1} ۋە @{group2} ئاتاش # ئىشلەتكۈچىنىڭ ئۇقتۇرۇش چېكىدىن ئېشىپ كەتتى.}
+                          }
+                        }
+                        other {}
+                      }
+                    }
+              other {
+                      { isAdmin, select,
+                        true {
+                          { notificationLimit, plural,
+                              one {بۇ {groupCount} گۇرۇپپىنى ئاتاش # ئىشلەتكۈچىنىڭ <a href="{siteSettingUrl}" target="_blank">ئۇقتۇرۇش چېكى</a> دىن ئېشىپ كەتتى.}
+                            other {بۇ {groupCount} گۇرۇپپىنى ئاتاش # ئىشلەتكۈچىنىڭ<a href="{siteSettingUrl}" target="_blank">ئۇقتۇرۇش چېكى</a> دىن ئېشىپ كەتتى.}
+                          }
+                        }
+                        false {
+                          { notificationLimit, plural,
+                              one {بۇ {groupCount} گۇرۇپپىنى ئاتاش # ئىشلەتكۈچىنىڭ ئۇقتۇرۇش چېكىدىن ئېشىپ كەتتى.}
+                            other {بۇ {groupCount} گۇرۇپپىنى ئاتاش # ئىشلەتكۈچىنىڭ ئۇقتۇرۇش چېكىدىن ئېشىپ كەتتى.}
+                          }
+                        }
+                        other {}
+                      }
+                    }
+            }
         too_many_mentions:
           one: "بۇ ئۇچۇر %{count} قېتىم ئاتاش ئۇقتۇرۇش چەكلىمىسىدىن ئېشىپ كەتتى."
           other: "بۇ ئۇچۇر %{count} قېتىم ئاتاش ئۇقتۇرۇش چەكلىمىسىدىن ئېشىپ كەتتى."
@@ -518,7 +579,7 @@ ug:
           other: "سۆھبەت تەڭشەكلىرى قانال ئۇچۇرلىرىنى %{count} كۈن ساقلاپ قېلىشقا تەڭشەلدى."
       flags:
         off_topic: "بۇ ئۇچۇر بىلەن قانال ماۋزۇسىدا بەلگىلەنگەن نۆۋەتتىكى سۆھبەت بىلەن مۇناسىۋەتسىز، باشقا جايغا يۆتكەش لازىم بولۇشى مۇمكىن."
-        inappropriate: "ئەقىللىق ئادەم بۇ ئۇچۇردا ھۇجۇم، ھاقارەت ياكى <a href=\"%{basePath}/guidelines\">جامائەت كۆرسەتمىمىز</a>گە خىلاپ مەزمۇن بار دەپ قارايدۇ."
+        inappropriate: "ئەقىللىق ئادەم بۇ ئۇچۇردا ھۇجۇم، ھاقارەت ياكى <a href=\"%{basePath}/guidelines\">جامائەت مىزانىمىز</a>غا خىلاپ مەزمۇن بار دەپ قارايدۇ."
         illegal: "بۇ يازمىغا باشقۇرغۇچى دىققەت قىلىشى زۆرۈر چۈنكى ئۇنىڭدا قانۇنسىز مەزمۇن بارلىقىغا ئىشىنىمەن."
         spam: "بۇ ئۇچۇر ئېلان ياكى بۇزغۇنچىلىق. ئۇ نۆۋەتتىكى قانالغا پايدىسىز ياكى مۇناسىۋەتسىز."
         notify_user: "مەن ئۇلارنىڭ ئۇچۇرى ھەققىدە بۇ كىشى بىلەن بىۋاسىتە ۋە ئۆزۈم سۆزلەشمەكچى."

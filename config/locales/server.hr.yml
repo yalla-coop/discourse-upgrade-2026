@@ -43,7 +43,7 @@ hr:
   views: "pregledi"
   loading: "Učitavanje"
   powered_by_html: 'Pogonjeno <a href="https://www.discourse.org">Discourse</a> platformom, preporučen pregled uz omogućen JavaScript'
-  sign_up: "Učlani se"
+  sign_up: "Registriraj se"
   log_in: "Prijava"
   submit: "Pošalji"
   purge_reason: "Automatski izbrisao kao napušteni, deaktivirani račun."
@@ -416,6 +416,8 @@ hr:
       trust_level_2: "razina_povjerenja_2"
       trust_level_3: "razina_povjerenja_3"
       trust_level_4: "razina_povjerenja_4"
+    default_descriptions:
+      moderators: "Odgovorni za odgovaranje na oznake, moderiranje rasprava i pomoć članovima s njihovim računima"
   education:
     until_posts:
       one: "%{count} objava"
@@ -489,6 +491,7 @@ hr:
   staff_category_description: "Privatna kategorija za rasprave osoblja. Teme su vidljive samo administratorima i moderatorima."
   category:
     topic_prefix: "O %{category} kategoriji"
+    post_template: "%{replace_paragraph}\n\nKoristite sljedeće odlomke za dulji opis ili za postavljanje smjernica ili pravila kategorije:\n\n- Zašto bi ljudi trebali koristiti ovu kategoriju? Čemu služi?\n\n- Po čemu se točno ovo razlikuje od ostalih kategorija koje već imamo?\n\n- Što bi teme u ovoj kategoriji općenito trebale sadržavati?\n\n- Trebamo li ovu kategoriju? Možemo li se spojiti s drugom kategorijom ili potkategorijom?\n"
     errors:
       not_found: "Kategorija nije pronađena!"
       uncategorized_parent: "Nekategorizirano ne može imati nadkategoriju"
@@ -724,6 +727,8 @@ hr:
       email_body: "%{link}\n\n%{message}"
     notify_user:
       title: "Pošaljite poruku @%{username}"
+      description: "Želim razgovarati s tom osobom izravno i osobno o njihovoj objavi."
+      short_description: "Želim razgovarati s tom osobom izravno i osobno o njihovoj objavi."
       email_title: 'Vaša objava u "%{title}"'
       email_body: "%{link}\n\n%{message}"
     notify_moderators:
@@ -1123,8 +1128,7 @@ hr:
   site_settings:
     disabled: "onemogućen"
     allow_user_locale: "Dopustite korisnicima da odaberu vlastite postavke jezika sučelja"
-    set_locale_from_accept_language_header: "postaviti jezik sučelja za anonimne korisnike iz jezičnih zaglavlja njihovih web preglednika"
-    support_mixed_text_direction: "Podržava mješoviti smjer teksta slijeva nadesno i zdesna nalijevo."
+    support_mixed_text_direction: "Podržava mješoviti smjer teksta slijeva nadesno i zdesna nalijevo"
     max_post_length: "Najveća dopuštena duljina posta u znakovima"
     show_topic_featured_link_in_digest: "Pokažite istaknutu vezu na temu u sažetku e-pošte."
     min_topic_views_for_delete_confirm: "Minimalni broj prikaza koje tema mora imati da bi se pojavio skočni prozor za potvrdu kada se izbriše"
@@ -1214,8 +1218,8 @@ hr:
     version_checks: "Pingaj Discourse Hub za dostupna ažuriranja i prikaži obavijesti o novim verzijama na <a href='%{base_path}/admin' target='_blank'>/admin</a> nadzornoj ploči"
     min_username_length: "Minimalna duljina korisničkog imena u znakovima. UPOZORENJE: ako bilo koji postojeći korisnik ili grupa ima imena kraća od ovoga, vaša stranica će se pokvariti!"
     max_username_length: "Maksimalna duljina korisničkog imena u znakovima. UPOZORENJE: ako postojeći korisnici ili grupe imaju imena duža od ovog, vaša će stranica pokvariti!"
-    unicode_usernames: "Dopustite da korisnička imena i nazivi grupa sadrže Unicode slova i brojke."
-    allowed_unicode_username_characters: "Regularni izraz koji dopušta samo neke Unicode znakove unutar korisničkih imena. ASCII slova i brojevi uvijek će biti dopušteni i ne moraju biti uključeni u popis dopuštenih."
+    unicode_usernames: "Dopustite da korisnička imena i nazivi grupa sadrže Unicode slova i brojke"
+    allowed_unicode_username_characters: "Regularni izraz koji dopušta samo neke Unicode znakove unutar korisničkih imena. ASCII slova i brojevi uvijek će biti dopušteni i ne moraju biti uključeni u popis dopuštenih"
     reserved_usernames: "Korisnička imena za koja nije dopuštena prijava. Simbol zamjenskog znaka * može se koristiti za podudaranje bilo kojeg znaka nula ili više puta."
     password_unique_characters: "Minimalni broj jedinstvenih znakova koje lozinka mora sadržavati."
     block_common_passwords: "Nemojte dopustiti lozinke koje se nalaze među 10.000 najčešćih lozinki."
@@ -1340,7 +1344,6 @@ hr:
     num_hours_to_close_topic: "Broj sati za pauziranje teme za intervenciju."
     auto_respond_to_flag_actions: "Omogući automatski odgovor pri uklanjanju oznake."
     min_first_post_typing_time: "Minimalno vrijeme u milisekundama koje korisnik mora upisati tijekom prve objave, ako prag nije dostignut, objava će automatski ući u red čekanja za odobrenje. Postavite na 0 za onemogućavanje (ne preporučuje se)"
-    auto_silence_fast_typers_on_first_post: "Automatski utišaj korisnike koji ne ispunjavaju min_first_post_typing_time"
     auto_silence_fast_typers_max_trust_level: "Maksimalna razina povjerenja za automatsko utišavanje brzih tipkača"
     auto_silence_first_post_regex: "Regularni izraz koji ne razlikuje velika i mala slova koji će, ako se proslijedi, utišati prvu objavu korisnika i poslati je u red čekanja za odobrenje. Primjer: raging|a[bc]a , uzrokovat će prvo utišavanje svih postova koji sadrže raging ili aba ili aca. Odnosi se samo na prvi post. ZASTARJELO: Umjesto toga koristite utišavanje promatranih riječi."
     reviewable_claiming: "Treba li potraživati sadržaj koji se može pregledati prije nego što se na njega može djelovati?"
@@ -1446,7 +1449,6 @@ hr:
     share_quote_visibility: "Odredite kada prikazati gumbe za dijeljenje ponuda: nikada, samo anonimnim korisnicima ili svim korisnicima. "
     create_revision_on_bulk_topic_moves: "Napravite reviziju za prve postove kada se teme skupno premještaju u novu kategoriju."
     allow_changing_staged_user_tracking: "Dopustite korisniku administratoru da promijeni postavke obavijesti o kategorijama i oznakama postupnog korisnika."
-    use_email_for_username_and_name_suggestions: "Koristite prvi dio adresa e-pošte za korisničko ime i prijedloge imena. Imajte na umu da ovo javnosti olakšava pogađanje pune adrese e-pošte korisnika (jer velik dio ljudi dijeli zajedničke usluge poput `gmail.com`)."
     use_name_for_username_suggestions: "Koristite puno ime korisnika kada predlažete korisnička imena."
     suggest_weekends_in_date_pickers: "Uključite vikende (subota i nedjelja) u prijedloge za odabir datuma (onemogućite ovo ako Discourse koristite samo radnim danima, od ponedjeljka do petka)."
     splash_screen: "Prikazuje privremeni zaslon za učitavanje dok se sredstva web-mjesta učitavaju"

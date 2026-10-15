@@ -90,6 +90,7 @@ pt_BR:
       actor_muting_target_user: "Você está silenciando %{username}, então você não pode enviar mensagens para ele(a)."
       actor_disallowed_dms: "Você optou por impedir que os(as) usuários(as) enviem mensagens pessoais e diretas. Portanto, você não pode criar novas mensagens diretas."
       actor_preventing_target_user_from_dm: "Você optou por impedir que %{username} envie mensagens pessoais e diretas, portanto, você não pode criar novas mensagens diretas para ele(a)."
+      not_reachable: "Desculpe, %{username} não está usando o chat."
       user_cannot_send_direct_messages: "Desculpe, você não pode enviar mensagens diretas."
       over_chat_max_direct_message_users_allow_self: "Você poderá criar uma mensagem direta apenas consigo mesmo(a)."
       over_chat_max_direct_message_users:
@@ -185,6 +186,8 @@ pt_BR:
       inline_to_message: "Mensagem #%{message_id} por %{username} – #%{chat_channel}"
       inline_to_channel: "Chat #%{chat_channel}"
       inline_to_topic_channel: "Chat do Tópico %{topic_title}"
+      inline_to_thread: "%{thread_title} - #%{chat_channel}"
+      inline_to_thread_no_title: "Linha de discussão #%{chat_channel}"
       thread_title_connector: "em"
       x_members:
         one: "%{count} membro"
