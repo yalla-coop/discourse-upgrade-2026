@@ -1,0 +1,22 @@
+{
+  "hop": "3.4.7",
+  "discourse_version": "3.4.7",
+  "branch": "hop/3.4.7",
+  "commit": "71ec4fcb3c",
+  "ran_at": "2026-10-15T13:55:33.909Z",
+  "verdict": "pass",
+  "layer_a": {
+    "examples": 48,
+    "failures": 0,
+    "failed": []
+  },
+  "layer_b": {
+    "passed": 106,
+    "failed": 0,
+    "unverified": 0,
+    "skipped": 0,
+    "changed_vs_baseline": [],
+    "failed_checks": []
+  },
+  "layer_c": null
+}

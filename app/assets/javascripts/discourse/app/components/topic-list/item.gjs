@@ -4,6 +4,7 @@ import { on } from "@ember/modifier";
 import { action } from "@ember/object";
 import { next } from "@ember/runloop";
 import { service } from "@ember/service";
+import { htmlSafe, isHTMLSafe } from "@ember/template";
 import { modifier } from "ember-modifier";
 import { eq } from "truth-helpers";
 import PluginOutlet from "discourse/components/plugin-outlet";
@@ -18,7 +19,10 @@ import discourseTags from "discourse/helpers/discourse-tags";
 import formatDate from "discourse/helpers/format-date";
 import topicFeaturedLink from "discourse/helpers/topic-featured-link";
 import { wantsNewWindow } from "discourse/lib/intercept-click";
-import { applyValueTransformer } from "discourse/lib/transformer";
+import {
+  applyBehaviorTransformer,
+  applyValueTransformer,
+} from "discourse/lib/transformer";
 import DiscourseURL from "discourse/lib/url";
 import { i18n } from "discourse-i18n";
 
@@ -57,7 +61,7 @@ export default class Item extends Component {
     let expandPinned;
     if (
       !this.args.topic.pinned ||
-      (this.site.mobileView && !this.siteSettings.show_pinned_excerpt_mobile) ||
+      (this.useMobileLayout && !this.siteSettings.show_pinned_excerpt_mobile) ||
       (this.site.desktopView && !this.siteSettings.show_pinned_excerpt_desktop)
     ) {
       expandPinned = false;
@@ -70,7 +74,7 @@ export default class Item extends Component {
     return applyValueTransformer(
       "topic-list-item-expand-pinned",
       expandPinned,
-      { topic: this.args.topic, mobileView: this.site.mobileView }
+      { topic: this.args.topic, mobileView: this.useMobileLayout }
     );
   }
 
@@ -78,6 +82,7 @@ export default class Item extends Component {
     return this.site.desktopView && this.args.focusLastVisitedTopic;
   }
 
+  @action
   navigateToTopic(topic, href) {
     this.historyStore.set("lastTopicIdViewed", topic.id);
     DiscourseURL.routeTo(href || topic.url);
@@ -132,35 +137,45 @@ export default class Item extends Component {
 
   @action
   click(e) {
-    if (
-      e.target.classList.contains("raw-topic-link") ||
-      e.target.classList.contains("post-activity") ||
-      e.target.classList.contains("badge-posts")
-    ) {
-      if (wantsNewWindow(e)) {
-        return;
+    applyBehaviorTransformer(
+      "topic-list-item-click",
+      () => {
+        if (
+          e.target.classList.contains("raw-topic-link") ||
+          e.target.classList.contains("post-activity") ||
+          e.target.classList.contains("badge-posts")
+        ) {
+          if (wantsNewWindow(e)) {
+            return;
+          }
+
+          e.preventDefault();
+          this.navigateToTopic(this.args.topic, e.target.href);
+          return;
+        }
+
+        // make full row click target on mobile, due to size constraints
+        if (
+          this.site.mobileView &&
+          e.target.matches(
+            ".topic-list-data, .main-link, .right, .topic-item-stats, .topic-item-stats__category-tags, .discourse-tags"
+          )
+        ) {
+          if (wantsNewWindow(e)) {
+            return;
+          }
+
+          e.preventDefault();
+          this.navigateToTopic(this.args.topic, this.args.topic.lastUnreadUrl);
+          return;
+        }
+      },
+      {
+        topic: this.args.topic,
+        event: e,
+        navigateToTopic: this.navigateToTopic,
       }
-
-      e.preventDefault();
-      this.navigateToTopic(this.args.topic, e.target.href);
-      return;
-    }
-
-    // make full row click target on mobile, due to size constraints
-    if (
-      this.site.mobileView &&
-      e.target.matches(
-        ".topic-list-data, .main-link, .right, .topic-item-stats, .topic-item-stats__category-tags, .discourse-tags"
-      )
-    ) {
-      if (wantsNewWindow(e)) {
-        return;
-      }
-
-      e.preventDefault();
-      this.navigateToTopic(this.args.topic, this.args.topic.lastUnreadUrl);
-      return;
-    }
+    );
   }
 
   @action
@@ -190,6 +205,28 @@ export default class Item extends Component {
     });
   }
 
+  get style() {
+    const parts = applyValueTransformer("topic-list-item-style", [], {
+      topic: this.args.topic,
+      index: this.args.index,
+    });
+
+    const safeParts = parts.filter(Boolean).filter((part) => {
+      if (isHTMLSafe(part)) {
+        return true;
+      }
+      // eslint-disable-next-line no-console
+      console.error(
+        "topic-list-item-style must be formed of htmlSafe strings. Skipped unsafe value:",
+        part
+      );
+    });
+
+    if (safeParts.length) {
+      return htmlSafe(safeParts.join("\n"));
+    }
+  }
+
   <template>
     <tr
       {{! template-lint-disable no-invalid-interactive }}
@@ -215,6 +252,7 @@ export default class Item extends Component {
         this.tagClassNames
         this.additionalClasses
       }}
+      style={{this.style}}
     >
       <PluginOutlet
         @name="above-topic-list-item"
@@ -232,6 +270,7 @@ export default class Item extends Component {
           hideCategory=@hideCategory
           tagsForUser=@tagsForUser
           showTopicPostBadges=@showTopicPostBadges
+          navigateToTopic=this.navigateToTopic
         }}
       >
         {{#if this.useMobileLayout}}

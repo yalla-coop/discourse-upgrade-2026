@@ -94,6 +94,7 @@ sk:
       actor_muting_target_user: "Vypnete zvuk na stránke %{username}, takže im nemôžete posielať správy."
       actor_disallowed_dms: "Rozhodli ste sa zabrániť používateľom odosielať vám osobné a priame správy, takže nemôžete vytvárať nové priame správy."
       actor_preventing_target_user_from_dm: "Rozhodli ste sa zabrániť tomu, aby vám %{username} odosielal osobné a priame správy, takže k nim nemôžete vytvárať nové priame správy."
+      not_reachable: "Prepáčte, %{username} nepoužíva chat."
       user_cannot_send_direct_messages: "Ľutujeme, nemôžete posielať priame správy."
       over_chat_max_direct_message_users_allow_self: "Súkromnú správu môžete vytvoriť len sami so sebou."
       over_chat_max_direct_message_users:
@@ -207,6 +208,8 @@ sk:
       inline_to_message: "Správa #%{message_id} od %{username} – #%{chat_channel}"
       inline_to_channel: "Chat #%{chat_channel}"
       inline_to_topic_channel: "Chat pre tému %{topic_title}"
+      inline_to_thread: "%{thread_title} - #%{chat_channel}"
+      inline_to_thread_no_title: "Vlákno v #%{chat_channel}"
       thread_title_connector: "v"
       x_members:
         one: "%{count}/ člen"

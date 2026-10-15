@@ -4496,6 +4496,7 @@ en:
       image_load_error: '<a href="%url%">The image</a> could not be loaded.'
 
     cannot_render_video: This video cannot be rendered because your browser does not support the codec.
+    invalid_video_url: This video cannot be played because the URL is invalid or unavailable.
 
     keyboard_shortcuts_help:
       shortcut_key_delimiter_comma: ", "
@@ -4979,9 +4980,11 @@ en:
             users:
               content: "Users"
               title: "List of all users"
-            my_drafts:
-              content: "My Drafts"
-              title: "My unposted drafts"
+            my_posts:
+              content: "My Posts"
+              content_drafts: "My Drafts"
+              title: "My recent topic activity"
+              title_drafts: "My unposted drafts"
               draft_count:
                 one: "%{count} draft"
                 other: "%{count} drafts"
@@ -5154,6 +5157,9 @@ en:
         legal:
           title: "Legal"
           header_description: "Configure legal settings, such as terms of service, privacy policy, contact details, and EU-specific considerations"
+        localization:
+          title: "Localization"
+          header_description: "Configure your community’s interface language and other localization options for your members"
         login_and_authentication:
           title: "Login & authentication"
           header_description: "Configure how users log in and authenticate, secrets and keys, OAuth2 providers, and more"
@@ -5692,6 +5698,9 @@ en:
           group_permissions: "Group permissions"
           users: "Users"
           groups: "Groups"
+          localization:
+            title: "Localization"
+            keywords: "locale|language|timezone|unicode|ltr"
           user_fields: "User fields"
           watched_words: "Watched words"
           legal: "Legal"

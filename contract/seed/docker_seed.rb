@@ -192,6 +192,11 @@ end
 # The "top" topic lists are built by a daily job; build them now.
 TopTopic.refresh!
 
+# Search (#59) needs every seeded post in the search index. On a fresh
+# database some were only indexed later in the background, so the first run
+# after seeding found nothing. Index them now.
+Post.find_each { |post| SearchIndexer.index(post, force: true) }
+
 # The plain key is only readable right after creation, so each run makes a new one.
 api_key = ApiKey.create!(user: admin, created_by: admin, description: "contract checks")
 
