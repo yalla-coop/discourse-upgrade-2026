@@ -861,48 +861,4 @@ class UserNotifications < ActionMailer::Base
         .count
         .tap { Discourse.redis.setex(key, 1.day, _1) }
   end
-
-  def self.user_locale(user)
-    user.effective_locale
-  end
-
-  def self.notify_group_owner(user_name, user_email, group_name, group_owner_email)
-    I18n.with_locale(SiteSetting.default_locale) do
-      # Adjust the subject based on whether the group name contains "holding"
-      subject = if group_name.downcase.include?("holding")
-                  "New user registered to your holding group"
-                else
-                  "New user registered to your group"
-                end
-      
-      # Format the first line of the body based on whether the group name contains "holding"
-      first_line = if group_name.downcase.include?("holding")
-                     "A new user has been registered to your holding group #{group_name}."
-                   else
-                     "A new user has been registered to your group #{group_name}."
-                   end
-      
-      # Construct the full body
-      body = <<~TEXT
-        Hello,
-
-        #{first_line}
-
-        Username: #{user_name}
-        Email: #{user_email}
-
-        Please review them and add to the appropriate groups.
-
-        Best regards,
-        The Team
-      TEXT
-
-      build_email(
-        group_owner_email,
-        subject: subject,
-        body: body,
-        locale: SiteSetting.default_locale,
-      ).deliver_now
-    end
-  end
 end

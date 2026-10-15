@@ -4014,21 +4014,9 @@ en:
     visit_link_to_respond: "[Visit Topic](%{base_url}%{url}) to respond."
     visit_link_to_respond_pm: "[Visit Message](%{base_url}%{url}) to respond to %{participants}."
     reply_above_line: "## Please type your reply above this line. ##"
-    notify_group_owner:
-      subject_template: "New user registered to your holding group"
-      text_body_template: |
-        Hello,
 
-        A new user has been registered to your holding group %{group_name}.
-
-        Username: %{user_name}
-        Email: %{user_email}
-
-        Please review them and add to the appropriate groups.
-
-        Best regards,
-        The Team
     posted_by: "Posted by %{username} on %{post_date}"
+
     pm_participants: "Participants: %{participants}"
     more_pm_participants:
       one: "%{participants} and %{count} other"

@@ -24,11 +24,11 @@ class SearchPostSerializer < BasicPostSerializer
   end
 
   def include_blurb?
-    true
+    options[:result].present?
   end
 
   def include_cooked?
-    true
+    false
   end
 
   def include_ignored?

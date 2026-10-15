@@ -78,7 +78,6 @@ class TopicViewSerializer < ApplicationSerializer
     :user_last_posted_at,
     :is_shared_draft,
     :slow_mode_enabled_until,
-    :flagged_by_user,
   )
 
   has_one :details, serializer: TopicViewDetailsSerializer, root: false, embed: :objects
@@ -317,14 +316,5 @@ class TopicViewSerializer < ApplicationSerializer
 
   def include_visibility_reason_id?
     object.topic.visibility_reason_id.present?
-  end
-
-  def flagged_by_user
-    user = scope.current_user
-    if user
-      object.topic.flagged_by_user?(user)
-    else
-      false
-    end
   end
 end

@@ -111,20 +111,15 @@ after_initialize do
 
   add_to_serializer(:user_card, :can_chat_user) do
     return false if !SiteSetting.chat_enabled
-    return false if scope.user.blank? || scope.user.id == object.id
+    return false if scope.user.blank?
     return false if !scope.user.user_option.chat_enabled || !object.user_option.chat_enabled
 
     scope.can_direct_message? && Guardian.new(object).can_chat?
   end
 
-  # add the ingored ignored_usernames to the user serializer
-  add_to_serializer(:user, :ignored_usernames) do
-    IgnoredUser.where(user_id: object.id).joins(:ignored_user).pluck(:username)
-  end
-
   add_to_serializer(:hidden_profile, :can_chat_user) do
     return false if !SiteSetting.chat_enabled
-    return false if scope.user.blank? || scope.user.id == object.id
+    return false if scope.user.blank?
     return false if !scope.user.user_option.chat_enabled || !object.user_option.chat_enabled
 
     scope.can_direct_message? && Guardian.new(object).can_chat?

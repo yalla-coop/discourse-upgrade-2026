@@ -26,8 +26,8 @@ docker run -d --name ft-baseline --hostname discourse \
 docker exec -u discourse:discourse -w /src ft-baseline bash -lc \
   'bundle install && pnpm install --frozen-lockfile && RAILS_ENV=test LOAD_PLUGINS=1 bin/rake db:create db:migrate'
 
-# every run
-docker exec -u discourse:discourse -w /src -e LOAD_PLUGINS=1 ft-baseline bin/rspec spec/yalla
+# every run (CI=1 turns on Rails eager loading, as in production)
+docker exec -u discourse:discourse -w /src -e LOAD_PLUGINS=1 -e CI=1 ft-baseline bin/rspec spec/yalla
 ```
 
 For each hop, start a new container from the `discourse_dev` image dated nearest to that version's release (tags look like `YYYYMMDD-HHMM-arm64`), with its own data folder, for example `~/yalla/discourse-upgrade-data/hop-3.4.7`.
@@ -40,6 +40,8 @@ For each hop, start a new container from the `discourse_dev` image dated nearest
 | Chat: mobile level "never" gets nothing | `chat_notifications_spec.rb` | 1 |
 | Chat: new memberships default to "always" | `chat_notifications_spec.rb` | 1 |
 | Chat: messages before joining are not unread | `chat_notifications_spec.rb` | 2 |
+| Chat: mentions in new messages give one `chat_message` notification, no `chat_mention`, one web alert; edits still create `chat_mention` | `chat_notifications_spec.rb` | 3 |
+| Chat: thread replies before joining a thread are not unread (trigger, and the plugin's backfill) | `chat_notifications_spec.rb` | 2 |
 | Chat serializers: `admin`, `ignored_usernames`, `can_chat_user` for self | `chat_notifications_spec.rb` | 3 |
 | Category `group_permissions` (serializer + `/site.json`) | `core_changes_spec.rb` | 3 |
 | Post previews: full HTML, links kept, video links | `core_changes_spec.rb` | 4 |

@@ -26,17 +26,20 @@ Decision key: **Keep** = carry forward with the same behaviour. **Rewrite** = be
 
 ### A. Rate limits turned off - Setting
 
+- **New home:** `deploy/forward-trust.env`, copied into `app.yml`'s `env:` section.
 - `4f86acaa3e` (part): `config/discourse_defaults.conf` raises every API and per-IP limit to 1,000,000 and sets `max_reqs_per_ip_mode = warn`.
 - These are global settings, so they can be set as `DISCOURSE_MAX_REQS_PER_IP_PER_MINUTE` and similar variables in `app.yml` with no code change.
 - Note for later: this switches rate limiting off for everyone, not only for Prose. A tighter option is to exempt only Prose's IP.
 
 ### B. Category group permissions in `/site.json` - Keep
 
+- **New home:** plugin files `category_group_permissions.rb` and `serializer_family.rb`.
 - `4f86acaa3e` (part): adds `group_permissions` to `BasicCategorySerializer`. Prose reads it.
 - The same commit also **accidentally removed** `has_one :uploaded_background_dark`, probably while resolving a merge. Do not carry that line removal forward.
 
 ### C. Excerpts return full HTML and links - Keep (high blast radius)
 
+- **New home:** plugin file `post_previews.rb`.
 - `fed449dc55` un-strip links, `51c2f73fc1` return video links and include cooked/blurb/thumbnails in search, `3cf8b666e0` `Post.excerpt` returns the full cooked HTML, `1f373c7c58` post item excerpt uses cooked.
 - These change Discourse **globally**, not only for the app. `ExcerptParser`'s `strip_links` and `strip_images` logic is inverted, and `Post.excerpt` no longer truncates. This affects emails, push bodies, summaries and search.
 - For the upgrade: keep behaviour identical. Refactoring this into app-only fields is technical debt for later.
@@ -45,12 +48,14 @@ Decision key: **Keep** = carry forward with the same behaviour. **Rewrite** = be
 
 ### D. `flagged_by_user` on topics - Keep
 
+- **New home:** plugin file `flagged_by_user.rb`.
 - `fe124c10cf`, `fb61063527`: adds `flagged_by_user` to topic list, topic view and search results.
 - Flag IDs `[3,4,6,7,8,9,10]` are hardcoded. These IDs are **unchanged** in v2026.9.0.
 - Note: this runs 2 extra queries per topic in every list (N+1). It's fine for now, but worth fixing later.
 
 ### E. Chat notifications - Rewrite (highest risk)
 
+- **New home:** plugin files `chat_memberships.rb`, `chat_message_notifications.rb`, `chat_summary_emails.rb` and the three plugin migrations.
 - `4f86acaa3e` (chat part), `4814174c29` migration `20240710161417` (default level "always"), `9c849ac9b8` (messages from before you joined are not unread), `d1b1f3be45`, `fb0ad7f1f5`, `68b411e9cd`.
 - Behaviour to preserve:
   1. Watching/mention logic driven by the **mobile** notification level.
@@ -62,6 +67,7 @@ Decision key: **Keep** = carry forward with the same behaviour. **Rewrite** = be
 
 ### F. Chat serializers - Keep
 
+- **New home:** plugin file `chat_serializers.rb`.
 - `4f86acaa3e` (part):
   - `admin` on chatable users
   - `can_chat` uses `can_direct_message?`
@@ -72,6 +78,7 @@ Decision key: **Keep** = carry forward with the same behaviour. **Rewrite** = be
 
 ### G. Group owner email on signup - Keep
 
+- **New home:** plugin file `group_owner_email.rb`.
 - `fb087acfbb`, `160a49046f`, `081062113b`, `d66f43f15d`: the `config/initializers/notify_group_owner.rb` initializer emails group owners when a new user confirms their email. The "holding group" wording is decided in code.
 - `b327885ba6`, `a7ecc2fc43`: `EmailToken.confirm` fires `user_confirmed_email` only on signup, not on password reset. Without this, owners get an email on every password reset.
 - The locale strings added in `server.en.yml` have been unused since `d66f43f15d` hardcoded the text. **Drop** them.
@@ -79,12 +86,13 @@ Decision key: **Keep** = carry forward with the same behaviour. **Rewrite** = be
 
 ### H. Gemfile.lock - Drop
 
+- **New home:** dropped (upstream's lockfile is used).
 - `3cf8b666e0` (part), `1f7697ae2f`. Use upstream's lockfile.
 
 ### Not in git: `lib/tasks/fix_notification_levels.rake`
 
 - This sits untracked in the old working copy (`~/yalla/discourse`) and was never committed. It moves group categories from Watching to Watching First Post.
-- Commit it to the new repo so it isn't lost.
+- Commit it to the new repo so it isn't lost. Done: it now lives in the plugin, `plugins/discourse-forward-trust/lib/tasks/fix_notification_levels.rake` (Discourse loads plugin rake tasks).
 
 ## Recommendation: move custom code into one in-house plugin
 

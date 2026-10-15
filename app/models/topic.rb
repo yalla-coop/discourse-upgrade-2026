@@ -145,16 +145,6 @@ class Topic < ActiveRecord::Base
     UrlHelper.cook_url(raw_url, secure: image_upload&.secure?, local: true) if raw_url
   end
 
-  def flagged_by_user?(user)
-    first_post = posts.where(post_number: 1).first
-    return false unless first_post
-    PostAction.exists?(
-      user_id: user.id,
-      post_id: first_post.id,
-      post_action_type_id: [3, 4, 6, 7, 8, 9, 10], # these numbers are the ids of the flags
-    )
-  end
-
   def featured_users
     @featured_users ||= TopicFeaturedUsers.new(self)
   end

@@ -31,34 +31,12 @@ class BasicCategorySerializer < ApplicationSerializer
              :default_list_filter,
              :minimum_required_tags,
              :navigate_to_first_post_after_read,
-             :custom_fields,
-             :group_permissions
+             :custom_fields
 
   has_one :uploaded_logo, embed: :object, serializer: CategoryUploadSerializer
   has_one :uploaded_logo_dark, embed: :object, serializer: CategoryUploadSerializer
   has_one :uploaded_background, embed: :object, serializer: CategoryUploadSerializer
-
-  def group_permissions
-    @group_permissions ||=
-      begin
-        perms =
-          object
-            .category_groups
-            .joins(:group)
-            .includes(:group)
-            .merge(Group.visible_groups(scope&.user, "groups.name ASC", include_everyone: true))
-            .map { |cg| { permission_type: cg.permission_type, group_name: cg.group.name } }
-
-        if perms.length == 0 && !object.read_restricted
-          perms << {
-            permission_type: CategoryGroup.permission_types[:full],
-            group_name: Group[:everyone]&.name.presence || :everyone,
-          }
-        end
-
-        perms
-      end
-  end
+  has_one :uploaded_background_dark, embed: :object, serializer: CategoryUploadSerializer
 
   def include_parent_category_id?
     parent_category_id

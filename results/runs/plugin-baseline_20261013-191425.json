@@ -1,0 +1,33 @@
+{
+  "hop": "plugin-baseline",
+  "discourse_version": "3.4.0.beta4-dev",
+  "branch": "plugin/baseline",
+  "commit": "4523a9ba75",
+  "ran_at": "2026-10-13T19:14:25.583Z",
+  "verdict": "pass",
+  "layer_a": {
+    "examples": 43,
+    "failures": 0,
+    "failed": []
+  },
+  "layer_b": {
+    "passed": 106,
+    "failed": 0,
+    "unverified": 0,
+    "skipped": 0,
+    "changed_vs_baseline": [],
+    "failed_checks": []
+  },
+  "layer_c": {
+    "passed": 29,
+    "total": 29,
+    "failed": [],
+    "app_branch": "main",
+    "app_commit": "cd077ee1b2",
+    "app_changed_since_baseline": true,
+    "baseline_app": "codex/high-priority-staging-tests @ 8482d824f7",
+    "regressions": [],
+    "flaky_failed": [],
+    "compared_with_baseline": true
+  }
+}

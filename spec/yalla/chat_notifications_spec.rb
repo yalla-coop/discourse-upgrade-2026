@@ -6,7 +6,9 @@
 # (tag baseline/prod-3.4.0.beta4-dev). They must pass unchanged after every
 # upgrade hop. If one fails after a hop, a behaviour the app relies on changed.
 #
-# Run with: LOAD_PLUGINS=1 bin/rspec spec/yalla
+# Run with: LOAD_PLUGINS=1 CI=1 bin/rspec spec/yalla
+# CI=1 turns on Rails eager loading, as in production (script/safety-net.sh
+# sets it too). Some plugin load-order behaviour only shows with it.
 RSpec.describe "Yalla safety net: chat notifications", type: :request do
   fab!(:sender) { Fabricate(:user) }
   fab!(:member) { Fabricate(:user) }
@@ -38,6 +40,10 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
 
   def chat_notifications_for(user)
     Notification.where(user: user, notification_type: Notification.types[:chat_message])
+  end
+
+  def chat_mention_notifications_for(user)
+    Notification.where(user: user, notification_type: Notification.types[:chat_mention])
   end
 
   describe "new channel memberships" do
@@ -81,6 +87,31 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
       expect(notification_type).to eq(Notification.types[:chat_message])
       expect(payload).to include(chat_message_id: message.id, sender: sender.username)
     end
+
+    # Production waited 5 seconds so an active reader's client can advance
+    # last_read first; otherwise people get pushed messages they are reading.
+    # Plugin-specific (names the plugin's job), so it can't run on production code.
+    it "waits 5 seconds before deciding who to notify" do
+      freeze_time
+      Jobs.run_later!
+
+      expect_enqueued_with(
+        job: Jobs::DiscourseForwardTrust::ChatMessageNotifications,
+        args: {
+          chat_message_id: message.id,
+        },
+        at: Time.zone.now + 5.seconds,
+      ) { Chat::Notifier.new(message, message.created_at).notify_new }
+    end
+
+    it "creates exactly one notification and one event per member" do
+      events = lexicon_events_for(member) { notify_new(message) }
+
+      expect(
+        chat_notifications_for(member).where("data::json->>'chat_message_id' = ?", message.id.to_s).count,
+      ).to eq(1)
+      expect(events.size).to eq(1)
+    end
   end
 
   describe "a member who turned mobile notifications off" do
@@ -122,6 +153,61 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
 
       expect(events).to be_empty
     end
+
+    # Ruling R16. Production's Chat::Notifier#notify_new never created
+    # chat_mention notifications: a mention reached the member as one
+    # chat_message notification (and the Lexicon push). Mobile level "mention" is
+    # the case where production notified only because of the mention.
+    it "gets exactly one chat_message notification and no chat_mention notification when mentioned" do
+      message =
+        Fabricate(:chat_message, chat_channel: channel, user: sender, message: "hi @#{member.username}")
+
+      notify_new(message)
+
+      expect(
+        chat_notifications_for(member).where("data::json->>'chat_message_id' = ?", message.id.to_s).count,
+      ).to eq(1)
+      expect(chat_mention_notifications_for(member).count).to eq(0)
+    end
+
+    # The web chat alert (MessageBus). Production's NotifyWatching sent it to
+    # mentioned members too; stock sends it from the mention job instead.
+    it "gets one web chat alert when mentioned" do
+      message =
+        Fabricate(:chat_message, chat_channel: channel, user: sender, message: "hi @#{member.username}")
+
+      alerts =
+        MessageBus.track_publish("/chat/notification-alert/#{member.id}") { notify_new(message) }
+
+      expect(alerts.size).to eq(1)
+    end
+  end
+
+  # Production kept the mention notification on edit (Chat::Notifier#notify_edit
+  # still calls notify_mentioned_users): adding a mention by editing a message
+  # creates a chat_mention notification.
+  describe "editing a message to add a mention" do
+    before { join(sender) }
+
+    let!(:membership) do
+      join(member, notification_level: :always, mobile_notification_level: :always)
+    end
+
+    it "creates a chat_mention notification for the newly mentioned member" do
+      message = Fabricate(:chat_message, chat_channel: channel, user: sender, message: "hello all")
+      notify_new(message)
+      expect(chat_mention_notifications_for(member).count).to eq(0)
+
+      message.message = "hello @#{member.username}"
+      message.cook
+      message.save!
+      message.upsert_mentions
+      Chat::Notifier.new(Chat::Message.find(message.id), Time.zone.now).notify_edit
+
+      expect(chat_mention_notifications_for(member).count).to eq(1)
+      data = JSON.parse(chat_mention_notifications_for(member).last.data)
+      expect(data).to include("chat_message_id" => message.id, "chat_channel_id" => channel.id)
+    end
   end
 
   describe "messages sent before the member joined" do
@@ -135,12 +221,140 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
       expect(unread.unread_count).to eq(0)
     end
 
+    it "are not counted as unread when the member is auto-joined in bulk" do
+      channel.update!(auto_join_users: true)
+      member.update!(last_seen_at: 1.hour.ago)
+      member.user_option.update!(chat_enabled: true)
+      Fabricate(:chat_message, chat_channel: channel, user: sender, created_at: 1.hour.ago)
+
+      Chat::AutoJoinChannels.call(params: { user_id: member.id, channel_id: channel.id })
+
+      expect(Chat::UserChatChannelMembership.exists?(user: member, chat_channel: channel)).to eq(
+        true,
+      )
+      unread = Chat::ChannelUnreadsQuery.call(channel_ids: [channel.id], user_id: member.id).first
+      expect(unread.unread_count).to eq(0)
+    end
+
     it "does count messages sent after joining" do
       join(member, created_at: 1.hour.ago)
       Fabricate(:chat_message, chat_channel: channel, user: sender)
 
       unread = Chat::ChannelUnreadsQuery.call(channel_ids: [channel.id], user_id: member.id).first
       expect(unread.unread_count).to eq(1)
+    end
+
+    it "are not counted as unread in a thread the member joins later, but later replies are" do
+      channel.update!(threading_enabled: true)
+      thread = Fabricate(:chat_thread, channel: channel, original_message_user: sender, old_om: true)
+      Fabricate(:chat_message, chat_channel: channel, thread: thread, user: sender, created_at: 1.hour.ago)
+      join(member)
+
+      Fabricate(:user_chat_thread_membership, user: member, thread: thread, notification_level: :tracking)
+
+      unread =
+        Chat::ThreadUnreadsQuery.call(thread_ids: [thread.id], user_id: member.id, include_read: true).first
+      expect(unread.unread_count).to eq(0)
+
+      Fabricate(:chat_message, chat_channel: channel, thread: thread, user: sender)
+      unread =
+        Chat::ThreadUnreadsQuery.call(thread_ids: [thread.id], user_id: member.id, include_read: true).first
+      expect(unread.unread_count).to eq(1)
+    end
+  end
+
+  describe "existing memberships when the plugin is installed" do
+    before { join(sender) }
+
+    # Production has memberships whose pre-join messages were hidden by edited
+    # SQL. With stock SQL they would suddenly count as unread, so the plugin's
+    # one-time migration marks them read.
+    it "backfill marks pre-join messages read for existing memberships" do
+      Fabricate(:chat_message, chat_channel: channel, user: sender, created_at: 2.hours.ago)
+      membership = join(member, created_at: 1.hour.ago)
+      membership.update_column(:last_read_message_id, nil)
+      Fabricate(:chat_message, chat_channel: channel, user: sender)
+
+      # Runs the migration's own SQL (it has already run on this database).
+      require Rails.root.join(
+                "plugins/discourse-forward-trust/db/migrate/20261013120001_forward_trust_backfill_chat_last_read",
+              )
+      ForwardTrustBackfillChatLastRead.new.up
+
+      unread = Chat::ChannelUnreadsQuery.call(channel_ids: [channel.id], user_id: member.id).first
+      expect(unread.unread_count).to eq(1)
+    end
+
+    it "backfill marks pre-join thread replies read for existing thread memberships" do
+      channel.update!(threading_enabled: true)
+      thread = Fabricate(:chat_thread, channel: channel, original_message_user: sender, old_om: true)
+      Fabricate(:chat_message, chat_channel: channel, thread: thread, user: sender, created_at: 2.hours.ago)
+      join(member, created_at: 3.hours.ago)
+      membership =
+        Fabricate(
+          :user_chat_thread_membership,
+          user: member,
+          thread: thread,
+          notification_level: :tracking,
+          created_at: 1.hour.ago,
+        )
+      membership.update_column(:last_read_message_id, nil)
+      Fabricate(:chat_message, chat_channel: channel, thread: thread, user: sender)
+
+      # Runs the migration's own SQL (it has already run on this database).
+      require Rails.root.join(
+                "plugins/discourse-forward-trust/db/migrate/20261013120001_forward_trust_backfill_chat_last_read",
+              )
+      ForwardTrustBackfillChatLastRead.new.up
+
+      unread =
+        Chat::ThreadUnreadsQuery.call(thread_ids: [thread.id], user_id: member.id, include_read: true).first
+      expect(unread.unread_count).to eq(1)
+    end
+  end
+
+  # Ruling R13: production's chat summary email query is broken, so it has never
+  # sent these emails. The plugin keeps that (setting off by default).
+  describe "chat summary emails for members who are away" do
+    before do
+      join(sender)
+      join(member, created_at: 1.hour.ago)
+      member.update!(last_seen_at: 1.hour.ago)
+      member.user_option.update!(
+        chat_enabled: true,
+        chat_email_frequency: UserOption.chat_email_frequencies[:when_away],
+        email_level: UserOption.email_level_types[:always],
+      )
+      message =
+        Fabricate(:chat_message, chat_channel: channel, user: sender, message: "hi @#{member.username}")
+      # The unread mention the summary would report. Created directly: new
+      # messages create no chat_mention notification (ruling R16).
+      notification =
+        Fabricate(
+          :notification,
+          user: member,
+          notification_type: Notification.types[:chat_mention],
+          high_priority: true,
+          read: false,
+          data: {
+            chat_message_id: message.id,
+            chat_channel_id: channel.id,
+            mentioned_by_username: sender.username,
+          }.to_json,
+        )
+      Fabricate(
+        :chat_mention_notification,
+        chat_mention: Chat::UserMention.find_by!(chat_message: message, target_id: member.id),
+        notification: notification,
+      )
+      Jobs.run_immediately!
+      ActionMailer::Base.deliveries.clear
+    end
+
+    it "sends none by default, even with an unread mention" do
+      Chat::Mailer.send_unread_mentions_summary
+
+      expect(ActionMailer::Base.deliveries.map(&:to).flatten).not_to include(member.email)
     end
   end
 
@@ -188,6 +402,19 @@ RSpec.describe "Yalla safety net: chat notifications", type: :request do
       json = UserCardSerializer.new(member, scope: Guardian.new(member), root: false).as_json
 
       expect(json[:can_chat_user]).to eq(false)
+    end
+
+    it "says you cannot chat with yourself even when direct messages are allowed, but can chat with someone else" do
+      SiteSetting.direct_message_enabled_groups = Group::AUTO_GROUPS[:everyone]
+      guardian = Guardian.new(member)
+
+      [UserCardSerializer, HiddenProfileSerializer].each do |serializer|
+        own = serializer.new(member, scope: guardian, root: false).as_json
+        other = serializer.new(sender, scope: guardian, root: false).as_json
+
+        expect(own[:can_chat_user]).to eq(false), "#{serializer} for yourself"
+        expect(other[:can_chat_user]).to eq(true), "#{serializer} for someone else"
+      end
     end
   end
 end

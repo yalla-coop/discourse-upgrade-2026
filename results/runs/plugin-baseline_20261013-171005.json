@@ -1,0 +1,143 @@
+{
+  "hop": "plugin-baseline",
+  "discourse_version": "3.4.0.beta4-dev",
+  "branch": "plugin/baseline",
+  "commit": "046f9698ad",
+  "ran_at": "2026-10-13T17:10:05.310Z",
+  "verdict": "fail",
+  "layer_a": {
+    "examples": 30,
+    "failures": 24,
+    "failed": [
+      "spec/yalla/core_changes_spec.rb:150: Yalla safety net: core changes flagged_by_user on topics is false for another user who did not flag it",
+      "spec/yalla/core_changes_spec.rb:142: Yalla safety net: core changes flagged_by_user on topics is true on the topic page after the user flags it",
+      "spec/yalla/core_changes_spec.rb:132: Yalla safety net: core changes flagged_by_user on topics is false in topic lists until the user flags the topic",
+      "spec/yalla/core_changes_spec.rb:165: Yalla safety net: core changes search results include cooked HTML on posts and flagged_by_user on topics",
+      "spec/yalla/core_changes_spec.rb:203: Yalla safety net: core changes group owner email when a new user confirms their email emails the owner of a holding group on signup, with holding wording",
+      "spec/yalla/core_changes_spec.rb:214: Yalla safety net: core changes group owner email when a new user confirms their email uses plain group wording for groups that are not holding groups",
+      "spec/yalla/core_changes_spec.rb:42: Yalla safety net: core changes category group_permissions (site.json, categories) is included for categories in /categories.json",
+      "spec/yalla/core_changes_spec.rb:23: Yalla safety net: core changes category group_permissions (site.json, categories) reports 'everyone' with full access for a public category",
+      "spec/yalla/core_changes_spec.rb:31: Yalla safety net: core changes category group_permissions (site.json, categories) lists the groups of a restricted category",
+      "spec/yalla/core_changes_spec.rb:75: Yalla safety net: core changes category group_permissions (site.json, categories) is included for categories in /site.json",
+      "spec/yalla/core_changes_spec.rb:95: Yalla safety net: core changes post previews keep full HTML, links and images keeps links in the topic excerpt",
+      "spec/yalla/core_changes_spec.rb:99: Yalla safety net: core changes post previews keep full HTML, links and images keeps links even when a caller asks to strip them",
+      "spec/yalla/core_changes_spec.rb:91: Yalla safety net: core changes post previews keep full HTML, links and images returns the full cooked HTML as the post excerpt",
+      "spec/yalla/core_changes_spec.rb:110: Yalla safety net: core changes post previews keep full HTML, links and images turns uploaded videos into a [Video](url) link",
+      "spec/yalla/chat_notifications_spec.rb:130: Yalla safety net: chat notifications messages sent before the member joined are not counted as unread",
+      "spec/yalla/chat_notifications_spec.rb:109: Yalla safety net: chat notifications a member whose mobile level is 'mention' is notified when mentioned",
+      "spec/yalla/chat_notifications_spec.rb:118: Yalla safety net: chat notifications a member whose mobile level is 'mention' is not notified for a message that doesn't mention them",
+      "spec/yalla/chat_notifications_spec.rb:94: Yalla safety net: chat notifications a member who turned mobile notifications off gets no notification and no Lexicon event",
+      "spec/yalla/chat_notifications_spec.rb:44: Yalla safety net: chat notifications new channel memberships default to notifying always, on desktop and on mobile",
+      "spec/yalla/chat_notifications_spec.rb:60: Yalla safety net: chat notifications a message in a channel the member watches creates exactly one chat_message notification for the member",
+      "spec/yalla/chat_notifications_spec.rb:76: Yalla safety net: chat notifications a message in a channel the member watches fires :created_chat_notification once for the Lexicon plugin",
+      "spec/yalla/chat_notifications_spec.rb:148: Yalla safety net: chat notifications chat serializers the app reads includes admin on chatable users",
+      "spec/yalla/chat_notifications_spec.rb:166: Yalla safety net: chat notifications chat serializers the app reads includes each group's users, with admin, in /chat/api/chatables",
+      "spec/yalla/rate_limits_spec.rb:11: Yalla safety net: rate limits keeps the per-IP and API limits high enough for Prose"
+    ]
+  },
+  "layer_b": {
+    "passed": 95,
+    "failed": 11,
+    "unverified": 0,
+    "skipped": 0,
+    "changed_vs_baseline": [
+      "#15 Users: Another member's profile (UserLite) (PASS -> FAIL)",
+      "#34 Topics: Latest topic list (PASS -> FAIL)",
+      "#34 Topics: Top topic list (PASS -> FAIL)",
+      "#34 Topics: Category topic list (PASS -> FAIL)",
+      "#34 Topics: Tag topic list (PASS -> FAIL)",
+      "#34 Topics: Category + tag topic list (PASS -> FAIL)",
+      "#42 Topics: Private messages inbox (PASS -> FAIL)",
+      "#43 Topics: Private messages sent (PASS -> FAIL)",
+      "#59 Search, categories & site: Search (PASS -> FAIL)",
+      "#61 Search, categories & site: Category list with subcategories (PASS -> FAIL)",
+      "#72 Chat: Chatables (users available for direct messages) (PASS -> FAIL)"
+    ],
+    "failed_checks": [
+      {
+        "id": "15",
+        "name": "Users: Another member's profile (UserLite)",
+        "problems": [
+          "user.ignored_usernames: missing"
+        ]
+      },
+      {
+        "id": "34",
+        "name": "Topics: Latest topic list",
+        "problems": [
+          "topic_list.topics[].flagged_by_user: missing"
+        ]
+      },
+      {
+        "id": "34",
+        "name": "Topics: Top topic list",
+        "problems": [
+          "topic_list.topics[].flagged_by_user: missing"
+        ]
+      },
+      {
+        "id": "34",
+        "name": "Topics: Category topic list",
+        "problems": [
+          "topic_list.topics[].flagged_by_user: missing"
+        ]
+      },
+      {
+        "id": "34",
+        "name": "Topics: Tag topic list",
+        "problems": [
+          "topic_list.topics[].flagged_by_user: missing"
+        ]
+      },
+      {
+        "id": "34",
+        "name": "Topics: Category + tag topic list",
+        "problems": [
+          "topic_list.topics[].flagged_by_user: missing"
+        ]
+      },
+      {
+        "id": "42",
+        "name": "Topics: Private messages inbox",
+        "problems": [
+          "topic_list.topics[].flagged_by_user: missing"
+        ]
+      },
+      {
+        "id": "43",
+        "name": "Topics: Private messages sent",
+        "problems": [
+          "topic_list.topics[].flagged_by_user: missing"
+        ]
+      },
+      {
+        "id": "59",
+        "name": "Search, categories & site: Search",
+        "problems": [
+          "topics[].flagged_by_user: missing"
+        ]
+      },
+      {
+        "id": "61",
+        "name": "Search, categories & site: Category list with subcategories",
+        "problems": [
+          "category_list.categories[].group_permissions: missing",
+          "category_list.categories[].group_permissions[].group_name: missing",
+          "category_list.categories[].group_permissions[].permission_type: missing"
+        ]
+      },
+      {
+        "id": "72",
+        "name": "Chat: Chatables (users available for direct messages)",
+        "problems": [
+          "groups[].users: missing",
+          "groups[].users[].model.id: missing",
+          "groups[].users[].model.username: missing",
+          "groups[].users[].model.avatar_template: missing",
+          "groups[].users[].model.admin: missing"
+        ]
+      }
+    ]
+  },
+  "layer_c": null
+}

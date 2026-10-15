@@ -10,8 +10,8 @@ class ExcerptParser < Nokogiri::XML::SAX::Document
     @excerpt = +""
     @current_length = 0
     options || {}
-    @strip_links = options[:strip_links] == false
-    @strip_images = options[:strip_images] == false
+    @strip_links = options[:strip_links] == true
+    @strip_images = options[:strip_images] == true
     @text_entities = options[:text_entities] == true
     @markdown_images = options[:markdown_images] == true
     @keep_newlines = options[:keep_newlines] == true
@@ -121,10 +121,6 @@ class ExcerptParser < Nokogiri::XML::SAX::Document
         @excerpt = +""
         @current_length = 0
         @start_excerpt = true
-      elsif attributes["class"]&.include?("video-placeholder-container")
-        # Add handling for video placeholders
-        video_src = attributes["data-video-src"]
-        characters("[Video](#{video_src})") if video_src
       elsif attributes["class"]&.include?("hashtag-icon-placeholder")
         @start_hashtag_icon = true
         include_tag(name, attributes)

@@ -7,7 +7,9 @@
 # baseline/prod-3.4.0.beta4-dev). They must pass unchanged after every upgrade
 # hop. If one fails after a hop, a behaviour the app relies on changed.
 #
-# Run with: LOAD_PLUGINS=1 bin/rspec spec/yalla
+# Run with: LOAD_PLUGINS=1 CI=1 bin/rspec spec/yalla
+# CI=1 turns on Rails eager loading, as in production (script/safety-net.sh
+# sets it too). Some plugin load-order behaviour only shows with it.
 RSpec.describe "Yalla safety net: core changes", type: :request do
   fab!(:user)
 
@@ -82,6 +84,14 @@ RSpec.describe "Yalla safety net: core changes", type: :request do
       json_category = response.parsed_body["categories"].find { |c| c["id"] == category.id }
       expect(json_category["group_permissions"]).to be_present
     end
+
+    it "is not added to webhook category payloads for a member who cannot edit the category" do
+      category = Fabricate(:category)
+
+      json = WebHookCategorySerializer.new(category, scope: Guardian.new(user), root: false).as_json
+
+      expect(json).not_to have_key(:group_permissions)
+    end
   end
 
   describe "post previews keep full HTML, links and images" do
@@ -96,24 +106,32 @@ RSpec.describe "Yalla safety net: core changes", type: :request do
       expect(post.excerpt_for_topic).to include('href="https://example.com/guide"')
     end
 
-    it "keeps links even when a caller asks to strip them" do
-      excerpt =
-        PrettyText.excerpt(
-          '<p>See <a href="https://example.com/guide">the guide</a></p>',
-          100,
-          strip_links: true,
-        )
+    let(:link_html) { '<p>See <a href="https://example.com/guide">the guide</a></p>' }
+    let(:video_html) do
+      '<p>Watch this</p><div class="video-placeholder-container" data-video-src="/uploads/default/original/1X/clip.mp4"></div>'
+    end
+
+    it "ExcerptParser keeps links even when a caller asks to strip them" do
+      excerpt = ExcerptParser.get_excerpt(link_html, 100, { strip_links: true })
 
       expect(excerpt).to include('href="https://example.com/guide"')
     end
 
-    it "turns uploaded videos into a [Video](url) link" do
-      html =
-        '<p>Watch this</p><div class="video-placeholder-container" data-video-src="/uploads/default/original/1X/clip.mp4"></div>'
-
-      expect(PrettyText.excerpt(html, 200)).to include(
+    it "ExcerptParser turns uploaded videos into a [Video](url) link" do
+      expect(ExcerptParser.get_excerpt(video_html, 200, {})).to include(
         "[Video](/uploads/default/original/1X/clip.mp4)",
       )
+    end
+
+    # Production's PrettyText.excerpt comes from the Lexicon plugin, which only
+    # loads with eager loading (as in production). Tests above pin the
+    # ExcerptParser change carried by this plugin; these two pin Lexicon's override.
+    it "PrettyText excerpts are plain text (Lexicon's override in production)" do
+      expect(PrettyText.excerpt(link_html, 100, strip_links: true)).to eq("See the guide")
+    end
+
+    it "PrettyText describes an uploaded video as 'uploaded a video' (Lexicon)" do
+      expect(PrettyText.excerpt(video_html, 200)).to eq("uploaded a video")
     end
   end
 
@@ -152,6 +170,15 @@ RSpec.describe "Yalla safety net: core changes", type: :request do
       other = Fabricate(:user)
 
       json = TopicListItemSerializer.new(topic, scope: Guardian.new(other), root: false).as_json
+      expect(json[:flagged_by_user]).to eq(false)
+    end
+
+    # Deliberate fix: production's ListableTopicSerializer called
+    # flagged_by_user?(nil) for logged-out viewers and raised. The plugin
+    # returns false instead.
+    it "is false for a logged-out viewer in search results" do
+      json = SearchTopicListItemSerializer.new(topic, scope: Guardian.new, root: false).as_json
+
       expect(json[:flagged_by_user]).to eq(false)
     end
   end
@@ -221,6 +248,28 @@ RSpec.describe "Yalla safety net: core changes", type: :request do
 
     it "does not email the owner when a user resets their password" do
       group_with_owner(full_name: "North London Holding")
+      new_user.update!(active: true)
+
+      confirm(:password_reset)
+
+      expect(mails_to(owner.email)).to be_empty
+    end
+
+    # Deliberate fix: production crashed account activation here
+    # (NoMethodError: undefined method 'downcase' for nil).
+    it "uses the group name when the group has no full name" do
+      group = group_with_owner(full_name: nil)
+
+      expect { confirm(:signup) }.not_to raise_error
+
+      mail = mails_to(owner.email).last
+      expect(mail.subject).to eq("New user registered to your group")
+      expect(mail.body.to_s).to include(group.name)
+    end
+
+    it "does not email owners on a later password reset after a failed signup confirmation" do
+      group_with_owner(full_name: "North London Holding")
+      EmailToken.confirm("not-a-real-token", scope: EmailToken.scopes[:signup])
       new_user.update!(active: true)
 
       confirm(:password_reset)
