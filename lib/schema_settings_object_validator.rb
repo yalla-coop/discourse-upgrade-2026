@@ -16,6 +16,16 @@ class SchemaSettingsObjectValidator
       error_messages
     end
 
+    def property_values_of_type(schema:, objects:, type:)
+      values = Set.new
+
+      objects.each do |object|
+        values.merge(self.new(schema: schema, object: object).property_values_of_type(type))
+      end
+
+      values.to_a
+    end
+
     private
 
     def humanize_error_messages(errors, index:, error_messages:)
@@ -124,8 +134,21 @@ class SchemaSettingsObjectValidator
       case type
       when "string"
         value.is_a?(String)
-      when "integer", "topic", "post", "upload"
+      when "integer", "topic", "post"
         value.is_a?(Integer)
+      when "upload"
+        if value.is_a?(String)
+          if upload = Upload.get_from_url(value)
+            @object[property_name] = upload.id
+            # upload already verified via get_from_url, so we can add it to valid ids
+            (@valid_ids_lookup["upload"] ||= Set.new) << upload.id
+            true
+          else
+            false
+          end
+        else
+          value.is_a?(Integer)
+        end
       when "float"
         value.is_a?(Float) || value.is_a?(Integer)
       when "boolean"

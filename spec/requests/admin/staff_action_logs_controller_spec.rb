@@ -54,7 +54,7 @@ RSpec.describe Admin::StaffActionLogsController do
         end
 
         it "filter logs by end_date" do
-          get "/admin/logs/staff_action_logs.json", params: { end_date: 1.days.ago.iso8601 }
+          get "/admin/logs/staff_action_logs.json", params: { end_date: 1.day.ago.iso8601 }
 
           json = response.parsed_body
           expect(response.status).to eq(200)
@@ -68,7 +68,7 @@ RSpec.describe Admin::StaffActionLogsController do
           get "/admin/logs/staff_action_logs.json",
               params: {
                 start_date: 3.days.ago.iso8601,
-                end_date: 1.days.ago.iso8601,
+                end_date: 1.day.ago.iso8601,
               }
 
           json = response.parsed_body
@@ -190,7 +190,7 @@ RSpec.describe Admin::StaffActionLogsController do
       end
 
       it "redacts content for restricted categories" do
-        SiteSetting.moderators_manage_categories_and_groups = true
+        SiteSetting.moderators_manage_categories = true
         category = Fabricate(:private_category, group: Fabricate(:group))
         StaffActionLogger.new(admin).log_category_creation(category)
 
@@ -226,7 +226,7 @@ RSpec.describe Admin::StaffActionLogsController do
       end
 
       it "redacts content when referenced category is deleted" do
-        SiteSetting.moderators_manage_categories_and_groups = true
+        SiteSetting.moderators_manage_categories = true
         category = Fabricate(:category)
         StaffActionLogger.new(admin).log_category_creation(category)
         category.destroy!
@@ -238,8 +238,8 @@ RSpec.describe Admin::StaffActionLogsController do
         )
       end
 
-      it "hides category actions when moderators_manage_categories_and_groups is disabled" do
-        SiteSetting.moderators_manage_categories_and_groups = false
+      it "hides category actions when moderators_manage_categories is disabled" do
+        SiteSetting.moderators_manage_categories = false
         category = Fabricate(:category)
         StaffActionLogger.new(admin).log_category_creation(category)
 
@@ -249,8 +249,8 @@ RSpec.describe Admin::StaffActionLogsController do
         expect(action_names).not_to include("create_category")
       end
 
-      it "shows category actions when moderators_manage_categories_and_groups is enabled" do
-        SiteSetting.moderators_manage_categories_and_groups = true
+      it "shows category actions when moderators_manage_categories is enabled" do
+        SiteSetting.moderators_manage_categories = true
         category = Fabricate(:category)
         StaffActionLogger.new(admin).log_category_creation(category)
 

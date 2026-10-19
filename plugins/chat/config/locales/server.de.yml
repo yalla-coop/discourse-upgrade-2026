@@ -31,6 +31,7 @@ de:
     chat_editing_grace_period_max_diff_high_trust: "Maximale Anzahl von Zeichenänderungen, die innerhalb der Chat-Bearbeitungsfrist erlaubt sind. Wenn mehr geändert werden, wird das Schlagwort „(bearbeitet)“ in der Chat-Nachricht angezeigt (Vertrauensstufe 2 und höher)."
     chat_preferred_index: "Bevorzugte Registerkarte beim Laden von /chat."
     allow_chat_in_anonymous_mode: "Aktiviere diese Einstellung, um Benutzern im anonymen Modus die Nutzung des Chats zu ermöglichen. Für diese Einstellung muss die Einstellung „allow anonymous mode“ aktiviert sein."
+    chat_search_enabled: "Aktiviere diese Einstellung, um Benutzern die Suche nach Chatnachrichten zu ermöglichen."
     errors:
       chat_default_channel: "Der Standard-Chat-Kanal muss ein öffentlicher Kanal sein."
       direct_message_enabled_groups_invalid: "Du musst mindestens eine Gruppe für diese Einstellung angeben. Wenn du nicht möchtest, dass andere Personen als Teammitglieder Direktnachrichten senden, wähle die Gruppe für Teammitglieder aus."
@@ -106,6 +107,17 @@ de:
     reviewables:
       message_already_handled: "Danke, aber wir haben diese Nachricht bereits überprüft und festgestellt, dass sie nicht erneut markiert werden muss."
       actions:
+        message_actions:
+          bundle_title: "Was willst du mit der Nachricht machen?"
+        no_action_message:
+          title: "Keine Aktion"
+          description: "Nachricht unverändert lassen."
+        delete_message:
+          title: "Nachricht löschen"
+          description: "Nachricht endgültig löschen."
+        restore_message:
+          title: "Nachricht wiederherstellen"
+          description: "Nachricht wiederherstellen, damit Benutzer sie sehen können."
         agree:
           title: "Zustimmen …"
         agree_and_keep_message:
@@ -184,7 +196,8 @@ de:
         slug_contains_non_ascii_chars: "enthält Nicht-ASCII-Zeichen"
         is_already_in_use: "wird bereits verwendet"
     bookmarkable:
-      notification_title: "Nachricht in %{channel_name}"
+      notification_title_channel: "Nachricht in %{channel_name}"
+      notification_title_direct_message: "Nachricht mit %{channel_name}"
     personal_chat: "persönlicher Chat"
     onebox:
       inline_to_message: "Nachricht #%{message_id} von %{username} – #%{chat_channel}"
@@ -264,10 +277,9 @@ de:
       view_more:
         one: "%{count} weitere Nachricht anzeigen"
         other: "%{count} weitere Nachrichten anzeigen"
-      your_chat_settings: "Chat-E-Mail-Häufigkeitspräferenz"
+      your_chat_settings: "Chat-E-Mail-Einstellung"
   unsubscribe:
     chat_summary:
-      select_title: "Häufigkeit von Chat-Zusammenfassungs-E-Mails festlegen auf:"
       never: Niemals
       when_away: Nur bei Abwesenheit
   category:

@@ -3,8 +3,8 @@
 describe DiscoursePolicy::PolicyController do
   fab!(:group)
   fab!(:moderator)
-  fab!(:user1) { Fabricate(:user) }
-  fab!(:user2) { Fabricate(:user) }
+  fab!(:user1, :user)
+  fab!(:user2, :user)
 
   before do
     enable_current_plugin
@@ -40,7 +40,7 @@ describe DiscoursePolicy::PolicyController do
   end
 
   context "when add_users_to_group is present" do
-    fab!(:group2) { Fabricate(:group) }
+    fab!(:group2, :group)
     fab!(:post) { Fabricate(:post, user: moderator) }
     fab!(:policy666) do
       policy = Fabricate(:post_policy, post: post, add_users_to_group: group2.id)
@@ -112,8 +112,47 @@ describe DiscoursePolicy::PolicyController do
     end
   end
 
+  describe "post visibility checks" do
+    fab!(:private_group, :group)
+    fab!(:private_category) { Fabricate(:private_category, group: private_group) }
+    fab!(:outsider, :user)
+    fab!(:private_topic) { Fabricate(:topic, category: private_category, user: moderator) }
+    fab!(:private_post) { Fabricate(:post, topic: private_topic, user: moderator) }
+    fab!(:private_policy) do
+      policy = Fabricate(:post_policy, post: private_post)
+      PostPolicyGroup.create!(post_policy_id: policy.id, group_id: group.id)
+      policy
+    end
+
+    before { group.add(outsider) }
+
+    it "returns 404 when user cannot see the post for accept" do
+      sign_in(outsider)
+      put "/policy/accept.json", params: { post_id: private_post.id }
+      expect(response.status).to eq(404)
+    end
+
+    it "returns 404 when user cannot see the post for unaccept" do
+      sign_in(outsider)
+      put "/policy/unaccept.json", params: { post_id: private_post.id }
+      expect(response.status).to eq(404)
+    end
+
+    it "returns 404 when user cannot see the post for accepted" do
+      sign_in(outsider)
+      get "/policy/accepted.json", params: { post_id: private_post.id }
+      expect(response.status).to eq(404)
+    end
+
+    it "returns 404 when user cannot see the post for not_accepted" do
+      sign_in(outsider)
+      get "/policy/not-accepted.json", params: { post_id: private_post.id }
+      expect(response.status).to eq(404)
+    end
+  end
+
   describe "group member visibility restrictions" do
-    fab!(:owner) { Fabricate(:user) }
+    fab!(:owner, :user)
     let!(:post) do
       raw = <<~MD
         [policy group=#{group.name}]

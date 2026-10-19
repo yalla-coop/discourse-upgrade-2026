@@ -229,6 +229,7 @@ lv:
       every_month: "katru mēnesi"
       every_six_months: "katrus sešus mēnešus"
   user_api_key:
+    deny: "Atcelt"
     read: "izlasīts"
     otp_confirmation:
       confirm_title: Turpināt %{site_name}
@@ -460,10 +461,7 @@ lv:
       title: "Iestatīt paroli"
   page_not_found:
     page_title: "Lapa nav atrasta"
-    popular_topics: "Populāri"
-    recent_topics: "Neseni"
     see_more: "Vairāk"
-    search_title: "Meklēt šajā vietnē"
     search_button: "Meklēt"
   upload:
     unauthorized: "Atvainojiet, fails, ko mēģināt augšuplādēt, nav atļauts (atļautie paplašinājumi: %{authorized_extensions})."
@@ -492,11 +490,9 @@ lv:
       button: "Reģistrēties"
     resend_email:
       title: "Atkārtoti nosūtīt aktivācijas e-pastu"
-  dev_mode:
-    enter: "Ievadīt"
   wizard:
     step:
-      privacy:
+      setup:
         fields:
           login_required:
             choices:
@@ -504,17 +500,12 @@ lv:
                 label: "Publisks"
               private:
                 label: "Privāts"
-      styling:
-        fields:
-          styling_preview:
-            label: "Priekšskatījums"
-          homepage_style:
-            choices:
-              latest:
-                label: "Pēdējais"
   onebox:
     github:
       closed: "slēgts"
+      status_date:
+        approved: "apstiprināt"
+        closed: "slēgts"
   discourse_push_notifications:
     popup:
       mentioned: '%{username} pieminēja jūs "%{topic}" - %{site_title}'
@@ -558,8 +549,10 @@ lv:
           complete: "Lietotājs dzēsts."
       reject:
         title: "Noraidīt"
+      delete_post:
+        complete: "Ieraksts dzēsts"
       delete_user:
-        complete: "Lietotājs dzēsts."
+        complete: "Lietotājs dzēsts"
   fallback_username: "lietotājs"
   activemodel:
     errors:

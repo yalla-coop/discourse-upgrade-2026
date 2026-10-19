@@ -5,13 +5,13 @@ describe DiscourseDataExplorer::QueryGroupBookmarkable do
     RegisteredBookmarkable.new(DiscourseDataExplorer::QueryGroupBookmarkable)
   end
 
-  fab!(:admin_user) { Fabricate(:admin) }
+  fab!(:admin_user, :admin)
   fab!(:user)
   fab!(:guardian) { Guardian.new(user) }
-  fab!(:group0) { Fabricate(:group) }
-  fab!(:group1) { Fabricate(:group) }
-  fab!(:group2) { Fabricate(:group) }
-  fab!(:group3) { Fabricate(:group) }
+  fab!(:group0, :group)
+  fab!(:group1, :group)
+  fab!(:group2, :group)
+  fab!(:group3, :group)
   fab!(:query1) do
     Fabricate(
       :query,
@@ -157,6 +157,27 @@ describe DiscourseDataExplorer::QueryGroupBookmarkable do
           bookmarkable_id: bookmark1.bookmarkable_id,
         }.to_json,
       )
+    end
+  end
+
+  describe "#validate_before_create" do
+    it "raises InvalidAccess if the bookmarkable is blank" do
+      expect { registered_bookmarkable.validate_before_create(guardian, nil) }.to raise_error(
+        Discourse::InvalidAccess,
+      )
+    end
+
+    it "raises InvalidAccess if the user is not a member of the bookmarkable group" do
+      non_member_guardian = Guardian.new(Fabricate(:user))
+      expect {
+        registered_bookmarkable.validate_before_create(non_member_guardian, query_group4)
+      }.to raise_error(Discourse::InvalidAccess)
+    end
+
+    it "does not raise if the user is a member of the bookmarkable group" do
+      expect {
+        registered_bookmarkable.validate_before_create(guardian, query_group1)
+      }.not_to raise_error
     end
   end
 

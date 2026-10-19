@@ -1583,7 +1583,7 @@ RSpec.describe User do
 
     it "is false if first post was more than 24 hours ago" do
       u = create_test_user(created_at: 28.hours.ago)
-      u.user_stat.update!(first_post_created_at: 25.hour.ago)
+      u.user_stat.update!(first_post_created_at: 25.hours.ago)
       expect(u.new_user_posting_on_first_day?).to eq(false)
     end
   end
@@ -1724,8 +1724,8 @@ RSpec.describe User do
       expect(Discourse.system_user.avatar_template).to eq(logo_small_url)
     end
 
-    it "uses the system user avatar if the logo is nil" do
-      SiteSetting.logo_small = nil
+    it "uses the system user avatar if the logo is blank" do
+      SiteSetting.logo_small = ""
       system_user = Discourse.system_user
       expected = User.avatar_template(system_user.username, system_user.uploaded_avatar_id)
 
@@ -2134,7 +2134,7 @@ RSpec.describe User do
           status: Reviewable.statuses[:approved],
         )
 
-        expect(user.number_of_rejected_posts).to eq(0)
+        expect(user.number_of_rejected_posts.to_i).to eq(0)
       end
     end
 
@@ -2158,6 +2158,10 @@ RSpec.describe User do
           Fabricate(:user_history, action: UserHistory.actions[:silence_user], target_user: user)
         end
         expect(user.number_of_silencings).to eq(3)
+
+        # ignores other users' history
+        Fabricate(:user_history, action: UserHistory.actions[:silence_user])
+        expect(user.reload.number_of_silencings).to eq(3)
       end
     end
   end
@@ -2356,6 +2360,7 @@ RSpec.describe User do
   describe ".clear_global_notice_if_needed" do
     fab!(:user)
     fab!(:admin)
+    let!(:inactive_user) { Fabricate(:user, active: false) }
 
     before do
       SiteSetting.has_login_hint = true
@@ -2374,10 +2379,17 @@ RSpec.describe User do
       expect(SiteSetting.global_notice).to eq("some notice")
     end
 
-    it "clears the notice when the admin is saved" do
+    it "clears the notice when an active admin is saved" do
       admin.save
       expect(SiteSetting.has_login_hint).to eq(false)
       expect(SiteSetting.global_notice).to eq("")
+    end
+
+    it "does not clear the notice when an inactive admin is saved" do
+      inactive_user.admin = true
+      inactive_user.save
+      expect(SiteSetting.has_login_hint).to eq(true)
+      expect(SiteSetting.global_notice).to eq("some notice")
     end
   end
 
@@ -3289,12 +3301,7 @@ RSpec.describe User do
     end
 
     it "is false when no dnd timing is present for the current time" do
-      Fabricate(
-        :do_not_disturb_timing,
-        user: user,
-        starts_at: Time.zone.now - 2.day,
-        ends_at: 1.minute.ago,
-      )
+      Fabricate(:do_not_disturb_timing, user:, starts_at: 2.days.ago, ends_at: 1.minute.ago)
       expect(user.do_not_disturb?).to eq(false)
     end
   end
@@ -3318,7 +3325,7 @@ RSpec.describe User do
 
     it "excludes invites redeemed after user creation" do
       invite = Fabricate(:invite, invited_by: Fabricate(:user))
-      Fabricate(:invited_user, invite: invite, user: user, redeemed_at: user.created_at + 6.second)
+      Fabricate(:invited_user, invite: invite, user:, redeemed_at: user.created_at + 6.seconds)
 
       expect(user.invited_by).to eq(nil)
     end
@@ -3752,6 +3759,31 @@ RSpec.describe User do
       expect(user.suspend_reason).to eq(
         "foo <a href=\"https://example.com\" rel=\"noopener nofollow ugc\">link</a> bar",
       )
+    end
+  end
+
+  describe "#effective_locale" do
+    before { SiteSetting.allow_user_locale = true }
+
+    it "returns the user's locale when it is valid" do
+      user.update!(locale: "fr")
+      expect(user.effective_locale).to eq("fr")
+    end
+
+    it "returns the default locale when user locale is invalid" do
+      user.update_columns(locale: "invalid")
+      expect(user.effective_locale).to eq(SiteSetting.default_locale)
+    end
+
+    it "returns the default locale when user locale is blank" do
+      user.update!(locale: nil)
+      expect(user.effective_locale).to eq(SiteSetting.default_locale)
+    end
+
+    it "returns the default locale when allow_user_locale is disabled" do
+      SiteSetting.allow_user_locale = false
+      user.update!(locale: "fr")
+      expect(user.effective_locale).to eq(SiteSetting.default_locale)
     end
   end
 end

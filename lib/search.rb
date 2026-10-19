@@ -472,7 +472,9 @@ class Search
 
   advanced_filter(/\Ain:first|^f\z/i) { |posts| posts.where("posts.post_number = 1") }
 
-  advanced_filter(/\Ain:pinned\z/i) { |posts| posts.where("topics.pinned_at IS NOT NULL") }
+  advanced_filter(/\Ain:replies\z/i) { |posts| posts.where("posts.post_number > 1") }
+
+  advanced_filter(/\Ain:pinned\z/i) { |posts| posts.where.not(topics: { pinned_at: nil }) }
 
   advanced_filter(/\Ain:wiki\z/i) { |posts, match| posts.where(wiki: true) }
 
@@ -570,7 +572,7 @@ class Search
     end
   end
 
-  advanced_filter(/\Awith:images\z/i) { |posts| posts.where("posts.image_upload_id IS NOT NULL") }
+  advanced_filter(/\Awith:images\z/i) { |posts| posts.where.not(posts: { image_upload_id: nil }) }
 
   advanced_filter(/\Acategor(?:y|ies):(.+)\z/i) do |posts, terms|
     category_ids = []
@@ -811,6 +813,19 @@ class Search
     posts.where("topics.views <= ?", match.to_i)
   end
 
+  advanced_filter(/\Alocale:([a-zA-Z0-9_-]+)\z/i) do |posts, match|
+    case match.downcase
+    when "none", "null"
+      posts.where("posts.locale IS NULL")
+    when "any", "present"
+      posts.where("posts.locale IS NOT NULL")
+    else
+      locale = match.downcase.gsub("-", "_")
+      base_locale = locale.split("_").first
+      posts.where("posts.locale LIKE ?", "#{base_locale}%")
+    end
+  end
+
   def apply_filters(posts)
     @filters.each do |block, match|
       if block.arity == 1
@@ -829,13 +844,17 @@ class Search
     type_filter: "all_topics"
   )
     if @order == :latest
-      if aggregate_search
+      if @in_title
+        posts = posts.order("topics.bumped_at DESC")
+      elsif aggregate_search
         posts = posts.order("MAX(posts.created_at) DESC")
       else
         posts = posts.reorder("posts.created_at DESC")
       end
     elsif @order == :oldest
-      if aggregate_search
+      if @in_title
+        posts = posts.order("topics.bumped_at ASC")
+      elsif aggregate_search
         posts = posts.order("MAX(posts.created_at) ASC")
       else
         posts = posts.reorder("posts.created_at ASC")
@@ -866,9 +885,11 @@ class Search
       end
     elsif @order == :read && @guardian.user
       posts =
-        posts.joins(
-          "JOIN topic_users tu ON tu.topic_id = posts.topic_id AND tu.user_id = #{@guardian.user.id.to_i}",
-        ).where("tu.last_visited_at IS NOT NULL")
+        posts
+          .joins(
+            "JOIN topic_users tu ON tu.topic_id = posts.topic_id AND tu.user_id = #{@guardian.user.id.to_i}",
+          )
+          .where.not(tu: { last_visited_at: nil })
 
       if aggregate_search
         posts = posts.order("MAX(tu.last_visited_at) DESC")
@@ -968,6 +989,9 @@ class Search
           nil
         elsif word =~ /\Ain:all\z/i
           @search_all_topics = true
+          nil
+        elsif word =~ /\Ain:all-posts\z/i
+          @all_posts = true
           nil
         elsif word =~ /\Ain:personal\z/i
           @search_pms = true
@@ -1531,6 +1555,9 @@ class Search
         )
 
       posts.each { |post| @results.add(post) }
+    elsif @all_posts
+      posts = posts_scope(posts_eager_loads(posts_query(limit)))
+      posts.each { |post| @results.add(post) }
     else
       aggregate_search
     end
@@ -1538,9 +1565,11 @@ class Search
 
   def posts_eager_loads(query)
     query = query.includes(:user, :post_search_data)
+    query = query.includes(:localizations) if SiteSetting.content_localization_enabled
     topic_eager_loads = [{ category: :parent_category }]
 
     topic_eager_loads << :tags if SiteSetting.tagging_enabled
+    topic_eager_loads << :localizations if SiteSetting.content_localization_enabled
 
     Search.custom_topic_eager_loads.each do |custom_loads|
       next unless custom_loads[:enabled].call

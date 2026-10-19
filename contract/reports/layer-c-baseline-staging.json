@@ -1,10 +1,9 @@
 {
   "data": "restored staging backup yalla-community-2026-10-13-135532-v20250205104150.tar.gz (script/restore-staging.sh)",
-  "recorded": "2026-10-13",
+  "recorded": "2026-10-19",
   "passed": 29,
   "total": 30,
   "passed_flows": [
-    "A-AUTH-01 - Member login",
     "TC001 - App launch readiness",
     "TC002 - Intro page",
     "TC003 - Review legal links",
@@ -12,6 +11,7 @@
     "TC006 - Register terms disclaimer",
     "TC007 - Invalid email format",
     "TC008 - Reject duplicate email",
+    "A-AUTH-01 - Member login",
     "TC022 - Post-approval home access",
     "TC023 - Posts search and group filter",
     "TC024 - Posts feed filtered by group",
@@ -39,8 +39,13 @@
     "TC100 - Logout blocks protected screens": "its helper script refuses to run unless the Discourse host contains 'staging' (deliberate safety guard)"
   },
   "flaky": {
-    "TC003 - Review legal links": "failed once waiting for the button after returning from the browser; passed in 4 other runs, including 2 standalone re-runs"
+    "TC003 - Review legal links": "failed once waiting for the button after returning from the browser; passed in 4 other runs, including 2 standalone re-runs",
+    "TC024 - Posts feed filtered by group": "timed out once in a long run on 2026-10-19 (no feed card visible); passed standalone",
+    "TC040 - Post requires a title": "timed out once in a long run on 2026-10-19 (Submit not enabled in time); passed standalone",
+    "TC007 - Invalid email format": "fails only when the emulator runs with a window (the Mac keyboard replaces the on-screen one); run the robot headless"
   },
-  "app_branch": "codex/high-priority-staging-tests",
-  "app_commit": "8482d824f7"
+  "app_branch": "fix/tag-search-ids",
+  "app_commit": "2d989a3150",
+  "recorded_on": "Discourse v2025.12.0 (hop/2025.12) with Prose from the app's main (774dd84251, includes the CSRF login fix #655) plus the tag search fix (fix/tag-search-ids)",
+  "pending_flows_note": "The app repo keeps not-yet-enabled flows in .maestro/pending/ (TC005, TC009, TC081, TC101 on 2026-10-19). When one moves to .maestro/flows/ and config.yaml, Layer C runs it automatically; re-record this reference then."
 }

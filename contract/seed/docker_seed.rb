@@ -150,6 +150,18 @@ Topic.find_by(title: "Checking in after this week's session") ||
     target_usernames: member2.username,
   )
 
+# A message the member received. From Discourse 2025.12 the inbox only lists
+# received messages (the ones you start are under Sent), and the inbox check
+# (#42) needs one there.
+Topic.find_by(title: "Are you joining the walk on Saturday?") ||
+  PostCreator.create!(
+    member2,
+    title: "Are you joining the walk on Saturday?",
+    raw: "A few of us are meeting at the park gates at ten. You'd be very welcome.",
+    archetype: Archetype.private_message,
+    target_usernames: member.username,
+  )
+
 channel =
   Chat::Channel.find_by(chatable: general) ||
     Chat::CategoryChannel.create!(

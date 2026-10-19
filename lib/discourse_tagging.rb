@@ -174,11 +174,7 @@ module DiscourseTagging
                     .map do |tag|
                       tag_name = tag.name
 
-                      if parent_child_names_map[tag_name].present?
-                        parent_child_names_map[tag_name]
-                      else
-                        tag_name
-                      end
+                      parent_child_names_map[tag_name].presence || tag_name
                     end
                     .uniq
                     .sort
@@ -600,7 +596,7 @@ module DiscourseTagging
 
     if opts[:order_popularity]
       builder.order_by("#{topic_count_column} DESC, name")
-    elsif opts[:order_search_results] && !term.blank?
+    elsif opts[:order_search_results] && term.present?
       builder.order_by("lower(name) = lower(:cleaned_term) DESC, #{topic_count_column} DESC, name")
     end
 
@@ -755,7 +751,8 @@ module DiscourseTagging
       tag_names.uniq!
     end
 
-    opts[:unlimited] ? tag_names : tag_names[0...SiteSetting.max_tags_per_topic]
+    saving_tags = opts[:unlimited] ? tag_names : tag_names[0...SiteSetting.max_tags_per_topic]
+    DiscoursePluginRegistry.apply_modifier(:tags_for_saving, saving_tags, tag_names, guardian, opts)
   end
 
   def self.add_or_create_tags_by_name(taggable, tag_names_arg, opts = {})

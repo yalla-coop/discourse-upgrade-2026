@@ -131,7 +131,6 @@ pt_BR:
               help: "Um nome para descrever o canal. Não é usado para a conexão com o Matrix."
             room_id:
               title: "ID da sala"
-              help: "O \"identificador privado\" para a sala. Precisa ser algo como !abcdefg:matrix.org"
           errors:
             unknown_token: "O token de acesso é inválido"
             unknown_room: "O ID da sala é inválido"

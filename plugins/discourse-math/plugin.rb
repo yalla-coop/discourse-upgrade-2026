@@ -9,8 +9,12 @@
 
 register_asset "stylesheets/common/discourse-math.scss"
 register_asset "stylesheets/ext/discourse-chat.scss"
+register_svg_icon "square-root-variable"
 
 enabled_site_setting :discourse_math_enabled
+
+module ::DiscourseMath
+end
 
 after_initialize do
   if respond_to?(:chat) && SiteSetting.chat_enabled

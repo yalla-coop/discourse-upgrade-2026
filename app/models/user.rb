@@ -90,7 +90,9 @@ class User < ActiveRecord::Base
   has_many :muted_user_records, class_name: "MutedUser", dependent: :delete_all
   has_many :ignored_user_records, class_name: "IgnoredUser", dependent: :delete_all
   has_many :do_not_disturb_timings, dependent: :delete_all
+  has_many :reviewable_histories, foreign_key: :created_by_id, dependent: :delete_all
   has_many :sidebar_sections, dependent: :destroy
+  has_many :user_histories, foreign_key: :target_user_id
   has_one :user_status, dependent: :destroy
 
   # dependent deleting handled via before_destroy (special cases)
@@ -146,7 +148,7 @@ class User < ActiveRecord::Base
 
   delegate :last_sent_email_address, to: :email_logs
 
-  validates_presence_of :username
+  validates :username, presence: true
   validate :username_validator, if: :will_save_change_to_username?
   validate :password_validator
   validate :name_validator, if: :will_save_change_to_name?
@@ -166,6 +168,12 @@ class User < ActiveRecord::Base
 
   before_validation :set_skip_validate_email
 
+  before_save :update_usernames
+  before_save :match_primary_group_changes
+  before_save :check_if_title_is_badged_granted
+  before_save :apply_watched_words, unless: :should_skip_user_fields_validation?
+  before_save :check_qualification_for_users_directory,
+              if: Proc.new { SiteSetting.bootstrap_mode_enabled }
   after_create :create_email_token
   after_create :create_user_stat
   after_create :create_user_option
@@ -182,13 +190,6 @@ class User < ActiveRecord::Base
 
   after_update :trigger_user_automatic_group_refresh, if: :saved_change_to_staged?
   after_update :change_display_name, if: :saved_change_to_name?
-
-  before_save :update_usernames
-  before_save :match_primary_group_changes
-  before_save :check_if_title_is_badged_granted
-  before_save :apply_watched_words, unless: :should_skip_user_fields_validation?
-  before_save :check_qualification_for_users_directory,
-              if: Proc.new { SiteSetting.bootstrap_mode_enabled }
 
   after_save :expire_tokens_if_password_changed
   after_save :clear_global_notice_if_needed
@@ -485,7 +486,7 @@ class User < ActiveRecord::Base
   end
 
   def effective_locale
-    if SiteSetting.allow_user_locale && self.locale.present?
+    if SiteSetting.allow_user_locale && self.locale.present? && I18n.locale_available?(self.locale)
       self.locale
     else
       SiteSetting.default_locale
@@ -929,8 +930,12 @@ class User < ActiveRecord::Base
     @raw_password = pw # still required to maintain compatibility with usage of password-related User interface
   end
 
+  def can_remove_password?
+    associated_accounts.present? || passkey_credential_ids.present?
+  end
+
   def remove_password
-    raise Discourse::InvalidAccess if associated_accounts.blank? && passkey_credential_ids.blank?
+    raise Discourse::InvalidAccess if !can_remove_password?
 
     user_password.destroy if user_password
   end
@@ -1325,7 +1330,7 @@ class User < ActiveRecord::Base
   end
 
   def silenced_record
-    UserHistory.for(self, :silence_user).order("id DESC").first
+    user_histories.where(action: UserHistory.actions[:silence_user]).order("id DESC").first
   end
 
   def silence_reason
@@ -1341,7 +1346,7 @@ class User < ActiveRecord::Base
   end
 
   def suspend_record
-    UserHistory.for(self, :suspend_user).order("id DESC").first
+    user_histories.where(action: UserHistory.actions[:suspend_user]).order("id DESC").first
   end
 
   def full_suspend_reason
@@ -1634,7 +1639,12 @@ class User < ActiveRecord::Base
   end
 
   def number_of_rejected_posts
-    ReviewableQueuedPost.rejected.where(target_created_by_id: self.id).count
+    goldiload do |ids|
+      ReviewableQueuedPost
+        .where(status: "rejected", target_created_by_id: ids)
+        .group(:target_created_by_id)
+        .count
+    end
   end
 
   def number_of_flags_given
@@ -1646,11 +1656,21 @@ class User < ActiveRecord::Base
   end
 
   def number_of_silencings
-    UserHistory.for(self, :silence_user).count
+    goldiload do |ids|
+      UserHistory
+        .where(target_user_id: ids, action: UserHistory.actions[:silence_user])
+        .group(:target_user_id)
+        .count
+    end
   end
 
   def number_of_suspensions
-    UserHistory.for(self, :suspend_user).count
+    goldiload do |ids|
+      UserHistory
+        .where(target_user_id: ids, action: UserHistory.actions[:suspend_user])
+        .group(:target_user_id)
+        .count
+    end
   end
 
   def create_user_profile
@@ -1915,14 +1935,6 @@ class User < ActiveRecord::Base
     in_any_groups?(SiteSetting.experimental_new_new_view_groups_map)
   end
 
-  def watched_precedence_over_muted
-    if user_option.watched_precedence_over_muted.nil?
-      SiteSetting.watched_precedence_over_muted
-    else
-      user_option.watched_precedence_over_muted
-    end
-  end
-
   def populated_required_custom_fields?
     UserField
       .for_all_users
@@ -1947,6 +1959,10 @@ class User < ActiveRecord::Base
       .where(ip_address: self.ip_address, admin: false, moderator: false)
   end
 
+  def upcoming_change_enabled?(upcoming_change)
+    UpcomingChanges.enabled_for_user?(upcoming_change, self)
+  end
+
   protected
 
   def badge_grant
@@ -1961,7 +1977,7 @@ class User < ActiveRecord::Base
   def clear_global_notice_if_needed
     return if id < 0
 
-    if admin && SiteSetting.has_login_hint
+    if admin && active && SiteSetting.has_login_hint
       SiteSetting.has_login_hint = false
       SiteSetting.global_notice = ""
     end

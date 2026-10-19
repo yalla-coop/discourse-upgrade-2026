@@ -10,10 +10,16 @@ describe "Admin Customize Themes", type: :system do
   let(:theme_page) { PageObjects::Pages::AdminCustomizeThemes.new }
   let(:themes_page) { PageObjects::Pages::AdminCustomizeThemesConfigArea.new }
   let(:dialog) { PageObjects::Components::Dialog.new }
+  let(:sidebar) { PageObjects::Components::NavigationMenu::Sidebar.new }
 
   before { sign_in(admin) }
 
   describe "when visiting the page to customize a single theme" do
+    it "should keep sidebar navigation link active" do
+      theme_page.visit(theme)
+      expect(sidebar).to have_active_link("admin_themes_and_components")
+    end
+
     it "should allow admin to update the light color scheme of the theme" do
       theme_page.visit(theme)
 
@@ -32,7 +38,7 @@ describe "Admin Customize Themes", type: :system do
 
       expect(page).to have_link(
         I18n.t("admin_js.admin.customize.theme.edit_colors"),
-        href: "/admin/customize/colors/#{color_scheme.id}",
+        href: "/admin/config/colors/#{color_scheme.id}",
       )
     end
 
@@ -54,7 +60,7 @@ describe "Admin Customize Themes", type: :system do
 
       expect(page).to have_link(
         I18n.t("admin_js.admin.customize.theme.edit_colors"),
-        href: "/admin/customize/colors/#{color_scheme.id}",
+        href: "/admin/config/colors/#{color_scheme.id}",
       )
     end
 
@@ -87,11 +93,9 @@ describe "Admin Customize Themes", type: :system do
       find(".ace_text-input", visible: false).fill_in(with: "console.log('test')\n")
       find(".save-theme").click
 
-      try_until_success do
-        expect(
-          theme.theme_fields.find_by(target_id: Theme.targets[:extra_js])&.value,
-        ).to start_with("console.log('test')\n")
-      end
+      expect(theme.theme_fields.find_by(target_id: Theme.targets[:extra_js])&.value).to start_with(
+        "console.log('test')\n",
+      )
 
       # Check content is loaded from db correctly
       theme
@@ -115,10 +119,10 @@ describe "Admin Customize Themes", type: :system do
     expect(page).to have_no_css(".delete")
   end
 
-  it "hides unecessary sections and buttons for system themes" do
-    theme.theme_fields.create!(
-      name: "js",
-      target_id: Theme.targets[:extra_js],
+  it "hides unnecessary sections and buttons for system themes" do
+    theme.set_field(
+      target: :extra_js,
+      name: "discourse/api-initializers/test.js",
       value: "console.log('second test')",
     )
     yaml = <<~YAML
@@ -147,6 +151,24 @@ describe "Admin Customize Themes", type: :system do
     expect(page).to have_no_css(".export")
     expect(page).to have_no_css(".extra-files")
     expect(page).to have_css(".theme-settings")
+  end
+
+  it "shows both JS and SCSS extra files with canonical paths" do
+    theme.set_field(
+      target: :extra_js,
+      name: "discourse/api-initializers/canvas.js",
+      value: "console.log('extra js')",
+    )
+    theme.set_field(target: :extra_scss, name: "properties", value: ".custom { color: red; }")
+    theme.save!
+
+    theme_page.visit(theme)
+
+    extra_files = find(".extra-files")
+    extra_files.find("summary").click
+
+    expect(extra_files).to have_content("javascripts/discourse/api-initializers/canvas.js")
+    expect(extra_files).to have_content("stylesheets/properties.scss")
   end
 
   describe "when editing theme translations" do
@@ -228,7 +250,7 @@ describe "Admin Customize Themes", type: :system do
 
       theme_translations_picker = PageObjects::Components::SelectKit.new(".translation-selector")
 
-      expect(theme_translations_picker.component).to have_content("English (US)")
+      expect(theme_translations_picker.component).to have_content("English")
     end
   end
 
@@ -248,7 +270,7 @@ describe "Admin Customize Themes", type: :system do
     end
   end
 
-  context "when visting a component's page" do
+  context "when visiting a component's page" do
     fab!(:component) { Fabricate(:theme, component: true, name: "Cool component 493") }
 
     it "has a link to the components page" do
@@ -329,7 +351,7 @@ describe "Admin Customize Themes", type: :system do
         theme_page.toggle_theme_site_setting("enable_welcome_banner")
       end
 
-      expect(banner).to be_hidden
+      try_until_success(reason: "Relies on MessageBus updates") { expect(banner).to be_hidden }
     end
   end
 end

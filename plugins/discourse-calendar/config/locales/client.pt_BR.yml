@@ -7,11 +7,11 @@
 pt_BR:
   admin_js:
     admin:
-      calendar: "Calendário"
+      calendar: "Calendário e Eventos"
       site_settings:
         categories:
           discourse_post_event: "Evento do Discourse"
-          discourse_calendar: "Calendário do Discourse"
+          discourse_calendar: "Calendário e Eventos"
   js:
     notifications:
       titles:
@@ -36,6 +36,7 @@ pt_BR:
         header_title: "Feriados"
         pick_region_description: "Escolha uma região para ver os feriados dessa região."
         disabled_holidays_description: "Feriados desativados serão excluídos do calendário de férias da equipe."
+        header_description: "Selecione uma região para ver os feriados. Feriados desativados serão excluídos do calendário de feriados da equipe."
       date: "Data"
       add_to_calendar: "Adicionar ao Google Calendar"
       toggle_timezone_offset_title: "Alternar deslocamento de fuso horário"
@@ -44,6 +45,7 @@ pt_BR:
         title: "Região"
         none: "Nenhum"
         use_current_region: "Usar região atual"
+        select_region: "Selecione uma região"
         names:
           ae: "Emirados Árabes Unidos"
           ar: "Argentina"
@@ -138,6 +140,7 @@ pt_BR:
           dk: "Dinamarca"
           ee: "Estônia"
           el: "Grécia"
+          gr: "Grécia"
           es_an: "Espanha (es_an)"
           es_ar: "Espanha (es_ar)"
           es_ce: "Espanha (es_ce)"
@@ -314,7 +317,7 @@ pt_BR:
         month: "Mês"
         week: "Semana"
         day: "Dia"
-        list: "Lista"
+        year: "Ano"
     group_timezones:
       search: "Pesquisar..."
       group_availability: "disponibilidade de %{group}"
@@ -413,6 +416,7 @@ pt_BR:
         event:
           expired: "Expirou"
           closed: "Fechados"
+          full: "Lotado"
           status:
             standalone:
               title: "Independente"
@@ -470,6 +474,9 @@ pt_BR:
         minimal:
           label: "evento mínimo"
           checkbox_label: "Ocultar botões Vou/Não vou e status dos(as) convidados(as)"
+        max_attendees:
+          label: "Máximo de participantes"
+          placeholder: "Sem limite"
         allow_chat:
           label: "Integração com chat"
           checkbox_label: "Criar e gerenciar canal de chat específico de evento"

@@ -69,8 +69,12 @@ RSpec.describe "Yalla safety net: core changes", type: :request do
 
       sign_in(Fabricate(:admin))
       get "/c/#{category.id}/show.json"
+      # Discourse 2025.12 also sends group_id here; the app only reads these two.
       expect(response.parsed_body["category"]["group_permissions"]).to contain_exactly(
-        { "permission_type" => CategoryGroup.permission_types[:full], "group_name" => group.name },
+        a_hash_including(
+          "permission_type" => CategoryGroup.permission_types[:full],
+          "group_name" => group.name,
+        ),
       )
     end
 

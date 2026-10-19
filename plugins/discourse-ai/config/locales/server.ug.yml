@@ -11,6 +11,10 @@ ug:
     emotion_neutral:
       title: "\U0001F610 بىتەرەپ"
   discourse_ai:
+    tools:
+      presets:
+        image_generation_custom:
+          name: "ئىختىيارى"
     spam_detection:
       logging_subject: "ئەخلەت ئۇچۇر بايقاش"
     ai_bot:
@@ -29,6 +33,8 @@ ug:
           name: "مەزمۇن قۇرغۇچ"
         report_runner:
           name: "دوكلات ئىجرا قىلغۇچ"
+        discover:
+          name: "بايقاش"
       tool_options:
         researcher:
           researcher_llm:
@@ -96,9 +102,6 @@ ug:
         must_select_model: "ئالدى بىلەن LLM نى تاللىشىڭىز كېرەك"
       endpoints:
         not_configured: "%{display_name} (سەپلەنمىگەن)"
-    embeddings:
-      configuration:
-        invalid_config: "ئىناۋەتسىز تاللانمىدىن بىرنى تاللىدىڭىز."
     ai_staff_action_logger:
       updated: "يېڭىلاندى"
       removed: "چىقىرىۋېتىلدى"

@@ -162,7 +162,7 @@ class GroupsController < ApplicationController
         user_count = count_existing_users(group.group_users, notification_level, categories, tags)
         if user_count > 0
           return(
-            render status: 422,
+            render status: :unprocessable_entity,
                    json: {
                      user_count: user_count,
                      errors: [I18n.t("invalid_params", message: :update_existing_users)],
@@ -355,12 +355,9 @@ class GroupsController < ApplicationController
     members = users.limit(limit).offset(offset)
     owners = users.where("group_users.owner")
 
-    group_members_serializer =
-      include_custom_fields ? GroupUserWithCustomFieldsSerializer : GroupUserSerializer
-
     render json: {
-             members: serialize_data(members, group_members_serializer),
-             owners: serialize_data(owners, GroupUserSerializer),
+             members: serialize_data(members, GroupUserWithCustomFieldsSerializer),
+             owners: serialize_data(owners, GroupUserWithCustomFieldsSerializer),
              meta: {
                total: total,
                limit: limit,
@@ -612,7 +609,7 @@ class GroupsController < ApplicationController
     rescue ActiveRecord::RecordNotUnique
       return(
         render json: failed_json.merge(error: I18n.t("groups.errors.already_requested_membership")),
-               status: 409
+               status: :conflict
       )
     end
 
@@ -1063,9 +1060,9 @@ class GroupsController < ApplicationController
             categories.each do |category_id, data|
               category_users = []
               existing_users =
-                CategoryUser.where(category_id: category_id, user_id: user_ids).where(
-                  "notification_level IS NOT NULL",
-                )
+                CategoryUser
+                  .where(category_id:, user_id: user_ids)
+                  .where.not(notification_level: nil)
               skip_user_ids = existing_users.pluck(:user_id)
 
               batch.each do |group_user|
@@ -1089,9 +1086,7 @@ class GroupsController < ApplicationController
             tags.each do |tag_id, data|
               tag_users = []
               existing_users =
-                TagUser.where(tag_id: tag_id, user_id: user_ids).where(
-                  "notification_level IS NOT NULL",
-                )
+                TagUser.where(tag_id:, user_id: user_ids).where.not(notification_level: nil)
               skip_user_ids = existing_users.pluck(:user_id)
 
               batch.each do |group_user|

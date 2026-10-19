@@ -10,7 +10,6 @@ da:
       site_settings:
         categories:
           discourse_post_event: "Discourse Begivenhed"
-          discourse_calendar: "Discourse Kalender"
   js:
     discourse_automation:
       triggerables:
@@ -121,6 +120,7 @@ da:
           dk: "Danmark"
           ee: "Estland"
           el: "Grækenland"
+          gr: "Grækenland"
           es_an: "Spanien (es_ar)"
           es_ar: "Spanien (es_ar)"
           es_ce: "Spanien (es_ce)"
@@ -287,6 +287,7 @@ da:
         month: "Måned"
         week: "Uge"
         day: "Dag"
+        year: "År"
     group_timezones:
       search: "Søg..."
       group_availability: "%{group} tilgængelighed"

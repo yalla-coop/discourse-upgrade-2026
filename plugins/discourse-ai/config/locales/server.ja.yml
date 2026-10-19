@@ -5,6 +5,10 @@
 # https://translate.discourse.org/
 
 ja:
+  activerecord:
+    attributes:
+      llm_model:
+        max_prompt_tokens: "コンテキストウィンドウ"
   discourse_automation:
     ai:
       flag_types:
@@ -22,10 +26,6 @@ ja:
       llm_triage:
         title: AI を使った投稿のトリアージ
         description: "大規模言語モデルを使って投稿に優先順位を付けます"
-        flagged_post: |
-          <div>モデルからの応答:</div>
-          <p>%%LLM_RESPONSE%%</p>
-          <b><a href="%{base_path}/admin/plugins/discourse-automation/%%AUTOMATION_ID%%">%%AUTOMATION_NAME%%</a> ルールによってトリガーされました。</b>
       llm_report:
         title: AI を使った定期レポート
         description: "大規模言語モデルに基づく定期レポート"
@@ -68,7 +68,6 @@ ja:
     composer_ai_helper_allowed_groups: "これらのグループのユーザーの作成ツールには、AI ヘルパーボタンが表示されます。"
     ai_helper_allowed_in_pm: "PM で作成ツールの AI ヘルパーを有効にします。"
     ai_helper_model: "AI ヘルパーに使用するモデル。"
-    ai_helper_custom_prompts_allowed_groups: "これらのグループのユーザーには、AI ヘルパーにカスタムプロンプトオプションが表示されます。"
     ai_helper_automatic_chat_thread_title_delay: "AI ヘルパーがチャットスレッドのタイトルを自動的に設定するまでの遅延 (分単位)。"
     ai_helper_automatic_chat_thread_title: "スレッドのコンテンツに基づいてチャットスレッドのタイトルを自動的に設定する。"
     ai_helper_illustrate_post_model: "作成ツールの AI ヘルパーのイラスト投稿機能に使用するモデル"
@@ -99,7 +98,6 @@ ja:
     ai_bot_allowed_groups: "GPT ボットが PM にアクセスできる場合、これらのグループのメンバーに返信します。"
     ai_bot_debugging_allowed_groups: "これらのグループが生の AI リクエストと応答を表示するデバッグボタンを投稿に表示することを許可する"
     ai_bot_public_sharing_allowed_groups: "これらのグループが、一意の公開リンクを介して AI 個人メッセージを公開共有することを許可する。注意: サイトにログインが必要な場合、共有にもログインが必要です。"
-    ai_bot_add_to_header: "AI ボットとの PM を開始するためのボタンをヘッダーに表示する"
     ai_bot_github_access_token: "GitHub AI ツールで使用する GitHub アクセストークン (検索サポートに必要)"
     ai_stability_api_key: "stability.ai API の API キー"
     ai_stability_engine: "stability.ai API に使用する画像生成エンジン"
@@ -112,11 +110,8 @@ ja:
     ai_discord_search_mode: "Discord 検索に使用する検索モードを選択する"
     ai_discord_search_persona: "Discord 検索に使用するペルソナ。"
     ai_discord_allowed_guilds: "ボットが検索できる Discord ギルド (サーバー)"
-    ai_bot_enable_dedicated_ux: "PM の代わりに、全画面表示のボットインターフェースを許可する"
-    ai_translation_enabled: "AI 翻訳機能を有効にします"
     ai_translation_model: "翻訳に使用するモデル。このモデルは翻訳をサポートしている必要があります。ペルソナはこの設定を上書きできます。"
     ai_translation_backfill_limit_to_public_content: "有効にすると、公開カテゴリのコンテンツのみが翻訳されます。無効にすると、グループ PM と非公開カテゴリのコンテンツも翻訳対象として送信されます。"
-    ai_translation_max_post_length: "翻訳する投稿の最大長。これより長い投稿は翻訳されません。"
     ai_translation_backfill_max_age_days: "翻訳する投稿とトピックの最大経過日数。これより古い投稿とトピックは翻訳されません。0 にするとバックファイルは無効になりますが、新しい投稿の翻訳は無効になりません。"
   reviewables:
     reasons:
@@ -236,8 +231,10 @@ ja:
           name: "為替レート"
         stock_quote:
           name: "株価 (AlphaVantage)"
-        image_generation:
-          name: "Flux 画像ジェネレーター (Together.ai)"
+        image_generation_custom:
+          name: "カスタム"
+        image_generation_openai:
+          name: "OpenAI"
         empty_tool:
           name: "空白から始める..."
       name:
@@ -254,10 +251,6 @@ ja:
         explain: "説明"
         illustrate_post: "イラスト投稿"
         replace_dates: "スマート日付"
-      painter:
-        attribution:
-          stable_diffusion_xl: "Stable Diffusion XL による画像"
-          dall_e_3: "DALL-E 3 による画像"
       image_caption:
         attribution: "AI によるキャプション"
     share_ai:
@@ -282,7 +275,6 @@ ja:
     ai_bot:
       reply_error: "返信中に予期しない問題が発生したようです。\n\n\n[details='エラーの詳細']\n%{details}\n[/details]"
       default_pm_prefix: "[無題の AI ボット PM]"
-      thinking: "考えています..."
       personas:
         default_llm_required: "チャットを有効にする前に、デフォルトの LLM モデルが必要です"
         cannot_delete_system_persona: "システムペルソナは削除できません。代わりに無効にしてください"
@@ -350,7 +342,6 @@ ja:
           description: "ヘルパーの Markdown テーブルの生成機能を強化するデフォルトのペルソナ"
         post_illustrator:
           name: "イラスト投稿ツール"
-          description: "ヘルパーのイラスト投稿機能を強化する StableDiffusion プロンプトを生成しあｍす"
         proofreader:
           name: "校正ツール"
           description: "ヘルパーのテキストの校正機能を強化するデフォルトのペルソナ"
@@ -576,7 +567,6 @@ ja:
       cannot_edit_builtin: "組み込みのモデルを編集することはできません。"
       configuration:
         disable_embeddings: "先に 'ai embeddings enabled' を無効にしてください。"
-        invalid_config: "無効なオプションを選択しました。"
         choose_model: "先に 'ai embeddings selected model' を設定してください。"
     llm_models:
       missing_provider_param: "%{param} は空白にできません"
@@ -600,6 +590,3 @@ ja:
       persona_already_exists: '%{name} という名前のペルソナはすでに存在します。'
       custom_tool_exists:
         other: "%{names} という名前のカスタムツールはすでに存在します。"
-  dashboard:
-    problem:
-      ai_llm_status: "LLM モデル: %{model_name} に問題が発生しています。<a href='%{url}'>モデルの構成ページ</a>を確認してください。"

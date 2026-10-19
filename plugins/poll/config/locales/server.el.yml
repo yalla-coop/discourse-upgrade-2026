@@ -28,6 +28,8 @@ el:
     default_poll_with_multiple_choices_has_invalid_parameters: "Η ψηφοφορία με πολλαπλές επιλογές έχει μη έγκυρες παραμέτρους."
     named_poll_with_multiple_choices_has_invalid_parameters: "Η ψηφοφορία με όνομα <strong>%{name}</strong> και με πολλαπλές επιλογές έχει μη έγγυρες παραμέτρους"
     requires_at_least_1_valid_option: "Πρέπει να κάνεις τουλάχιστον 1 έγκυρη επιλογή."
+    dynamic_poll:
+      enabled_hint: "Οι επιλογές μπορούν να προστεθούν ή να αφαιρεθούν."
     no_poll_with_this_name: "Σε αυτή την ανάρτηση δεν υπάρχουν ψηφοφορίες με το όνομα <strong>%{name}</strong>."
     post_is_deleted: "Δεν μπορείτε να ενεργήσετε σε διεγραμένη ανάρτηση."
     topic_must_be_open_to_vote: "Το νήμα πρέπει να είναι ανοιχτό για ψηφοφορίες."

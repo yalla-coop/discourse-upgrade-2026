@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 class ReviewableNotesController < ApplicationController
-  before_action :find_reviewable
   before_action :ensure_can_see
+  before_action :find_reviewable
 
   def create
     note = @reviewable.reviewable_notes.build(note_params)
@@ -13,7 +13,7 @@ class ReviewableNotesController < ApplicationController
       note.reload
       render json: ReviewableNoteSerializer.new(note, scope: guardian, root: false)
     else
-      render json: { errors: note.errors.full_messages }, status: 422
+      render json: { errors: note.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
@@ -30,7 +30,7 @@ class ReviewableNotesController < ApplicationController
   private
 
   def find_reviewable
-    @reviewable = Reviewable.find(params[:reviewable_id])
+    @reviewable = Reviewable.viewable_by(current_user, preload: false).find(params[:reviewable_id])
   end
 
   def note_params

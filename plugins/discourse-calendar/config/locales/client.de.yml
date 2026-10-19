@@ -7,11 +7,11 @@
 de:
   admin_js:
     admin:
-      calendar: "Kalender"
+      calendar: "Kalender & Ereignisse"
       site_settings:
         categories:
           discourse_post_event: "Discourse – Ereignis"
-          discourse_calendar: "Discourse – Kalender"
+          discourse_calendar: "Kalender und Ereignisse"
   js:
     notifications:
       titles:
@@ -36,6 +36,7 @@ de:
         header_title: "Feiertage"
         pick_region_description: "Wähle eine Region aus, um die Feiertage für diese Region zu sehen."
         disabled_holidays_description: "Deaktivierte Feiertage werden aus dem Team-Feiertagskalender ausgeschlossen."
+        header_description: "Wähle eine Region aus, um die Feiertage für diese zu sehen. Deaktivierte Feiertage werden aus dem Team-Feiertagskalender ausgeschlossen."
       date: "Datum"
       add_to_calendar: "Zu Google Kalender hinzufügen"
       toggle_timezone_offset_title: "Zeitzonenoffset umschalten"
@@ -44,6 +45,7 @@ de:
         title: "Region"
         none: "Keine"
         use_current_region: "Aktuelle Region verwenden"
+        select_region: "Region auswählen ..."
         names:
           ae: "Vereinigte Arabische Emirate"
           ar: "Argentinien"
@@ -138,6 +140,7 @@ de:
           dk: "Dänemark"
           ee: "Estland"
           el: "Griechenland"
+          gr: "Griechenland"
           es_an: "Spanien (es_an)"
           es_ar: "Spanien (es_ar)"
           es_ce: "Spanien (es_ce)"
@@ -314,7 +317,7 @@ de:
         month: "Monat"
         week: "Woche"
         day: "Tag"
-        list: "Auflisten"
+        year: "Jahr"
     group_timezones:
       search: "Suche …"
       group_availability: "%{group} Verfügbarkeit"
@@ -413,6 +416,7 @@ de:
         event:
           expired: "Abgelaufen"
           closed: "Geschlossen"
+          full: "Voll"
           status:
             standalone:
               title: "Einzeln"
@@ -470,6 +474,9 @@ de:
         minimal:
           label: "Minimales Event"
           checkbox_label: "Schaltflächen „Dabei“/„Nicht dabei“ und Status der eingeladenen Personen ausblenden"
+        max_attendees:
+          label: "Maximale Teilnehmerzahl"
+          placeholder: "Keine Begrenzung"
         allow_chat:
           label: "Chat-Integration"
           checkbox_label: "Erstelle und verwalte ereignisspezifische Chat-Kanäle"

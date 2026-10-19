@@ -17,6 +17,8 @@ vi:
         other: "Bạn không thể tạo tin nhắn trực tiếp với hơn %{count} người dùng khác."
     reviewables:
       actions:
+        no_action_message:
+          title: "Không có hành động"
         agree_and_suspend:
           title: "Tạm ngưng người dùng"
         agree_and_silence:
@@ -31,7 +33,8 @@ vi:
     mention_warning:
       dismiss: "bỏ qua"
     bookmarkable:
-      notification_title: "tin nhắn trong %{channel_name}"
+      notification_title_channel: "tin nhắn trong %{channel_name}"
+      notification_title_direct_message: "tin nhắn với %{channel_name}"
     onebox:
       thread_title_connector: "trong"
   discourse_push_notifications:

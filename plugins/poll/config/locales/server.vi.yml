@@ -39,6 +39,8 @@ vi:
     edit_window_expired:
       cannot_edit_default_poll_with_votes: "Bạn không thể thay đổi kết quả bình chọn sau %{minutes} phút đầu tiên."
       cannot_edit_named_poll_with_votes: "Bạn không thể thay đổi cuộc bình chọn <strong>${name}</strong> sau %{minutes} phút đầu tiên."
+    dynamic_poll:
+      enabled_hint: "Có thể thêm hoặc xóa các lựa chọn."
     no_poll_with_this_name: "Không có cuộc bình chọn có tên <strong>%{name}</strong> liên kết với tút này."
     post_is_deleted: "Không thể thực hiện trên một tút đã xóa."
     user_cant_post_in_topic: "Bạn không thể bình chọn vì bạn không thể đăng tút trong chủ đề này."

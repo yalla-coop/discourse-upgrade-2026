@@ -13,6 +13,7 @@ register_asset "stylesheets/explorer.scss"
 
 register_svg_icon "caret-down"
 register_svg_icon "caret-right"
+register_svg_icon "chart-line"
 register_svg_icon "chevron-left"
 register_svg_icon "circle-exclamation"
 register_svg_icon "info"
@@ -49,7 +50,7 @@ after_initialize do
   add_to_class(:guardian, :user_can_access_query?) do |query|
     return false if !current_user
     return true if current_user.admin?
-    query.groups.blank? || query.groups.any? { |group| user_is_a_member_of_group?(group) }
+    query.groups.any? { |group| user_is_a_member_of_group?(group) }
   end
 
   add_to_class(:guardian, :group_and_user_can_access_query?) do |group, query|
@@ -68,7 +69,12 @@ after_initialize do
 
   add_api_key_scope(
     :discourse_data_explorer,
-    { run_queries: { actions: %w[discourse_data_explorer/query#run], params: %i[id] } },
+    {
+      run_queries: {
+        actions: %w[discourse_data_explorer/query#run discourse_data_explorer/query#public_run],
+        params: %i[id],
+      },
+    },
   )
 
   reloadable_patch do

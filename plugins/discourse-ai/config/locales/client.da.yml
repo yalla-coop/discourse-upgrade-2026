@@ -51,7 +51,7 @@ da:
         disabled: "(deaktiveret)"
         groups: "Grupper:"
         no_groups: "Ingen"
-        edit: "Rediger"
+        edit: "Indstillinger"
         expand_list:
           one: "(%{count} mere)"
           other: "(%{count} mere)"
@@ -69,6 +69,20 @@ da:
         table: "Tabel"
       translations:
         title: "Oversættelser"
+        stats:
+          eta_minutes:
+            one: "%{count} minut"
+            other: "%{count} minutter"
+          eta_hours:
+            one: "%{count} time"
+            other: "%{count} timer"
+          eta_days:
+            one: "%{count} dag"
+            other: "%{count} dage"
+        progress_chart:
+          bar_done:
+            one: "%{count} indlæg"
+            other: "%{count} indlæg"
       spam:
         short_title: "Spam"
         last_seven_days: "Seneste 7 dage"
@@ -82,6 +96,7 @@ da:
         summary: "Statistik"
         username: "Brugernavn"
         total_requests: "Total antal anmodninger"
+        total: "Total"
         periods:
           last_day: "Seneste 24 timer"
           custom: "Tilpasset..."
@@ -162,6 +177,7 @@ da:
           cancel: "Annuller"
         thumbnail_suggestions:
           select: "Vælg"
+          try_again: "Prøv igen"
         image_caption:
           save_caption: "Gem"
       embeddings:

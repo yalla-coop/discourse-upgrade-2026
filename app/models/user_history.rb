@@ -28,7 +28,7 @@ class UserHistory < ActiveRecord::Base
   validates :previous_value, length: { maximum: MAX_JSON_LENGTH }
   validates :new_value, length: { maximum: MAX_JSON_LENGTH }
 
-  validates_presence_of :action
+  validates :action, presence: true
 
   # moderators can only see these if the corresponding site setting is enabled
   CATEGORY_ACTIONS = %i[create_category change_category_settings delete_category].freeze
@@ -163,6 +163,8 @@ class UserHistory < ActiveRecord::Base
         delete_associated_accounts: 119,
         change_theme_site_setting: 120,
         stop_impersonating: 121,
+        upcoming_change_toggled: 122,
+        change_site_setting_groups: 123,
       )
   end
 
@@ -287,6 +289,8 @@ class UserHistory < ActiveRecord::Base
       create_flag
       change_theme_site_setting
       stop_impersonating
+      upcoming_change_toggled
+      change_site_setting_groups
     ]
   end
 
@@ -373,7 +377,8 @@ class UserHistory < ActiveRecord::Base
 
   def self.site_setting_excluded_actions
     excluded = []
-    excluded.concat(CATEGORY_ACTIONS) unless SiteSetting.moderators_manage_categories_and_groups
+    excluded.concat(CATEGORY_ACTIONS) unless SiteSetting.moderators_manage_categories
+    excluded.concat(TRUST_LEVEL_ACTIONS) unless SiteSetting.moderators_change_trust_levels
     excluded.concat(EMAIL_ACTIONS) unless SiteSetting.moderators_view_emails
     excluded
   end

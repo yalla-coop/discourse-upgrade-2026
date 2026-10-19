@@ -4,7 +4,7 @@ require "openssl"
 require "json"
 require_relative "../spec_helper"
 
-RSpec.describe ::Patreon::PatreonWebhookController do
+RSpec.describe Patreon::PatreonWebhookController do
   before do
     SiteSetting.patreon_enabled = true
     SiteSetting.login_required = true
@@ -39,6 +39,25 @@ RSpec.describe ::Patreon::PatreonWebhookController do
                headers: {
                  "X-Patreon-Event": "pledges:create",
                  "X-Patreon-Signature": "foo",
+               }
+        end
+
+        expect(response.status).to eq(403)
+        expect(response.parsed_body["errors"]).to contain_exactly("Invalid signature")
+      end
+
+      it "returns a 403 error when webhook secret is blank" do
+        SiteSetting.patreon_webhook_secret = ""
+        body = get_patreon_response("pledge.json")
+        digest = OpenSSL::Digest.new("MD5")
+        forged_signature = OpenSSL::HMAC.hexdigest(digest, "", body)
+
+        expect_not_enqueued_with(job: :patreon_sync_patrons_to_groups) do
+          post "/patreon/webhook",
+               params: body,
+               headers: {
+                 "X-Patreon-Event": "pledges:create",
+                 "X-Patreon-Signature": forged_signature,
                }
         end
 

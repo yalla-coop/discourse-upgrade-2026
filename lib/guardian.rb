@@ -144,15 +144,8 @@ class Guardian
     return false if !category
     return false if !category_group_moderation_allowed?
 
-    @group_moderator_categories ||= {}
-
-    if @group_moderator_categories.key?(category.id)
-      @group_moderator_categories[category.id]
-    else
-      @group_moderator_categories[category.id] = category_group_moderator_scope.exists?(
-        id: category.id,
-      )
-    end
+    @moderated_category_ids ||= category_group_moderator_scope.pluck(:id).to_set
+    @moderated_category_ids.include?(category.id)
   end
 
   def is_silenced?
@@ -346,9 +339,13 @@ class Guardian
   end
 
   def can_suspend?(user)
-    user && is_staff? && user.regular?
+    can_unsuspend?(user) && user.regular?
   end
   alias can_deactivate? can_suspend?
+
+  def can_unsuspend?(user)
+    user && is_staff?
+  end
 
   def can_revoke_admin?(admin)
     can_administer_user?(admin) && admin.admin?
@@ -401,7 +398,7 @@ class Guardian
   end
 
   def can_change_trust_level?(user)
-    user && is_staff?
+    user && (is_admin? || (is_moderator? && SiteSetting.moderators_change_trust_levels))
   end
 
   # Support sites that have to approve users
@@ -492,7 +489,10 @@ class Guardian
     return false if anonymous?
     return true if is_admin?
     return can_see_emails? if entity == "screened_email"
-    return entity != "user_list" if is_moderator? && (entity != "user_archive" || entity_id.nil?)
+
+    if is_moderator? && (entity != "user_archive" || entity_id.nil?)
+      return %w[staff_action screened_ip screened_url report user_archive].include?(entity)
+    end
 
     # Regular users can only export their archives
     return false unless entity == "user_archive"
@@ -549,7 +549,7 @@ class Guardian
     return false if !@user.admin?
 
     allowed_repos = GlobalSetting.allowed_theme_repos
-    if !allowed_repos.blank?
+    if allowed_repos.present?
       urls = allowed_repos.split(",").map(&:strip)
       return urls.include?(repo)
     end
@@ -617,8 +617,7 @@ class Guardian
   end
 
   def can_see_reviewable_ui_refresh?
-    SiteSetting.reviewable_ui_refresh_map.include?(Group::AUTO_GROUPS[:everyone]) ||
-      @user.in_any_groups?(SiteSetting.reviewable_ui_refresh_map)
+    !SiteSetting.force_old_reviewable_ui
   end
 
   def is_me?(other)
@@ -672,9 +671,10 @@ class Guardian
   end
 
   def category_group_moderator_scope
-    Category
-      .joins(:category_moderation_groups)
-      .joins("INNER JOIN group_users ON group_users.group_id = category_moderation_groups.group_id")
-      .where("group_users.user_id": user.id)
+    Category.joins(category_moderation_groups: { group: :group_users }).where(
+      group_users: {
+        user_id: user.id,
+      },
+    )
   end
 end

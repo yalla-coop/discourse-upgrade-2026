@@ -99,8 +99,8 @@ RSpec.describe UserHistory do
   end
 
   describe ".site_setting_excluded_actions" do
-    it "excludes category actions when moderators_manage_categories_and_groups is disabled" do
-      SiteSetting.moderators_manage_categories_and_groups = false
+    it "excludes category actions when moderators_manage_categories is disabled" do
+      SiteSetting.moderators_manage_categories = false
       expect(described_class.site_setting_excluded_actions).to include(
         :create_category,
         :change_category_settings,
@@ -108,12 +108,30 @@ RSpec.describe UserHistory do
       )
     end
 
-    it "includes category actions when moderators_manage_categories_and_groups is enabled" do
-      SiteSetting.moderators_manage_categories_and_groups = true
+    it "includes category actions when moderators_manage_categories is enabled" do
+      SiteSetting.moderators_manage_categories = true
       expect(described_class.site_setting_excluded_actions).not_to include(
         :create_category,
         :change_category_settings,
         :delete_category,
+      )
+    end
+
+    it "excludes trust level actions when moderators_change_trust_levels is disabled" do
+      SiteSetting.moderators_change_trust_levels = false
+      expect(described_class.site_setting_excluded_actions).to include(
+        :change_trust_level,
+        :lock_trust_level,
+        :unlock_trust_level,
+      )
+    end
+
+    it "includes trust level actions when moderators_change_trust_levels is enabled" do
+      SiteSetting.moderators_change_trust_levels = true
+      expect(described_class.site_setting_excluded_actions).not_to include(
+        :change_trust_level,
+        :lock_trust_level,
+        :unlock_trust_level,
       )
     end
 
@@ -147,12 +165,12 @@ RSpec.describe UserHistory do
     end
 
     it "responds dynamically to site setting changes" do
-      SiteSetting.moderators_manage_categories_and_groups = true
+      SiteSetting.moderators_manage_categories = true
       expect(described_class.moderator_visible_action_ids).to include(
         described_class.actions[:create_category],
       )
 
-      SiteSetting.moderators_manage_categories_and_groups = false
+      SiteSetting.moderators_manage_categories = false
       expect(described_class.moderator_visible_action_ids).not_to include(
         described_class.actions[:create_category],
       )

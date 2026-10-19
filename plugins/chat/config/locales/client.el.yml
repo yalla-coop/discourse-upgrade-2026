@@ -92,10 +92,8 @@ el:
       send_shortcut:
         enter:
           label: "Αποστολή με Enter"
-          description: "Νέα γραμμή με Shift + Enter"
         meta_enter:
           label: "Αποστολή με %{meta_key} + Enter"
-          description: "Νέα γραμμή με Enter"
       enable: "Ενεργοποίηση συνομιλίας"
       flag: "Αναφορά"
       emoji: "Εισαγωγή emoji"
@@ -167,6 +165,8 @@ el:
       chat_message_separator:
         today: Σήμερα
         yesterday: Χτες
+      search_view:
+        filter_placeholder: Αναζήτηση στα μηνύματα
       about_view:
         title: Τίτλος
         name: Όνομα
@@ -176,6 +176,7 @@ el:
         tabs:
           members: Μέλη
           settings: Ρυθμίσεις
+          search: Αναζήτηση
         remove_member: "Αφαίρεση"
       new_message_modal:
         no_items: "Δεν υπάρχουν στοιχεία"
@@ -201,6 +202,7 @@ el:
           topic: "Θέμα"
       reviewable:
         type: "Μήνυμα συνομιλίας"
+        message_in_channel: "Κανάλι"
       composer:
         italic_text: "κείμενο σε έμφαση"
         bold_text: "έντονη γραφή"
@@ -223,6 +225,12 @@ el:
         category_label: "Κατηγορία"
         history_label: "Ιστορικό"
         members_label: "Μέλη"
+      search:
+        short_title: Αναζήτηση
+        no_results: "Δεν βρέθηκαν αποτελέσματα"
+        sort:
+          relevance: "Συνάφεια"
+          latest: "Πρόσφατα"
       direct_messages:
         new: "Δημιουργήστε μια προσωπική συνομιλία"
         leave: "Αποχωρήστε από την προσωπική συνομιλία"
@@ -336,6 +344,9 @@ el:
         chat:
           title: Συνομιλία
     sidebar:
+      start_new_dm:
+        text: Έναρξη νέου ΠΜ
+        title: Δημιουργία προσωπικής συνομιλίας
       panels:
         chat:
           label: "Συνομιλία"

@@ -505,6 +505,28 @@ RSpec.describe Guardian do
         expect(Guardian.new(admin).can_banner_topic?(topic)).to be_truthy
       end
 
+      describe "#can_change_archetype?" do
+        fab!(:topic)
+
+        it "allows staff to change archetype to banner" do
+          expect(Guardian.new(admin).can_change_archetype?(topic, Archetype.banner)).to eq(true)
+          expect(Guardian.new(moderator).can_change_archetype?(topic, Archetype.banner)).to eq(true)
+        end
+
+        it "does not allow regular users to change archetype to banner" do
+          expect(Guardian.new(user).can_change_archetype?(topic, Archetype.banner)).to eq(false)
+        end
+
+        it "does not allow regular users to change archetype from banner" do
+          topic.update!(archetype: Archetype.banner)
+          expect(Guardian.new(user).can_change_archetype?(topic, Archetype.default)).to eq(false)
+        end
+
+        it "returns true when archetype is unchanged" do
+          expect(Guardian.new(user).can_change_archetype?(topic, topic.archetype)).to eq(true)
+        end
+      end
+
       it "respects category group moderator settings" do
         group_user = Fabricate(:group_user)
         user_gm = group_user.user
@@ -619,7 +641,6 @@ RSpec.describe Guardian do
       end
 
       it "is false if user has not met minimum trust level" do
-        SiteSetting.min_trust_to_create_topic = 1
         SiteSetting.create_topic_allowed_groups = Group::AUTO_GROUPS[:trust_level_1]
         expect(
           Guardian.new(Fabricate(:user, trust_level: 0)).can_create?(Topic, plain_category),
@@ -1380,6 +1401,30 @@ RSpec.describe Guardian do
       Fabricate(:category_moderation_group, category: topic.category, group:)
       expect(Guardian.new(user).can_close_topic?(topic)).to eq(true)
     end
+
+    context "with TL4 users" do
+      it "returns true for visible topic" do
+        expect(Guardian.new(trust_level_4).can_close_topic?(topic)).to eq(true)
+      end
+
+      it "returns false for private category topic" do
+        private_category = Fabricate(:private_category, group: group)
+        private_topic = Fabricate(:topic, category: private_category)
+        expect(Guardian.new(trust_level_4).can_close_topic?(private_topic)).to eq(false)
+      end
+
+      it "returns false for private message" do
+        pm_topic = Fabricate(:private_message_topic)
+        expect(Guardian.new(trust_level_4).can_close_topic?(pm_topic)).to eq(false)
+      end
+
+      it "returns true with access to private category" do
+        group.add(trust_level_4)
+        private_category = Fabricate(:private_category, group: group)
+        private_topic = Fabricate(:topic, category: private_category)
+        expect(Guardian.new(trust_level_4).can_close_topic?(private_topic)).to eq(true)
+      end
+    end
   end
 
   describe "#can_archive_topic?" do
@@ -1400,6 +1445,56 @@ RSpec.describe Guardian do
       GroupUser.create!(group_id: group.id, user_id: user.id)
       Fabricate(:category_moderation_group, category: topic.category, group:)
       expect(Guardian.new(user).can_archive_topic?(topic)).to eq(true)
+    end
+
+    context "with TL4 users" do
+      it "returns true for visible topic" do
+        expect(Guardian.new(trust_level_4).can_archive_topic?(topic)).to eq(true)
+      end
+
+      it "returns false for private category topic" do
+        private_category = Fabricate(:private_category, group: group)
+        private_topic = Fabricate(:topic, category: private_category)
+        expect(Guardian.new(trust_level_4).can_archive_topic?(private_topic)).to eq(false)
+      end
+
+      it "returns false for private message" do
+        pm_topic = Fabricate(:private_message_topic)
+        expect(Guardian.new(trust_level_4).can_archive_topic?(pm_topic)).to eq(false)
+      end
+
+      it "returns true with access to private category" do
+        group.add(trust_level_4)
+        private_category = Fabricate(:private_category, group: group)
+        private_topic = Fabricate(:topic, category: private_category)
+        expect(Guardian.new(trust_level_4).can_archive_topic?(private_topic)).to eq(true)
+      end
+    end
+  end
+
+  describe "#can_pin_unpin_topic?" do
+    context "with TL4 users" do
+      it "returns true for visible topic" do
+        expect(Guardian.new(trust_level_4).can_pin_unpin_topic?(topic)).to eq(true)
+      end
+
+      it "returns false for private category topic" do
+        private_category = Fabricate(:private_category, group: group)
+        private_topic = Fabricate(:topic, category: private_category)
+        expect(Guardian.new(trust_level_4).can_pin_unpin_topic?(private_topic)).to eq(false)
+      end
+
+      it "returns true with access to private category" do
+        group.add(trust_level_4)
+        private_category = Fabricate(:private_category, group: group)
+        private_topic = Fabricate(:topic, category: private_category)
+        expect(Guardian.new(trust_level_4).can_pin_unpin_topic?(private_topic)).to eq(true)
+      end
+
+      it "returns false for private message" do
+        pm_topic = Fabricate(:private_message_topic)
+        expect(Guardian.new(trust_level_4).can_pin_unpin_topic?(pm_topic)).to eq(false)
+      end
     end
   end
 
@@ -1430,7 +1525,6 @@ RSpec.describe Guardian do
     end
 
     it "returns false for user with insufficient trust level" do
-      SiteSetting.min_trust_to_create_topic = 3
       SiteSetting.create_topic_allowed_groups = Group::AUTO_GROUPS[:trust_level_3]
       expect(Guardian.new(user).can_create_topic?(topic)).to eq(false)
     end
@@ -2045,16 +2139,16 @@ RSpec.describe Guardian do
       expect(Guardian.new(admin).can_change_primary_group?(user, group)).to eq(true)
     end
 
-    context "when moderators_manage_categories_and_groups site setting is enabled" do
-      before { SiteSetting.moderators_manage_categories_and_groups = true }
+    context "when moderators_manage_groups site setting is enabled" do
+      before { SiteSetting.moderators_manage_groups = true }
 
       it "returns true for moderators" do
         expect(Guardian.new(moderator).can_change_primary_group?(user, group)).to eq(true)
       end
     end
 
-    context "when moderators_manage_categories_and_groups site setting is disabled" do
-      before { SiteSetting.moderators_manage_categories_and_groups = false }
+    context "when moderators_manage_groups site setting is disabled" do
+      before { SiteSetting.moderators_manage_groups = false }
 
       it "returns false for moderators" do
         expect(Guardian.new(moderator).can_change_primary_group?(user, group)).to eq(false)
@@ -2622,7 +2716,7 @@ RSpec.describe Guardian do
     context "when post is older than post_edit_time_limit" do
       let(:old_post) { Fabricate(:post, user: trust_level_2, created_at: 6.minutes.ago) }
       before do
-        SiteSetting.min_trust_to_allow_self_wiki = 2
+        SiteSetting.self_wiki_allowed_groups = "1|2|12"
         SiteSetting.tl2_post_edit_time_limit = 5
       end
 
@@ -3181,7 +3275,6 @@ RSpec.describe Guardian do
     end
 
     it "works with trust levels" do
-      SiteSetting.min_trust_level_for_here_mention = 2
       SiteSetting.here_mention_allowed_groups = Group::AUTO_GROUPS[:trust_level_2]
 
       expect(trust_level_0.guardian.can_mention_here?).to eq(false)
@@ -3194,7 +3287,6 @@ RSpec.describe Guardian do
     end
 
     it "works with staff" do
-      SiteSetting.min_trust_level_for_here_mention = "staff"
       SiteSetting.here_mention_allowed_groups = Group::AUTO_GROUPS[:staff]
 
       expect(trust_level_4.guardian.can_mention_here?).to eq(false)
@@ -3203,7 +3295,6 @@ RSpec.describe Guardian do
     end
 
     it "works with admin or moderator" do
-      SiteSetting.min_trust_level_for_here_mention = "admin"
       SiteSetting.here_mention_allowed_groups = Group::AUTO_GROUPS[:admins]
 
       expect(trust_level_4.guardian.can_mention_here?).to eq(false)

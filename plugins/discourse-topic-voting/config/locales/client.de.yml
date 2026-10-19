@@ -21,12 +21,8 @@ de:
       voted_title: "Abgestimmt"
       voting_closed_title: "Geschlossen"
       voting_limit: "Limit"
-      votes_left:
-        one: "Du hast noch %{count} Stimme übrig, siehe <a href='%{path}'>deine Stimmen</a>."
-        other: "Du hast noch %{count} Stimmen übrig, siehe <a href='%{path}'>deine Stimmen</a>."
-      votes_left_button_title:
-        one: "Du hast noch %{count} Stimme übrig."
-        other: "Du hast noch %{count} Stimmen übrig."
+      locked: "Gesperrt"
+      locked_description: "Erhöhe deine Vertrauensstufe, um abzustimmen"
       votes:
         one: "%{count} Stimme"
         other: "%{count} Stimmen"

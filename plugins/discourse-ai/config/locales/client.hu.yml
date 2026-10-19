@@ -44,7 +44,7 @@ hu:
         groups: "Csoportok:"
         no_persona: "Nincs beállítva"
         no_groups: "Egyik sem"
-        edit: "Szerkesztés"
+        edit: "Beállítások"
         expand_list:
           one: "(%{count} további)"
           other: "(%{count} további)"
@@ -62,10 +62,20 @@ hu:
         table: "Táblázat"
       translations:
         title: "Fordítások"
+        stats:
+          eta_minutes:
+            one: "%{count} perc"
+            other: "%{count} perc"
+          eta_hours:
+            one: "%{count} óra"
+            other: "%{count} óra"
+          eta_days:
+            one: "%{count} nap"
+            other: "%{count} nap"
         progress_chart:
-          title: "Fordítási folyamat"
-          completed: "Befejezve"
-          remaining: "Hátralevő"
+          bar_done:
+            one: "%{count} bejegyzés"
+            other: "%{count} bejegyzés"
       spam:
         short_title: "Kéretlen tartalom"
         last_seven_days: "Elmúlt 7 nap"
@@ -80,6 +90,7 @@ hu:
         summary: "Összefoglaló"
         username: "Felhasználónév"
         total_requests: "Összes kérés"
+        total: "Összesen"
         periods:
           last_day: "Elmúlt 24 óra"
           custom: "Egyéni…"
@@ -141,9 +152,6 @@ hu:
         usage:
           ai_summarization: "Összefoglalás"
           ai_spam: "Kéretlen tartalom"
-        model_description:
-          open_ai-o3: "Az Open AI leghatékonyabb érvelési modellje"
-          open_ai-gpt-5: "Az Open AI zászlóshajó modellje. Jól alkalmazható a problémamegoldásra minden területen."
         next:
           title: "Következő"
         tests:
@@ -167,6 +175,7 @@ hu:
         thumbnail_suggestions:
           select: "Kiválasztás"
           selected: "Kiválasztott"
+          try_again: "Újrapróbálkozás"
         image_caption:
           save_caption: "Mentés"
       embeddings:

@@ -5,6 +5,10 @@
 # https://translate.discourse.org/
 
 ar:
+  activerecord:
+    attributes:
+      llm_model:
+        max_prompt_tokens: "نافذة السياق"
   discourse_automation:
     ai:
       flag_types:
@@ -22,10 +26,6 @@ ar:
       llm_triage:
         title: فرز المنشورات باستخدام الذكاء الاصطناعي
         description: "فرز المنشورات باستخدام نموذج اللغة الكبير"
-        flagged_post: |
-          <div>استجابة من النموذج:</div>
-          <p>%%LLM_RESPONSE%%</p>
-          <b>تم تشغيله من قِبل <a href="%{base_path}/admin/plugins/discourse-automation/%%AUTOMATION_ID%%">%%AUTOMATION_NAME%%</a> القاعدة.</b>
       llm_report:
         title: التقرير الدوري باستخدام الذكاء الاصطناعي
         description: "تقرير دوري قائم على نموذج اللغة الكبير"
@@ -68,7 +68,6 @@ ar:
     composer_ai_helper_allowed_groups: "سيرى المستخدمون في هذه المجموعات زر مساعد الذكاء الاصطناعي في أداة الإنشاء."
     ai_helper_allowed_in_pm: "تفعيل مساعد الذكاء الاصطناعي في الرسائل الخاصة."
     ai_helper_model: "النموذج المراد استخدامه لمساعد الذكاء الاصطناعي."
-    ai_helper_custom_prompts_allowed_groups: "سيرى المستخدمون في هذه المجموعات خيار رسالة المطالبة المخصَّصة في مساعد الذكاء الاصطناعي."
     ai_helper_automatic_chat_thread_title_delay: "التأخير بالدقائق قبل أن يقوم مساعد الذكاء الاصطناعي بتعيين عنوان سلسلة الدردشة تلقائيًا."
     ai_helper_automatic_chat_thread_title: "تعيين عناوين سلسلة الدردشة تلقائيًا بناءً على محتويات السلسلة."
     ai_helper_illustrate_post_model: "النموذج المراد استخدامه لميزة تزويد المنشور بالصور من مساعد الذكاء الاصطناعي في أداة الإنشاء"
@@ -99,7 +98,6 @@ ar:
     ai_bot_allowed_groups: "عندما يتمكن GPT Bot من الوصول إلى الرسالة الخاصة، فإنه سيرد على أعضاء هذه المجموعات."
     ai_bot_debugging_allowed_groups: "السماح لهذه المجموعات برؤية زر تصحيح الأخطاء في المنشورات التي تعرض طلب الذكاء الاصطناعي الأولي والرد"
     ai_bot_public_sharing_allowed_groups: "السماح لهذه المجموعات بمشاركة رسائل الذكاء الاصطناعي الشخصية مع العامة عبر رابط فريد متاح بشكلٍ علني. ملاحظة: إذا كان موقعك يتطلَّب تسجيل الدخول، فستتطلب المشاركة تسجيل الدخول أيضًا."
-    ai_bot_add_to_header: "عرض زر في الرأس لبدء رسالة خاصة مع روبوت ذكاء اصطناعي"
     ai_bot_github_access_token: "رمز وصول GitHub للاستخدام مع أدوات الذكاء الاصطناعي من GitHub (مطلوب لدعم البحث)"
     ai_stability_api_key: "مفتاح API لواجهة API المسماة stability.ai"
     ai_stability_engine: "محرك إنشاء الصور المراد استخدامه لواجهة API المسماة stability.ai"
@@ -112,11 +110,8 @@ ar:
     ai_discord_search_mode: "حدد وضع البحث الذي تريد استخدامه للبحث في Discord"
     ai_discord_search_persona: "الشخصية المستخدمة في بحث Discord."
     ai_discord_allowed_guilds: "مجتمعات (خوادم) Discord التي يُصرح للروبوت بالبحث فيها"
-    ai_bot_enable_dedicated_ux: "السماح باستخدام واجهة البوت بكامل الشاشة بدلًا من الرسائل الخاصة (PM)"
-    ai_translation_enabled: "تمكين ميزة الترجمة بالذكاء الاصطناعي"
     ai_translation_model: "النموذج المستخدم للترجمة. يجب أن يدعم هذا النموذج الترجمة. يمكن للشخصيات تغيير هذا الإعداد."
     ai_translation_backfill_limit_to_public_content: "عند التفعيل، سيتم ترجمة المحتوى في الفئات العامة فقط. عند التعطيل، سيتم أيضًا إرسال المحتوى في الرسائل الجماعية الخاصة والفئات الخاصة للترجمة."
-    ai_translation_max_post_length: "الحد الأقصى لطول المنشور الذي سيتم ترجمته. المنشورات الأطول من ذلك لن تُترجم."
     ai_translation_backfill_max_age_days: "الحد الأقصى لعمر المنشور والموضوع الذي سيتم ترجمته. المنشورات والموضوعات الأقدم من ذلك لن تُترجم. القيمة 0 تمنع الترجمة الرجعية، لكنها لن تمنع ترجمة المنشورات الجديدة."
   reviewables:
     reasons:
@@ -241,8 +236,10 @@ ar:
           name: "سعر الصرف"
         stock_quote:
           name: "أسعار الأسهم (AlphaVantage)"
-        image_generation:
-          name: "مولِّد صور Flux (Together.ai)"
+        image_generation_custom:
+          name: "مخصَّصة"
+        image_generation_openai:
+          name: "OpenAI"
         empty_tool:
           name: "ابدأ من لا شيء..."
       name:
@@ -259,10 +256,6 @@ ar:
         explain: "الشرح"
         illustrate_post: "توضيح المنشور"
         replace_dates: "التواريخ الذكية"
-      painter:
-        attribution:
-          stable_diffusion_xl: "الصورة بواسطة Stable Diffusion XL"
-          dall_e_3: "الصورة بواسطة DALL-E 3"
       image_caption:
         attribution: "تم إنشاء التسمية التوضيحية بالذكاء الاصطناعي"
     share_ai:
@@ -287,7 +280,6 @@ ar:
     ai_bot:
       reply_error: "عذرًا، يبدو أن نظامنا واجه مشكلة غير متوقعة أثناء محاولة الرد.\n\n[details='Error details']\n%{details}\n[/details]"
       default_pm_prefix: "[رسالة خاصة دون عنوان من روبوت ذكاء اصطناعي]"
-      thinking: "التفكير..."
       personas:
         default_llm_required: "نموذج اللغة الكبير الافتراضي مطلوب قبل تفعيل الدردشة"
         cannot_delete_system_persona: "لا يمكن حذف شخصيات النظام، يُرجى إيقافها بدلًا من ذلك"
@@ -355,7 +347,6 @@ ar:
           description: "الشخصية الافتراضية المسؤولة عن ميزة المساعد في إنشاء جداول Markdown"
         post_illustrator:
           name: "مُوضِّح المنشورات"
-          description: "يولّد مطالبات StableDiffusion لتشغيل ميزة المساعد في توضيح المنشورات"
         proofreader:
           name: "مدقق لغوي"
           description: "الشخصية الافتراضية المسؤولة عن ميزة المساعد في تدقيق النصوص"
@@ -635,7 +626,6 @@ ar:
       cannot_edit_builtin: "لا يمكنك تعديل نموذج مُدمَج."
       configuration:
         disable_embeddings: "يجب عليك إيقاف 'ai embeddings enabled' أولًا."
-        invalid_config: "لقد اخترت خيارًا غير صالح."
         choose_model: "قم بتعيين 'ai embeddings selected model' أولًا."
     llm_models:
       missing_provider_param: "لا يمكن ترك %{param} فارغة"
@@ -664,6 +654,3 @@ ar:
         few: "هناك أدوات مخصصة تحمل الأسماء %{names} بالفعل."
         many: "هناك أدوات مخصصة تحمل الأسماء %{names} بالفعل."
         other: "هناك أدوات مخصصة تحمل الأسماء %{names} بالفعل."
-  dashboard:
-    problem:
-      ai_llm_status: "نموذج اللغة الكبير: %{model_name} يواجه مشكلات. يُرجى التحقق من <a href='%{url}'>صفحة إعدادات النموذج</a>."

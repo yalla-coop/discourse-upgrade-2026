@@ -39,7 +39,7 @@ vi:
         disabled: "(vô hiệu hóa)"
         groups: "Nhóm:"
         no_groups: "Không có gì"
-        edit: "Sửa"
+        edit: "Cài đặt"
         expand_list:
           other: "(%{count} khác)"
         collapse_list: "(thu gọn)"
@@ -59,6 +59,16 @@ vi:
         select_option: "Chọn một tùy Chọn..."
       translations:
         title: "Bản dịch"
+        stats:
+          eta_minutes:
+            other: "%{count} phút"
+          eta_hours:
+            other: "%{count} giờ"
+          eta_days:
+            other: "%{count} ngày"
+        progress_chart:
+          bar_done:
+            other: "%{count} tút"
       spam:
         short_title: "Rác"
         last_seven_days: "7 ngày qua"
@@ -69,6 +79,7 @@ vi:
         summary: "Tóm tắt"
         username: "Tên tài khoản"
         total_requests: "Tổng số yêu cầu"
+        total: "Tổng số"
         periods:
           last_day: "24 giờ qua"
           custom: "Tùy chỉnh..."
@@ -162,6 +173,7 @@ vi:
           footnote_credits: "Giải thích bởi AI"
         thumbnail_suggestions:
           select: "Chọn"
+          try_again: "Thử lại"
         image_caption:
           save_caption: "Lưu lại"
         no_content_error: "Thêm nội dung trước để thực hiện các hành động AI trên đó"
@@ -183,12 +195,14 @@ vi:
           none: "Rất tiếc, tìm kiếm AI của chúng tôi không tìm thấy chủ đề phù hợp"
           new: "Nhấn 'Tìm' để bắt đầu tìm kiếm kết quả mới bằng AI."
           unavailable: "Kết quả AI không khả dụng"
+          zero_results_expanded: "Không tìm thấy kết quả, hiển thị %{count} kết quả AI"
         semantic_search_tooltips:
           results_explanation: "Khi được bật, các kết quả tìm kiếm AI bổ sung sẽ được thêm vào bên dưới."
           invalid_sort: "Kết quả tìm kiếm phải được sắp xếp theo mức độ Liên quan để hiển thị kết quả AI"
         semantic_search_unavailable_tooltip: "Kết quả tìm kiếm phải được sắp xếp theo mức độ Liên quan để hiển thị kết quả AI"
         ai_generated_result: "Kết quả tìm kiếm được tìm thấy bằng AI"
       ai_bot:
+        try_again: "Thử lại"
         debug_ai_modal:
           request: "Yêu cầu"
           response: "Đáp ứng"
@@ -223,6 +237,13 @@ vi:
       discobot_discoveries:
         regular_results: "Các chủ đề"
         collapse: "Thu gọn"
+        user_setting: "Bật tính năng tìm kiếm bằng AI"
         tooltip:
           actions:
             disable: "Tắt"
+    review:
+      types:
+        reviewable_ai_post:
+          title: "Tút bị gắn nhãn AI"
+        reviewable_ai_chat_message:
+          title: "Tin nhắn trò chuyện bị gắn nhãn AI"

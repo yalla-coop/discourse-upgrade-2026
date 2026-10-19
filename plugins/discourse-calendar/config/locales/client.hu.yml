@@ -7,11 +7,9 @@
 hu:
   admin_js:
     admin:
-      calendar: "Naptár"
       site_settings:
         categories:
           discourse_post_event: "Discourse esemény"
-          discourse_calendar: "Discourse naptár"
   js:
     notifications:
       titles:
@@ -128,6 +126,7 @@ hu:
           dk: "Dánia"
           ee: "Észtország"
           el: "Görögország"
+          gr: "Görögország"
           es_an: "Spanyolország (es_an)"
           es_ar: "Spanyolország (es_ar)"
           es_ce: "Spanyolország (es_ce)"
@@ -294,7 +293,7 @@ hu:
         month: "Utolsó 30 nap"
         week: "Utolsó 7 nap"
         day: "Nap"
-        list: "Lista"
+        year: "Elmúlt év"
     group_timezones:
       search: "Keresés…"
       group_availability: "%{group} elérhetősége"

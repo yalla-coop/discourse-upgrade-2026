@@ -12,6 +12,8 @@ vi:
           poll: "Discourse Poll"
   js:
     poll:
+      dynamic:
+        enabled_hint: "Có thể thêm hoặc xóa các tùy chọn."
       voters:
         other: "người bình chọn"
       total_votes:
@@ -140,6 +142,8 @@ vi:
           step: Vòng
         poll_public:
           label: Hiện người đã bình chọn
+        poll_dynamic:
+          label: Cho phép thêm hoặc xóa các lựa chọn sau khi đăng
         poll_title:
           label: Tiêu đề (tùy chọn)
         poll_options:

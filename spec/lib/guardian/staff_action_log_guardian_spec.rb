@@ -28,13 +28,13 @@ RSpec.describe StaffActionLogGuardian do
     end
 
     it "respects site setting gates for moderators" do
-      SiteSetting.moderators_manage_categories_and_groups = true
+      SiteSetting.moderators_manage_categories = true
       category = Fabricate(:category)
       log =
         UserHistory.create!(action: UserHistory.actions[:create_category], category_id: category.id)
       expect(Guardian.new(moderator).can_see_staff_action_log?(log)).to eq(true)
 
-      SiteSetting.moderators_manage_categories_and_groups = false
+      SiteSetting.moderators_manage_categories = false
       expect(Guardian.new(moderator).can_see_staff_action_log?(log)).to eq(false)
     end
   end

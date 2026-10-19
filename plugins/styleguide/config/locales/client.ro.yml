@@ -53,8 +53,6 @@ ro:
           title: "Navigare suprapusă"
         categories_list:
           title: "Listă de categorii"
-        topic_link:
-          title: "Legătură spre subiect"
         topic_list_item:
           title: "Element din lista subiectelor"
         topic_statuses:
@@ -89,6 +87,8 @@ ro:
           title: "Pictograme Antet"
         spinners:
           title: "Indicatori încărcare"
+        otp:
+          title: "OTP"
         tooltips:
           description: "Descriere"
           header: "Antet"

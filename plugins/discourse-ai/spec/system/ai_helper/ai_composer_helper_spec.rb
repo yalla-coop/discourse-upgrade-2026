@@ -2,13 +2,18 @@
 
 RSpec.describe "AI Composer helper", type: :system do
   fab!(:user) { Fabricate(:admin, refresh_auto_groups: true) }
-  fab!(:non_member_group) { Fabricate(:group) }
+  fab!(:non_member_group, :group)
   fab!(:embedding_definition)
+
+  fab!(:custom_prompts_persona) do
+    Fabricate(:ai_persona, allowed_group_ids: [Group::AUTO_GROUPS[:admins]])
+  end
 
   before do
     enable_current_plugin
     Group.find_by(id: Group::AUTO_GROUPS[:admins]).add(user)
     assign_fake_provider_to(:ai_default_llm_model)
+    SiteSetting.ai_helper_custom_prompt_persona = custom_prompts_persona.id
     SiteSetting.ai_helper_enabled = true
     Jobs.run_immediately!
     sign_in(user)
@@ -23,12 +28,12 @@ RSpec.describe "AI Composer helper", type: :system do
   let(:topic_page) { PageObjects::Pages::Topic.new }
 
   fab!(:category)
-  fab!(:category_2) { Fabricate(:category) }
-  fab!(:video) { Fabricate(:tag) }
-  fab!(:music) { Fabricate(:tag) }
-  fab!(:cloud) { Fabricate(:tag) }
-  fab!(:feedback) { Fabricate(:tag) }
-  fab!(:review) { Fabricate(:tag) }
+  fab!(:category_2, :category)
+  fab!(:video, :tag)
+  fab!(:music, :tag)
+  fab!(:cloud, :tag)
+  fab!(:feedback, :tag)
+  fab!(:review, :tag)
   fab!(:topic) { Fabricate(:topic, category: category, tags: [video, music]) }
   fab!(:post) do
     Fabricate(
@@ -116,7 +121,7 @@ RSpec.describe "AI Composer helper", type: :system do
 
     context "when not a member of custom prompt group" do
       let(:mode) { DiscourseAi::AiHelper::Assistant::CUSTOM_PROMPT }
-      before { SiteSetting.ai_helper_custom_prompts_allowed_groups = non_member_group.id.to_s }
+      before { custom_prompts_persona.update!(allowed_group_ids: [non_member_group.id]) }
 
       it "does not show custom prompt option" do
         trigger_composer_helper(input)
@@ -191,6 +196,35 @@ RSpec.describe "AI Composer helper", type: :system do
         DiscourseAi::Completions::Llm.with_prepared_responses([proofread_text]) do
           ai_helper_menu.select_helper_model(mode)
           diff_modal.confirm_changes
+          wait_for { composer.composer_input.value == proofread_text }
+          expect(composer.composer_input.value).to eq(proofread_text)
+        end
+      end
+
+      it "replaces selected formatted content from rich editor as markdown" do
+        visit("/latest")
+        page.find("#create-topic").click
+
+        composer.toggle_rich_editor
+        expect(composer).to have_rich_editor_active
+
+        composer.focus
+        composer.type_content("This is **bld text** and *itlic text* with `cde`.")
+
+        composer.select_all
+
+        composer.click_toolbar_button("ai-helper-trigger")
+        expect(ai_helper_menu).to have_context_menu
+
+        proofread_text = "This is **bold text** and *italic text* with `code`."
+
+        DiscourseAi::Completions::Llm.with_prepared_responses([proofread_text]) do
+          ai_helper_menu.select_helper_model(mode)
+          diff_modal.confirm_changes
+
+          composer.toggle_rich_editor
+          expect(composer).to have_no_rich_editor_active
+
           wait_for { composer.composer_input.value == proofread_text }
           expect(composer.composer_input.value).to eq(proofread_text)
         end

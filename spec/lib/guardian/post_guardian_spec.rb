@@ -5,7 +5,7 @@ RSpec.describe PostGuardian do
   fab!(:user) { Fabricate(:user, refresh_auto_groups: true) }
   fab!(:anon, :anonymous)
   fab!(:admin)
-  fab!(:another_admin) { Fabricate(:admin) }
+  fab!(:another_admin, :admin)
   fab!(:moderator)
   fab!(:trust_level_0) { Fabricate(:trust_level_0, refresh_auto_groups: true) }
   fab!(:trust_level_4) { Fabricate(:trust_level_4, refresh_auto_groups: true) }
@@ -634,7 +634,7 @@ RSpec.describe PostGuardian do
     end
 
     it "returns false if the edit_all_post_groups is empty" do
-      SiteSetting.edit_all_post_groups = nil
+      SiteSetting.edit_all_post_groups = ""
 
       expect(Guardian.new(user).is_in_edit_post_groups?).to eq(false)
     end

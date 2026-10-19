@@ -20,10 +20,8 @@ vi:
       voted_title: "Đã bình chọn"
       voting_closed_title: "Đã đóng"
       voting_limit: "Giới h"
-      votes_left:
-        other: "Bạn còn %{count} bình chọn, xem <a href='%{path}'>những bình chọn của bạn</a>."
-      votes_left_button_title:
-        other: "Bạn còn %{count} lượt bình chọn."
+      see_votes: "Bạn còn %{count}/%{max} lượt bình chọn"
+      locked_description: "Tăng độ tin cậy của bạn để bình chọn"
       votes:
         other: "%{count} lượt bình chọn"
       anonymous_button:

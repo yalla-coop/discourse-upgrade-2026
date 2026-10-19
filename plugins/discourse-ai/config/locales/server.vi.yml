@@ -11,6 +11,10 @@ vi:
     overall_sentiment:
       yaxis: "Ngày"
   discourse_ai:
+    tools:
+      presets:
+        image_generation_custom:
+          name: "Tùy biến"
     ai_helper:
       prompts:
         translate: Dịch sang %{language}

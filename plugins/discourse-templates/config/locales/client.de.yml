@@ -18,7 +18,7 @@ de:
         title: "Vorlagen (innerhalb eines Textbereichs)"
         insert_template: "%{shortcut} Vorlage einfügen"
     templates:
-      filter_hint: "Nach Titel filtern …"
+      filter_hint: "Nach Stichwort filtern..."
       insert_template: "Vorlage einfügen"
       close_templates: "Vorlagenauswahl schließen"
       copy: "Vorlage kopieren"

@@ -131,7 +131,7 @@ zh_CN:
               help: "用于描述频道的名称。它不用于连接到 Matrix。"
             room_id:
               title: "房间 ID"
-              help: "房间的“私有标识符”。看起来应该像 !abcdefg:matrix.org"
+              help: "房间的“私有标识符”。应该类似于 !abcdefghijkl"
           errors:
             unknown_token: "访问令牌无效"
             unknown_room: "房间 ID 无效"

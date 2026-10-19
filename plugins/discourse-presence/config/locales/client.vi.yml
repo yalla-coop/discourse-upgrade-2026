@@ -11,5 +11,7 @@ vi:
         other: "Đang trả lời"
       editing:
         other: "đang chỉnh sửa"
+      translating:
+        other: "đang dịch"
       replying_to_topic:
         other: "đang trả lời"

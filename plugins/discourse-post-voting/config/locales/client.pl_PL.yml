@@ -30,10 +30,10 @@ pl_PL:
         label: "Utwórz temat głosowania na wpisy"
       composer_actions:
         create_as_post_voting:
-          label: "Przełącz głosowanie na posty"
+          label: "Przełącz głosowanie na wpisy"
           desc: "Temat zostanie utworzony ze wpisami, na które można głosować"
         remove_as_post_voting:
-          label: "Usuń głosowanie na posty"
+          label: "Usuń głosowanie na wpisy"
           desc: "Temat zostanie utworzony w zwykłym formacie"
     vote:
       already_voted: "Na jedno pytanie można oddać tylko jeden głos."

@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 describe Jobs::DetectTranslateTopic do
-  fab!(:topic)
   subject(:job) { described_class.new }
+
+  fab!(:topic)
 
   let(:locales) { %w[en ja] }
 
@@ -23,6 +24,14 @@ describe Jobs::DetectTranslateTopic do
 
   it "does nothing when content translation is disabled" do
     SiteSetting.ai_translation_enabled = false
+    DiscourseAi::Translation::TopicLocaleDetector.expects(:detect_locale).never
+    DiscourseAi::Translation::TopicLocalizer.expects(:localize).never
+
+    job.execute({ topic_id: topic.id })
+  end
+
+  it "skips translation when credits are unavailable" do
+    DiscourseAi::Translation.expects(:credits_available_for_topic_detection?).returns(false)
     DiscourseAi::Translation::TopicLocaleDetector.expects(:detect_locale).never
     DiscourseAi::Translation::TopicLocalizer.expects(:localize).never
 
@@ -69,21 +78,40 @@ describe Jobs::DetectTranslateTopic do
     job.execute({ topic_id: topic.id })
   end
 
-  it "skips translating if the topic is already localized" do
-    topic.update(locale: "en")
-    Fabricate(:topic_localization, topic:, locale: "ja")
-    DiscourseAi::Translation::TopicLocalizer.expects(:localize).never
+  context "when translation exists and retranslation quota hit" do
+    before do
+      DiscourseAi::Translation::TopicLocalizer
+        .expects(:has_relocalize_quota?)
+        .with(topic, "ja")
+        .returns(false)
+    end
 
-    job.execute({ topic_id: topic.id })
-  end
+    it "skips translating if the topic is already localized" do
+      topic.update(locale: "en")
+      Fabricate(:topic_localization, topic:, locale: "ja")
 
-  it "does not translate to language of similar variant" do
-    topic.update(locale: "en_GB")
-    Fabricate(:topic_localization, topic:, locale: "ja_JP")
+      DiscourseAi::Translation::TopicLocalizer.expects(:localize).never
 
-    DiscourseAi::Translation::PostLocalizer.expects(:localize).never
+      job.execute({ topic_id: topic.id })
+    end
 
-    job.execute({ topic_id: topic.id })
+    it "does not translate to language of similar variant" do
+      topic.update(locale: "en_GB")
+      Fabricate(:topic_localization, topic:, locale: "ja_JP")
+
+      DiscourseAi::Translation::TopicLocalizer.expects(:localize).never
+
+      job.execute({ topic_id: topic.id })
+    end
+
+    it "translates when force is true" do
+      topic.update(locale: "en")
+      Fabricate(:topic_localization, topic:, locale: "ja")
+
+      DiscourseAi::Translation::TopicLocalizer.expects(:localize).with(topic, "ja").once
+
+      job.execute({ topic_id: topic.id, force: true })
+    end
   end
 
   it "handles translation errors gracefully" do
@@ -99,7 +127,7 @@ describe Jobs::DetectTranslateTopic do
     fab!(:private_category) { Fabricate(:private_category, group: Group[:staff]) }
     fab!(:private_topic) { Fabricate(:topic, category: private_category) }
 
-    fab!(:personal_pm_topic) { Fabricate(:private_message_topic) }
+    fab!(:personal_pm_topic, :private_message_topic)
 
     fab!(:group_pm_topic) do
       Fabricate(:group_private_message_topic, recipient_group: Fabricate(:group))
@@ -169,6 +197,40 @@ describe Jobs::DetectTranslateTopic do
           .never
         job.execute({ topic_id: personal_pm_topic.id })
       end
+    end
+
+    describe "force arg" do
+      it "processes private content when force is true" do
+        DiscourseAi::Translation::TopicLocaleDetector
+          .expects(:detect_locale)
+          .with(group_pm_topic)
+          .once
+
+        job.execute({ topic_id: group_pm_topic.id, force: true })
+      end
+
+      it "processes PM content when force is true" do
+        DiscourseAi::Translation::TopicLocaleDetector
+          .expects(:detect_locale)
+          .with(personal_pm_topic)
+          .once
+
+        job.execute({ topic_id: personal_pm_topic.id, force: true })
+      end
+    end
+
+    it "publishes a MessageBus event to update the topic" do
+      allow(DiscourseAi::Translation::TopicLocaleDetector).to receive(:detect_locale).with(
+        group_pm_topic,
+      ).and_return("en")
+      allow(DiscourseAi::Translation::TopicLocalizer).to receive(:localize).and_return(true)
+
+      message =
+        MessageBus.track_publish { job.execute({ topic_id: group_pm_topic.id, force: true }) }
+
+      expect(message.count).to eq(1)
+      expect(message.first.channel).to eq("/topic/#{group_pm_topic.id}")
+      expect(message.first.data).to eq(reload_topic: true)
     end
   end
 end

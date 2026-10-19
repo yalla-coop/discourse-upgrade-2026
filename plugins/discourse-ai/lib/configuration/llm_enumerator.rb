@@ -9,15 +9,12 @@ module DiscourseAi
         rval = Hash.new { |h, k| h[k] = [] }
 
         if SiteSetting.ai_bot_enabled
-          LlmModel
-            .where("enabled_chat_bot = ?", true)
-            .pluck(:id)
-            .each { |llm_id| rval[llm_id] << { type: :ai_bot } }
+          LlmModel.enabled_chat_bot_ids.each { |llm_id| rval[llm_id] << { type: :ai_bot } }
         end
 
         # this is unconditional, so it is clear that we always signal configuration
         AiPersona
-          .where("default_llm_id IS NOT NULL")
+          .where.not(default_llm_id: nil)
           .pluck(:default_llm_id, :name, :id)
           .each { |llm_id, name, id| rval[llm_id] << { type: :ai_persona, name: name, id: id } }
 
@@ -100,39 +97,29 @@ module DiscourseAi
       end
 
       # returns an array of hashes (id: , name:, vision_enabled:)
-      def self.values_for_serialization(allowed_seeded_llm_ids: nil)
-        builder = DB.build(<<~SQL)
+      def self.values_for_serialization
+        return [] unless table_exists?
+
+        DB.query_hash(<<~SQL).map(&:symbolize_keys)
           SELECT id, display_name AS name, vision_enabled
           FROM llm_models
-          /*where*/
         SQL
-
-        if allowed_seeded_llm_ids.is_a?(Array) && !allowed_seeded_llm_ids.empty?
-          builder.where(
-            "id > 0 OR id IN (:allowed_seeded_llm_ids)",
-            allowed_seeded_llm_ids: allowed_seeded_llm_ids,
-          )
-        else
-          builder.where("id > 0")
-        end
-
-        builder.query_hash.map(&:symbolize_keys)
       end
 
-      def self.values(allowed_seeded_llms: nil)
-        values = DB.query_hash(<<~SQL).map(&:symbolize_keys)
+      def self.values
+        return [] unless table_exists?
+
+        DB.query_hash(<<~SQL).map(&:symbolize_keys)
           SELECT display_name AS name, id AS value
           FROM llm_models
         SQL
+      end
 
-        if allowed_seeded_llms.is_a?(Array)
-          values =
-            values.filter do |value_h|
-              value_h[:value] > 0 || allowed_seeded_llms.include?("#{value_h[:value]}")
-            end
-        end
-
-        values
+      def self.table_exists?
+        DB.exec("SELECT 1 FROM llm_models LIMIT 0")
+        true
+      rescue StandardError
+        false
       end
     end
   end

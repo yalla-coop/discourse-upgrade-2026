@@ -1,0 +1,35 @@
+{
+  "hop": "2025.12",
+  "discourse_version": "2025.12.0",
+  "branch": "hop/2025.12",
+  "commit": "f2b8842316",
+  "ran_at": "2026-10-19T18:11:08.323Z",
+  "verdict": "pass",
+  "layer_a": {
+    "examples": 48,
+    "failures": 0,
+    "failed": []
+  },
+  "layer_b": {
+    "passed": 106,
+    "failed": 0,
+    "unverified": 0,
+    "skipped": 0,
+    "changed_vs_baseline": [],
+    "failed_checks": []
+  },
+  "layer_c": {
+    "passed": 29,
+    "total": 30,
+    "failed": [
+      "TC100 - Logout blocks protected screens"
+    ],
+    "app_branch": "fix/tag-search-ids",
+    "app_commit": "2d989a3150",
+    "app_changed_since_baseline": true,
+    "baseline_app": "codex/high-priority-staging-tests @ 8482d824f7",
+    "regressions": [],
+    "flaky_failed": [],
+    "compared_with_baseline": true
+  }
+}

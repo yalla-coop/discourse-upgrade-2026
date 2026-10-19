@@ -90,7 +90,9 @@ export default {
         "site_settings[].setting": "string",
         "site_settings[].value": "string",
         "site_settings[].default": "string",
-        "?site_settings[].valid_values[].name": "string",
+        // A number for some settings from 2025.12 (an AI setting the app doesn't
+        // use); Prose turns it into text for the app.
+        "?site_settings[].valid_values[].name": "string|number",
         // GraphQL String accepts numbers and booleans, and some enums use them.
         "?site_settings[].valid_values[].value": "string|number|boolean",
       },

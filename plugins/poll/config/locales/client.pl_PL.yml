@@ -12,6 +12,8 @@ pl_PL:
           poll: "Ankieta Discourse"
   js:
     poll:
+      dynamic:
+        enabled_hint: "Można dodawać i usuwać opcje."
       voters:
         one: "głosujący"
         few: "głosujących"
@@ -164,6 +166,8 @@ pl_PL:
           step: Krok
         poll_public:
           label: Pokaż kto głosował
+        poll_dynamic:
+          label: Zezwól na dodawanie lub usuwanie opcji po opublikowaniu
         poll_title:
           label: Tytuł (opcjonalnie)
         poll_options:

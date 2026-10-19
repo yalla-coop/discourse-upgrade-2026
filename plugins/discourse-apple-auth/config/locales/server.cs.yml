@@ -7,7 +7,7 @@
 cs:
   site_settings:
     sign_in_with_apple_enabled: 'Povolit přihlašování přes Apple?'
-    apple_client_id: "(Přihlásit se pomocí Apple) „Identifikátor služby“ Apple z konzole pro vývojáře. Obvykle řetězec ve stylu reverzního názvu domény (např. com.example.auth) (Přihlásit se pomocí Apple)"
+    apple_client_id: "(Přihlášení přes Apple) Apple 'Service Identifier' z vývojářské konzole. Typicky řetězec obráceného názvu domény (např. com.example.auth)"
     apple_team_id: '(Přihlášení přes Apple) Apple Team ID (10 znaků)'
     apple_key_id: '(Přihlášení přes Apple) Apple Key ID (10 znaků)'
     apple_pem: '(Přihlášení přes Apple) Obsah souboru Apple Pem. Zahrňte řádky BEGIN a END'
