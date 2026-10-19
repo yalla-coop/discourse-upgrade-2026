@@ -1,3 +1,5 @@
+import { buildBBCodeAttrs } from "discourse/lib/text";
+
 /** @type {RichEditorExtension} */
 const extension = {
   nodeSpec: {
@@ -12,6 +14,7 @@ const extension = {
         groups: { default: null },
         max: { default: null },
         min: { default: null },
+        dynamic: { default: null },
       },
       content: "heading? bullet_list poll_info?",
       group: "block",
@@ -29,6 +32,7 @@ const extension = {
             chartType: dom.getAttribute("data-poll-chart-type"),
             close: dom.getAttribute("data-poll-close"),
             groups: dom.getAttribute("data-poll-groups"),
+            dynamic: dom.getAttribute("data-poll-dynamic"),
             max: dom.getAttribute("data-poll-max"),
             min: dom.getAttribute("data-poll-min"),
           }),
@@ -45,6 +49,7 @@ const extension = {
           "data-poll-chart-type": node.attrs.chartType,
           "data-poll-close": node.attrs.close,
           "data-poll-groups": node.attrs.groups,
+          "data-poll-dynamic": node.attrs.dynamic,
           "data-poll-max": node.attrs.max,
           "data-poll-min": node.attrs.min,
         },
@@ -80,11 +85,8 @@ const extension = {
   },
   serializeNode: {
     poll(state, node) {
-      const attrs = Object.entries(node.attrs)
-        .map(([key, value]) => (value ? ` ${key}="${value}"` : ""))
-        .join("");
-
-      state.write(`[poll${attrs}]\n`);
+      const attrs = buildBBCodeAttrs(node.attrs);
+      state.write(`[poll${attrs ? ` ${attrs}` : ""}]\n`);
       state.renderContent(node);
       state.write("[/poll]\n\n");
     },

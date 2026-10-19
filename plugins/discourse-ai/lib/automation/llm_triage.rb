@@ -3,6 +3,17 @@
 module DiscourseAi
   module Automation
     module LlmTriage
+      def self.flagged_by_another_triage_rule?(post)
+        triage_score_types = [ReviewableScore.types[:spam], ReviewableScore.types[:needs_approval]]
+
+        ReviewableScore
+          .pending
+          .where(user: Discourse.system_user, reviewable_score_type: triage_score_types)
+          .joins(:reviewable)
+          .where(reviewables: { target: post })
+          .exists?
+      end
+
       def self.handle(
         post:,
         triage_persona_id:,
@@ -20,7 +31,10 @@ module DiscourseAi
         whisper: nil,
         reply_persona_id: nil,
         max_output_tokens: nil,
-        action: nil
+        action: nil,
+        notify_author_pm: nil,
+        notify_author_pm_user: nil,
+        notify_author_pm_message: nil
       )
         if category_id.blank? && tags.blank? && canned_reply.blank? && hide_topic.blank? &&
              flag_post.blank? && reply_persona_id.blank?
@@ -53,7 +67,7 @@ module DiscourseAi
             strict: SiteSetting.ai_strict_token_counting,
           ) if max_post_tokens.present?
 
-        if post.upload_ids.present?
+        if post.upload_ids.present? && triage_persona.vision_enabled
           input = [input]
           input.concat(post.upload_ids.map { |upload_id| { upload_id: upload_id } })
         end
@@ -61,7 +75,7 @@ module DiscourseAi
         bot_ctx =
           DiscourseAi::Personas::BotContext.new(
             user: Discourse.system_user,
-            skip_tool_details: true,
+            skip_show_thinking: true,
             feature_name: "llm_triage",
             messages: [{ type: :user, content: input }],
           )
@@ -93,6 +107,7 @@ module DiscourseAi
                 persona_id: reply_persona_id,
                 whisper: whisper,
                 user: original_user,
+                attributed_user: Discourse.system_user,
               )
             rescue StandardError => e
               Discourse.warn_exception(
@@ -103,7 +118,6 @@ module DiscourseAi
             end
           elsif canned_reply.present? && action != :edit
             post_type = whisper ? Post.types[:whisper] : Post.types[:regular]
-
             PostCreator.create!(
               user,
               topic_id: post.topic_id,
@@ -130,12 +144,19 @@ module DiscourseAi
           post.topic.update!(visible: false) if hide_topic
 
           if flag_post
+            # Check if another triage rule already created a reviewable for this post.
+            # We'll later use it to avoid sending multiple PMs to the user.
+            # We are doing this now before we create another flag.
+            already_flagged = flagged_by_another_triage_rule?(post)
+
             score_reason =
-              I18n
-                .t("discourse_automation.scriptables.llm_triage.flagged_post")
-                .sub("%%LLM_RESPONSE%%", result)
-                .sub("%%AUTOMATION_ID%%", automation&.id.to_s)
-                .sub("%%AUTOMATION_NAME%%", automation&.name.to_s)
+              I18n.t(
+                "discourse_automation.scriptables.llm_triage.flagged_post",
+                base_path: Discourse.base_path,
+                llm_response: result,
+                automation_id: automation&.id.to_s,
+                automation_name: automation&.name.to_s,
+              )
 
             if flag_type == :spam || flag_type == :spam_silence
               result =
@@ -158,7 +179,11 @@ module DiscourseAi
               end
             else
               reviewable =
-                ReviewablePost.needs_review!(target: post, created_by: Discourse.system_user)
+                ReviewablePost.needs_review!(
+                  target: post,
+                  created_by: Discourse.system_user,
+                  reviewable_by_moderator: true,
+                )
 
               reviewable.add_score(
                 Discourse.system_user,
@@ -168,9 +193,64 @@ module DiscourseAi
               )
 
               # We cannot do this through the PostActionCreator because hiding a post is reserved for auto action flags.
-              # Those flags are off_topic, inappropiate, and spam. We want a more generic type for triage, so none of those
+              # Those flags are off_topic, inappropriate, and spam. We want a more generic type for triage, so none of those
               # fit here.
-              post.hide!(PostActionType.types[:notify_moderators]) if flag_type == :review_hide
+              if flag_type == :review_hide
+                post.hide!(PostActionType.types[:notify_moderators])
+              elsif flag_type == :review_delete || flag_type == :review_delete_silence
+                # Soft-delete the post so it is hidden from users until a moderator handles it in review.
+                PostDestroyer.new(Discourse.system_user, post, context: "llm_triage").destroy
+
+                if flag_type == :review_delete_silence
+                  UserSilencer.silence(
+                    post.user,
+                    Discourse.system_user,
+                    message: :silenced_by_staff,
+                    post_id: @post&.id,
+                  )
+                end
+              end
+
+              if notify_author_pm && action != :edit && !already_flagged
+                begin
+                  pm_sender =
+                    if notify_author_pm_user.present?
+                      User.find_by_username(notify_author_pm_user)
+                    else
+                      nil
+                    end
+                  pm_sender ||= Discourse.system_user
+
+                  subject =
+                    I18n.t("discourse_automation.scriptables.llm_triage.notify_author_pm.subject")
+
+                  default_body =
+                    I18n.t(
+                      "discourse_automation.scriptables.llm_triage.notify_author_pm.body",
+                      username: post.user.username,
+                      topic_title: post.topic.title,
+                      post_url: post.url,
+                    )
+
+                  body = notify_author_pm_message.presence || default_body
+
+                  PostCreator.create!(
+                    pm_sender,
+                    title: subject,
+                    raw: body,
+                    archetype: Archetype.private_message,
+                    target_usernames: post.user.username,
+                    skip_validations: true,
+                  )
+                rescue StandardError => e
+                  Discourse.warn_exception(
+                    e,
+                    message:
+                      "Error sending PM notification for triage on: #{post&.url} in LlmTriage.handle",
+                  )
+                  raise e if Rails.env.test?
+                end
+              end
             end
           end
         end

@@ -24,6 +24,8 @@ el:
           title: "Σύστημα γραμματοσειράς"
         colors:
           title: "Χρώματα"
+        dialog:
+          title: "Διάλογος"
         icons:
           title: "Εικονίδια"
         forms:
@@ -38,10 +40,8 @@ el:
           title: "Γραμμή πλοήγησης"
         categories_list:
           title: "Λίστα Κατηγοριών"
-        topic_link:
-          title: "Σύνδεσμος θέματος"
         topic_timer_info:
-          title: "Χρονοδιακόπτες Θεμάτων"
+          title: "Χρονοδιακόπτες Νημάτων"
         post:
           title: "Ανάρτηση"
         topic_map:

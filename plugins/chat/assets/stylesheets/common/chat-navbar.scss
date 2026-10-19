@@ -15,7 +15,6 @@
   display: flex;
   align-items: flex-start;
   width: 100%;
-  gap: 0.25rem;
   position: relative;
   container-type: inline-size;
 
@@ -61,6 +60,25 @@
   height: var(--chat-header-offset);
   display: flex;
   align-items: center;
+}
+
+.c-navbar__star-channel-button {
+  height: var(--chat-header-offset);
+  color: var(--primary-medium);
+
+  &:hover,
+  &:focus {
+    color: var(--primary);
+  }
+
+  &.--starred {
+    color: var(--tertiary);
+
+    &:hover,
+    &:focus {
+      color: var(--tertiary-hover);
+    }
+  }
 }
 
 .c-navbar__title {
@@ -112,6 +130,14 @@
 
   .d-icon {
     color: var(--primary-low-mid);
+  }
+
+  .c-navbar__filter {
+    &.active {
+      .d-icon {
+        color: var(--d-button-transparent-text-color--hover);
+      }
+    }
   }
 }
 

@@ -19,11 +19,14 @@ ro:
       add_to_calendar: "Adaugă în Google Calendar"
       region:
         none: "Nimic"
+        names:
+          gr: "Grecia"
       toolbar_button:
         today: "Astăzi"
         month: "Lună"
         week: "Săptămână"
         day: "Zi"
+        year: "An"
     group_timezones:
       search: "Caută..."
     discourse_post_event:
@@ -66,6 +69,7 @@ ro:
         event:
           expired: "Expirate"
           closed: "Închis"
+          full: "Complet"
           status:
             public:
               title: "Public"
@@ -90,6 +94,9 @@ ro:
           label: "Recurență"
           none: "Fără recurență"
           every_day: "În fiecare zi"
+        max_attendees:
+          label: "Număr maxim de participanți"
+          placeholder: "Fără limită"
         url:
           label: "URL"
           placeholder: "Opțional"

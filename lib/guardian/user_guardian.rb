@@ -32,10 +32,8 @@ module UserGuardian
   def can_edit_email?(user)
     return false if SiteSetting.auth_overrides_email?
     return false unless SiteSetting.email_editable?
-    return true if is_admin?
+    return true if is_staff?
     return false if is_anonymous?
-    return false if is_moderator? && !is_me?(user)
-
     can_edit?(user)
   end
 

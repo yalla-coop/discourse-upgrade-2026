@@ -5,17 +5,7 @@
 # https://translate.discourse.org/
 
 vi:
-  admin_js:
-    admin:
-      calendar: "Lịch"
-      site_settings:
-        categories:
-          discourse_calendar: "Lịch cộng đồng"
   js:
-    notifications:
-      titles:
-        event_reminder: "Lời nhắc sự kiện"
-        event_invitation: "Lời mời sự kiện"
     discourse_automation:
       triggerables:
         event_started:
@@ -28,14 +18,12 @@ vi:
       date: "Ngày"
       region:
         none: "Không có gì"
-        names:
-          ru: "Liên bang Nga"
       toolbar_button:
         today: "Hôm nay"
         month: "Tháng"
         week: "Tuần"
         day: "Ngày"
-        list: "Danh sách"
+        year: "Năm"
     group_timezones:
       search: "Tìm kiếm..."
     discourse_post_event:
@@ -53,12 +41,10 @@ vi:
         group_selector_placeholder: "Chọn một nhóm..."
       upcoming_events:
         status: "Trạng thái"
-      upcoming_events_list:
-        try_again: "Thử lại"
       models:
         event:
           expired: "Hết hạn"
-          closed: "Đã đóng"
+          closed: "Đã "
           status:
             public:
               title: "Công khai"

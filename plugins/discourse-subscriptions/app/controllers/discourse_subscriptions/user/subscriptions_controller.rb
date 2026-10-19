@@ -6,10 +6,9 @@ module DiscourseSubscriptions
       include DiscourseSubscriptions::Stripe
       include DiscourseSubscriptions::Group
 
-      requires_plugin DiscourseSubscriptions::PLUGIN_NAME
+      requires_plugin PLUGIN_NAME
 
       before_action :set_api_key
-      before_action :find_subscription, only: %i[update destroy]
       requires_login
 
       def index
@@ -74,12 +73,14 @@ module DiscourseSubscriptions
       def update
         params.require(:payment_method)
 
+        subscription = Subscription.where(external_id: params[:id]).first
         begin
-          attach_method_to_customer(@subscription.customer_id, params[:payment_method])
-          ::Stripe::Subscription.update(
-            params[:id],
-            { default_payment_method: params[:payment_method] },
-          )
+          attach_method_to_customer(subscription.customer_id, params[:payment_method])
+          subscription =
+            ::Stripe::Subscription.update(
+              params[:id],
+              { default_payment_method: params[:payment_method] },
+            )
           render json: success_json
         rescue ::Stripe::InvalidRequestError
           render_json_error I18n.t("discourse_subscriptions.card.invalid")
@@ -91,21 +92,6 @@ module DiscourseSubscriptions
       def attach_method_to_customer(customer_id, method)
         customer = Customer.find(customer_id)
         ::Stripe::PaymentMethod.attach(method, { customer: customer.customer_id })
-      end
-
-      def find_subscription
-        @subscription ||=
-          Subscription.joins(:customer).find_by(
-            external_id: params[:id],
-            customer: {
-              user_id: current_user.id,
-            },
-          )
-
-        if @subscription.nil?
-          render_json_error I18n.t("discourse_subscriptions.subscription_not_found"),
-                            status: 404 and return
-        end
       end
     end
   end

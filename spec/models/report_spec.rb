@@ -734,7 +734,7 @@ RSpec.describe Report do
 
         exporter = Jobs::ExportCsvFile.new
         exporter.entity = "report"
-        exporter.extra = HashWithIndifferentAccess.new(name: "flags_status")
+        exporter.extra = ActiveSupport::HashWithIndifferentAccess.new(name: "flags_status")
         exporter.current_user = flagger
         exported_csv = []
         exporter.report_export { |entry| exported_csv << entry }
@@ -1882,35 +1882,35 @@ RSpec.describe Report do
           topic: topic_1,
           anonymous_views: 4,
           logged_in_views: 2,
-          viewed_at: Time.zone.now - 5.days,
+          viewed_at: 5.days.ago,
         )
         Fabricate(
           :topic_view_stat,
           topic: topic_1,
           anonymous_views: 5,
           logged_in_views: 18,
-          viewed_at: Time.zone.now - 3.days,
+          viewed_at: 3.days.ago,
         )
         Fabricate(
           :topic_view_stat,
           topic: topic_2,
           anonymous_views: 14,
           logged_in_views: 21,
-          viewed_at: Time.zone.now - 5.days,
+          viewed_at: 5.days.ago,
         )
         Fabricate(
           :topic_view_stat,
           topic: topic_2,
           anonymous_views: 9,
           logged_in_views: 13,
-          viewed_at: Time.zone.now - 1.days,
+          viewed_at: 1.day.ago,
         )
         Fabricate(
           :topic_view_stat,
           topic: Fabricate(:topic),
           anonymous_views: 1,
           logged_in_views: 34,
-          viewed_at: Time.zone.now - 40.days,
+          viewed_at: 40.days.ago,
         )
       end
 
@@ -1946,64 +1946,6 @@ RSpec.describe Report do
             total_logged_in_views: 20,
             total_views: 29,
           )
-        end
-      end
-    end
-  end
-
-  describe ".hidden?" do
-    context "when admin is true" do
-      it "returns false for regular reports" do
-        expect(Report.hidden?("topics", admin: true)).to eq(false)
-      end
-
-      it "returns false for admin-only reports" do
-        Report::ADMIN_ONLY_REPORTS.each do |report_type|
-          expect(Report.hidden?(report_type, admin: true)).to eq(false)
-        end
-      end
-    end
-
-    context "when admin is false" do
-      it "returns false for regular reports" do
-        expect(Report.hidden?("topics", admin: false)).to eq(false)
-      end
-
-      it "returns true for admin-only reports" do
-        Report::ADMIN_ONLY_REPORTS.each do |report_type|
-          expect(Report.hidden?(report_type, admin: false)).to eq(true)
-        end
-      end
-    end
-
-    context "when use_legacy_pageviews is true" do
-      before { SiteSetting.use_legacy_pageviews = true }
-
-      it "hides pageview reports" do
-        Report::HIDDEN_PAGEVIEW_REPORTS.each do |report_type|
-          expect(Report.hidden?(report_type, admin: true)).to eq(true)
-        end
-      end
-
-      it "does not hide legacy pageview reports" do
-        Report::HIDDEN_LEGACY_PAGEVIEW_REPORTS.each do |report_type|
-          expect(Report.hidden?(report_type, admin: true)).to eq(false)
-        end
-      end
-    end
-
-    context "when use_legacy_pageviews is false" do
-      before { SiteSetting.use_legacy_pageviews = false }
-
-      it "does not hide pageview reports" do
-        Report::HIDDEN_PAGEVIEW_REPORTS.each do |report_type|
-          expect(Report.hidden?(report_type, admin: true)).to eq(false)
-        end
-      end
-
-      it "hides legacy pageview reports" do
-        Report::HIDDEN_LEGACY_PAGEVIEW_REPORTS.each do |report_type|
-          expect(Report.hidden?(report_type, admin: true)).to eq(true)
         end
       end
     end

@@ -42,8 +42,6 @@ cs:
           param:
             identifier:
               title: Kanál
-          errors:
-            channel_not_found: "Zadaný kanál na Slacku neexistuje."
         telegram:
           param:
             name:
@@ -65,8 +63,6 @@ cs:
           param:
             name:
               title: "Název"
-            room_id:
-              help: "„Soukromý identifikátor“ místnosti. Měl by vypadat nějak takto !abcdefg:matrix.org"
         zulip:
           param:
             subject:

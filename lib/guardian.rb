@@ -6,11 +6,9 @@ require "guardian/ensure_magic"
 require "guardian/group_guardian"
 require "guardian/invite_guardian"
 require "guardian/flag_guardian"
-require "guardian/permalink_guardian"
 require "guardian/post_guardian"
 require "guardian/post_revision_guardian"
 require "guardian/sidebar_guardian"
-require "guardian/staff_action_log_guardian"
 require "guardian/tag_guardian"
 require "guardian/topic_guardian"
 require "guardian/user_guardian"
@@ -24,12 +22,10 @@ class Guardian
   include FlagGuardian
   include GroupGuardian
   include InviteGuardian
-  include PermalinkGuardian
   include PostGuardian
   include PostRevisionGuardian
   include LocalizationGuardian
   include SidebarGuardian
-  include StaffActionLogGuardian
   include TagGuardian
   include TopicGuardian
   include UserGuardian
@@ -144,15 +140,8 @@ class Guardian
     return false if !category
     return false if !category_group_moderation_allowed?
 
-    @group_moderator_categories ||= {}
-
-    if @group_moderator_categories.key?(category.id)
-      @group_moderator_categories[category.id]
-    else
-      @group_moderator_categories[category.id] = category_group_moderator_scope.exists?(
-        id: category.id,
-      )
-    end
+    @moderated_category_ids ||= category_group_moderator_scope.pluck(:id).to_set
+    @moderated_category_ids.include?(category.id)
   end
 
   def is_silenced?
@@ -346,9 +335,13 @@ class Guardian
   end
 
   def can_suspend?(user)
-    user && is_staff? && user.regular?
+    can_unsuspend?(user) && user.regular?
   end
   alias can_deactivate? can_suspend?
+
+  def can_unsuspend?(user)
+    user && is_staff?
+  end
 
   def can_revoke_admin?(admin)
     can_administer_user?(admin) && admin.admin?
@@ -401,7 +394,7 @@ class Guardian
   end
 
   def can_change_trust_level?(user)
-    user && is_staff?
+    user && (is_admin? || (is_moderator? && SiteSetting.moderators_change_trust_levels))
   end
 
   # Support sites that have to approve users
@@ -549,7 +542,7 @@ class Guardian
     return false if !@user.admin?
 
     allowed_repos = GlobalSetting.allowed_theme_repos
-    if !allowed_repos.blank?
+    if allowed_repos.present?
       urls = allowed_repos.split(",").map(&:strip)
       return urls.include?(repo)
     end
@@ -617,8 +610,7 @@ class Guardian
   end
 
   def can_see_reviewable_ui_refresh?
-    SiteSetting.reviewable_ui_refresh_map.include?(Group::AUTO_GROUPS[:everyone]) ||
-      @user.in_any_groups?(SiteSetting.reviewable_ui_refresh_map)
+    !SiteSetting.force_old_reviewable_ui
   end
 
   def is_me?(other)
@@ -672,9 +664,10 @@ class Guardian
   end
 
   def category_group_moderator_scope
-    Category
-      .joins(:category_moderation_groups)
-      .joins("INNER JOIN group_users ON group_users.group_id = category_moderation_groups.group_id")
-      .where("group_users.user_id": user.id)
+    Category.joins(category_moderation_groups: { group: :group_users }).where(
+      group_users: {
+        user_id: user.id,
+      },
+    )
   end
 end

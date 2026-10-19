@@ -97,6 +97,12 @@ module PageObjects
         true
       end
 
+      def has_overridden_topic_setting?(setting_name, value: nil)
+        setting_field = find_setting(setting_name, overridden: true)
+        return setting_field.find(".selected-name")["data-value"] == value.to_s if value
+        true
+      end
+
       def has_no_overridden_setting?(setting_name)
         find_setting(setting_name, overridden: false)
       end
@@ -140,6 +146,27 @@ module PageObjects
       def error_message(setting_name)
         setting = find_setting(setting_name)
         setting.find(".setting-value .validation-error").text
+      end
+
+      def has_theme_warning?(setting_name, theme_name, theme_id)
+        find_setting(setting_name).find(".setting-theme-warning__text").has_text?(theme_name) &&
+          find_setting(setting_name).find(".setting-theme-warning__text").has_link?(
+            href: "/admin/customize/themes/#{theme_id}",
+          )
+      end
+
+      def has_disabled_input?(setting_name)
+        find_setting(setting_name).has_css?("input[disabled]")
+      end
+
+      def has_visible_reorder_buttons?(setting_name)
+        has_css?("#{setting_row_selector(setting_name)} .shift-up-value-btn", visible: :visible) &&
+          has_css?("#{setting_row_selector(setting_name)} .shift-down-value-btn", visible: :visible)
+      end
+
+      def has_hidden_reorder_buttons?(setting_name)
+        has_css?("#{setting_row_selector(setting_name)} .shift-up-value-btn", visible: :hidden) &&
+          has_css?("#{setting_row_selector(setting_name)} .shift-down-value-btn", visible: :hidden)
       end
     end
   end

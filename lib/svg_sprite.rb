@@ -95,6 +95,7 @@ module SvgSprite
         discourse-table
         discourse-text
         discourse-threads
+        discourse-chat-search
         discourse-add-translation
         download
         discourse-h1
@@ -115,6 +116,7 @@ module SvgSprite
         fab-facebook
         fab-facebook-square
         fab-github
+        fab-google
         fab-instagram
         fab-linkedin-in
         fab-linux
@@ -128,6 +130,7 @@ module SvgSprite
         fab-windows
         far-bell
         far-bell-slash
+        far-bookmark
         far-calendar-plus
         far-chart-bar
         far-circle
@@ -230,6 +233,7 @@ module SvgSprite
         shield-halved
         shuffle
         signal
+        sign-hanging
         sliders
         spinner
         square-check
@@ -240,6 +244,8 @@ module SvgSprite
         sun
         table
         table-cells
+        table-cells-minus
+        table-cells-plus
         table-columns
         tag
         tags

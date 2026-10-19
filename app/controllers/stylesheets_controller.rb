@@ -66,7 +66,7 @@ class StylesheetsController < ApplicationController
     handle_missing_cache(location, target, digest) if !stylesheet_time
 
     if cache_time.present? && stylesheet_time && stylesheet_time <= cache_time
-      return render body: nil, status: 304
+      return head :not_modified
     end
 
     unless File.exist?(location)
@@ -78,7 +78,7 @@ class StylesheetsController < ApplicationController
       end
     end
 
-    if Rails.env == "development"
+    if Rails.env.development?
       response.headers["Last-Modified"] = Time.zone.now.httpdate
       immutable_for(1.second)
     else

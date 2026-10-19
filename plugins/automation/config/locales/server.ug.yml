@@ -8,6 +8,8 @@ ug:
   site_settings:
     discourse_automation_enabled: "discourse-automation قىستۇرمىنى قوزغات"
   discourse_automation:
+    staff_action_logs:
+      empty_value: "(بوش)"
     models:
       automations:
         validations:
@@ -65,6 +67,8 @@ ug:
       topic:
         title: تېما
         description: مۇناسىۋەتلىك قوليازما پەقەت بەلگىلەنگەن تېمىدىلا ئىشلىتىلىدۇ، بۇ دەلىللەشنى ئىجرا قىلىدىغان قوليازمىغا ئىنتايىن پايدىلىق
+      topic_closed:
+        title: تېما تاقالدى
       after_post_cook:
         title: يازمىنى تاماملىغاندىن كېيىن
         description: يازما مەزمۇنى تاماملانغاندا ئاپتوماتلاشتۇرۇش قوزغىلىدۇ
@@ -155,3 +159,5 @@ ug:
       random_assign:
         title: "ئىختىيارى بەلگىلەيدۇ"
         description: "گۇرۇپپىغا ئىختىيارى تېما بەلگىلەيدۇ"
+      set_topic_timer:
+        title: "تېما ۋاقىت خاتىرىلىگۈچ تەڭشىكى"

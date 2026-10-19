@@ -68,6 +68,9 @@ de:
       topic:
         title: Thema
         description: Das zugehörige Skript wird nur für das angegebene Thema verwendet. Dies ist beispielsweise für Skripts nützlich, die eine Validierung durchführen
+      topic_closed:
+        title: Thema geschlossen
+        description: Löst ein Skript aus, wenn ein Thema geschlossen wird.
       after_post_cook:
         title: Nach Beitragsfinalisierung
         description: Wenn ein Beitragsinhalt finalisiert wird, wird die Automatisierung ausgelöst
@@ -158,3 +161,5 @@ de:
       random_assign:
         title: "Zufällige Zuweisung"
         description: "Themen nach dem Zufallsprinzip einer Gruppe zuweisen"
+      set_topic_timer:
+        title: "Themen-Timer einstellen "

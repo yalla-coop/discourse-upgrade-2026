@@ -5,8 +5,3 @@
 # https://translate.discourse.org/
 
 vi:
-  js:
-    login:
-      lti:
-        name: "LTI"
-        title: "bằng LTI"

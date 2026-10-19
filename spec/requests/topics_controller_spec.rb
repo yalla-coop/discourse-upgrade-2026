@@ -37,6 +37,41 @@ RSpec.describe TopicsController do
 
   before { SiteSetting.personal_message_enabled_groups = Group::AUTO_GROUPS[:everyone] }
 
+  describe "topic_header plugin outlet" do
+    fab!(:another_topic) { Fabricate(:topic, title: "Another topic by me") }
+
+    before { global_setting(:load_plugins?, true) }
+
+    it "renders the connector templates from multiple plugins" do
+      get "/t/#{topic.slug}/#{topic.id}"
+
+      expect(response.status).to eq(200)
+      expect(response.body).to include("Fixture from my_plugin template 1: #{topic.title}")
+      expect(response.body).to include("Fixture from my_plugin template 2: #{topic.title}")
+      expect(response.body).to include("Fixture from my_plugin_2 template 1: #{topic.title}")
+      expect(response.body).to include("Fixture from my_plugin_2 template 2: #{topic.title}")
+      expect(response.body).not_to include("Fixture from my_plugin_3 template 1: #{topic.title}")
+
+      get "/t/#{another_topic.slug}/#{another_topic.id}"
+
+      expect(response.status).to eq(200)
+      expect(response.body).to include("Fixture from my_plugin template 1: #{another_topic.title}")
+      expect(response.body).to include("Fixture from my_plugin template 2: #{another_topic.title}")
+
+      expect(response.body).to include(
+        "Fixture from my_plugin_2 template 1: #{another_topic.title}",
+      )
+
+      expect(response.body).to include(
+        "Fixture from my_plugin_2 template 2: #{another_topic.title}",
+      )
+
+      expect(response.body).not_to include(
+        "Fixture from my_plugin_3 template 1: #{another_topic.title}",
+      )
+    end
+  end
+
   describe "#wordpress" do
     before { sign_in(moderator) }
 
@@ -1058,68 +1093,40 @@ RSpec.describe TopicsController do
         end
       end
 
-      describe "private messages" do
-        fab!(:private_category) do
-          Fabricate(
-            :private_category,
-            group: Fabricate(:group),
-            permission_type: CategoryGroup.permission_types[:full],
-          )
-        end
-        fab!(:private_topic) { Fabricate(:topic, category: private_category) }
-        fab!(:private_post) { Fabricate(:post, topic: private_topic) }
+      context "with API key" do
+        let(:api_key) { Fabricate(:api_key, user: admin, created_by: admin) }
 
-        fab!(:pm_user, :user)
-        fab!(:pm_topic) { Fabricate(:private_message_topic, user: pm_user) }
-        fab!(:pm_post) { Fabricate(:post, topic: pm_topic, user: pm_user) }
+        it "allows changing ownership with change_owner scope" do
+          ApiKeyScope.create!(resource: "topics", action: "change_owner", api_key_id: api_key.id)
 
-        describe "moderator signed in" do
-          before do
-            SiteSetting.moderators_change_post_ownership = true
-            sign_in(moderator)
-          end
+          post "/t/#{topic.id}/change-owner.json",
+               params: {
+                 username: user_a.username_lower,
+                 post_ids: [p1.id],
+               },
+               headers: {
+                 "HTTP_API_KEY" => api_key.key,
+                 "HTTP_API_USERNAME" => api_key.user.username,
+               }
 
-          it "returns 403 for topics in private categories the moderator cannot see" do
-            post "/t/#{private_topic.id}/change-owner.json",
-                 params: {
-                   username: user_a.username,
-                   post_ids: [private_post.id],
-                 }
-            expect(response.status).to eq(403)
-          end
-
-          it "returns 403 for private messages the moderator is not a participant of" do
-            post "/t/#{pm_topic.id}/change-owner.json",
-                 params: {
-                   username: user_a.username,
-                   post_ids: [pm_post.id],
-                 }
-            expect(response.status).to eq(403)
-          end
+          expect(response.status).to eq(200)
+          expect(p1.reload.user).to eq(user_a)
         end
 
-        describe "admin signed in" do
-          before { sign_in(admin) }
+        it "denies access without change_owner scope" do
+          ApiKeyScope.create!(resource: "topics", action: "read", api_key_id: api_key.id)
 
-          it "can change ownership of posts in private messages" do
-            post "/t/#{pm_topic.id}/change-owner.json",
-                 params: {
-                   username: user_a.username,
-                   post_ids: [pm_post.id],
-                 }
-            expect(response.status).to eq(200)
-            expect(pm_post.reload.user).to eq(user_a)
-          end
+          post "/t/#{topic.id}/change-owner.json",
+               params: {
+                 username: user_a.username_lower,
+                 post_ids: [p1.id],
+               },
+               headers: {
+                 "HTTP_API_KEY" => api_key.key,
+                 "HTTP_API_USERNAME" => api_key.user.username,
+               }
 
-          it "can change ownership of posts in private categories" do
-            post "/t/#{private_topic.id}/change-owner.json",
-                 params: {
-                   username: user_a.username,
-                   post_ids: [private_post.id],
-                 }
-            expect(response.status).to eq(200)
-            expect(private_post.reload.user).to eq(user_a)
-          end
+          expect(response.status).to eq(403)
         end
       end
     end
@@ -1249,6 +1256,25 @@ RSpec.describe TopicsController do
         body = response.parsed_body
 
         expect(body["topic_status_update"]).to eq(nil)
+      end
+
+      it "should update the status when `enabled` is a truthy value" do
+        closed_user_topic = Fabricate(:topic, user: user, closed: false)
+
+        put "/t/#{closed_user_topic.id}/status.json", params: { status: "closed", enabled: "t" }
+
+        expect(response.status).to eq(200)
+        expect(closed_user_topic.reload.closed).to eq(true)
+
+        put "/t/#{closed_user_topic.id}/status.json", params: { status: "closed", enabled: "0" }
+
+        expect(response.status).to eq(200)
+        expect(closed_user_topic.reload.closed).to eq(false)
+
+        put "/t/#{closed_user_topic.id}/status.json", params: { status: "closed", enabled: true }
+
+        expect(response.status).to eq(200)
+        expect(closed_user_topic.reload.closed).to eq(true)
       end
     end
 
@@ -1533,6 +1559,34 @@ RSpec.describe TopicsController do
         expect do delete "/t/#{user_topic.id}/timings.json" end.to change {
           topic_user_post_timings_count(user, user_topic)
         }.from([1, 1]).to([0, 0])
+      end
+    end
+
+    context "for private messages" do
+      fab!(:pm_post, :private_message_post)
+      fab!(:pm_topic) { pm_post.topic }
+      fab!(:pm_user) { pm_topic.user }
+
+      before do
+        sign_in(pm_user)
+        TopicUser.create!(
+          topic: pm_topic,
+          user: pm_user,
+          last_read_post_number: 1,
+          notification_level: TopicUser.notification_levels[:watching],
+        )
+        PostTiming.create!(topic: pm_topic, user: pm_user, post_number: 1, msecs: 1000)
+      end
+
+      it "publishes a message to update the client-side tracking state" do
+        messages =
+          MessageBus.track_publish(PrivateMessageTopicTrackingState.user_channel(pm_user.id)) do
+            delete "/t/#{pm_topic.id}/timings.json"
+          end
+
+        expect(messages.size).to eq(1)
+        expect(messages.first.data["message_type"]).to eq("read")
+        expect(messages.first.data["topic_id"]).to eq(pm_topic.id)
       end
     end
   end
@@ -1922,64 +1976,6 @@ RSpec.describe TopicsController do
           end.not_to change(PostRevision.all, :count)
 
           expect(response.status).to eq(200)
-        end
-
-        context "when using SiteSetting.disable_category_edit_notifications" do
-          it "doesn't bump the topic if the setting is enabled" do
-            SiteSetting.disable_category_edit_notifications = true
-            last_bumped_at = topic.bumped_at
-            expect(last_bumped_at).not_to be_nil
-
-            expect do
-              put "/t/#{topic.slug}/#{topic.id}.json", params: { category_id: category.id }
-            end.to change { topic.reload.category_id }.to(category.id)
-
-            expect(response.status).to eq(200)
-            expect(topic.reload.bumped_at).to eq_time(last_bumped_at)
-          end
-
-          it "bumps the topic if the setting is disabled" do
-            SiteSetting.disable_category_edit_notifications = false
-            last_bumped_at = topic.bumped_at
-            expect(last_bumped_at).not_to be_nil
-
-            expect do
-              put "/t/#{topic.slug}/#{topic.id}.json", params: { category_id: category.id }
-            end.to change { topic.reload.category_id }.to(category.id)
-
-            expect(response.status).to eq(200)
-            expect(topic.reload.bumped_at).not_to eq_time(last_bumped_at)
-          end
-        end
-
-        context "when using SiteSetting.disable_tags_edit_notifications" do
-          fab!(:t1, :tag)
-          fab!(:t2, :tag)
-          let(:tags) { [t1, t2] }
-
-          it "doesn't bump the topic if the setting is enabled" do
-            SiteSetting.disable_tags_edit_notifications = true
-            last_bumped_at = topic.bumped_at
-            expect(last_bumped_at).not_to be_nil
-
-            put "/t/#{topic.slug}/#{topic.id}.json", params: { tags: tags.map(&:name) }
-
-            expect(topic.reload.tags).to match_array(tags)
-            expect(response.status).to eq(200)
-            expect(topic.reload.bumped_at).to eq_time(last_bumped_at)
-          end
-
-          it "bumps the topic if the setting is disabled" do
-            SiteSetting.disable_tags_edit_notifications = false
-            last_bumped_at = topic.bumped_at
-            expect(last_bumped_at).not_to be_nil
-
-            put "/t/#{topic.slug}/#{topic.id}.json", params: { tags: tags.map(&:name) }
-
-            expect(topic.reload.tags).to match_array(tags)
-            expect(response.status).to eq(200)
-            expect(topic.reload.bumped_at).not_to eq_time(last_bumped_at)
-          end
         end
 
         describe "when first post is locked" do
@@ -2442,6 +2438,26 @@ RSpec.describe TopicsController do
 
     it "return 404 for an invalid page" do
       get "/t/#{topic.slug}/#{topic.id}.json", params: { page: 2 }
+      expect(response.status).to eq(404)
+    end
+
+    it "handles pagination correctly with deleted posts" do
+      topic_with_posts = Fabricate(:topic)
+
+      24.times do |i|
+        Fabricate(:post, topic: topic_with_posts, deleted_at: i.even? ? DateTime.now : nil)
+      end
+
+      Topic.reset_highest(topic_with_posts.id)
+      topic_with_posts.reload
+
+      expect(topic_with_posts.posts_count).to eq(12)
+      expect(topic_with_posts.highest_post_number).to eq(24)
+
+      get "/t/#{topic_with_posts.slug}/#{topic_with_posts.id}.json", params: { page: 1 }
+      expect(response.status).to eq(200)
+
+      get "/t/#{topic_with_posts.slug}/#{topic_with_posts.id}.json", params: { page: 2 }
       expect(response.status).to eq(404)
     end
 
@@ -3721,6 +3737,84 @@ RSpec.describe TopicsController do
         end
       end
     end
+
+    describe "#posts with content localization" do
+      fab!(:localized_post) do
+        post = Fabricate(:post, user:, locale: "en", cooked: "<p>Original EN</p>")
+        Fabricate(:post_localization, post:, locale: "ja", cooked: "<p>Translated JA</p>")
+        post
+      end
+      fab!(:localized_topic) { localized_post.topic }
+      fab!(:localized_post2) do
+        post =
+          Fabricate(
+            :post,
+            user:,
+            topic: localized_topic,
+            locale: "ja",
+            cooked: "<p>Original 2 JA</p>",
+          )
+        Fabricate(:post_localization, post:, locale: "en", cooked: "<p>Translated 2 EN</p>")
+        post
+      end
+
+      before do
+        SiteSetting.content_localization_enabled = true
+        I18n.locale = "en"
+      end
+
+      context "when show_original cookie is not set" do
+        it "returns translated posts" do
+          get "/t/#{localized_topic.id}/posts.json"
+
+          expect(response.status).to eq(200)
+
+          body = response.parsed_body
+          posts = body["post_stream"]["posts"]
+
+          expect(posts.first["cooked"]).to eq("<p>Original EN</p>")
+          expect(posts.second["cooked"]).to eq("<p>Translated 2 EN</p>")
+        end
+
+        it "returns translated posts when loading specific post_ids" do
+          get "/t/#{localized_topic.id}/posts.json", params: { post_ids: [localized_post2.id] }
+
+          expect(response.status).to eq(200)
+
+          body = response.parsed_body
+          posts = body["post_stream"]["posts"]
+
+          expect(posts.first["cooked"]).to eq("<p>Translated 2 EN</p>")
+        end
+      end
+
+      context "when show_original cookie is set" do
+        before { cookies[ContentLocalization::SHOW_ORIGINAL_COOKIE] = "true" }
+
+        it "returns original posts" do
+          get "/t/#{localized_topic.id}/posts.json"
+
+          expect(response.status).to eq(200)
+
+          body = response.parsed_body
+          posts = body["post_stream"]["posts"]
+
+          expect(posts.first["cooked"]).to eq("<p>Original EN</p>")
+          expect(posts.second["cooked"]).to eq("<p>Original 2 JA</p>")
+        end
+
+        it "returns original posts when loading specific post_ids" do
+          get "/t/#{localized_topic.id}/posts.json", params: { post_ids: [localized_post2.id] }
+
+          expect(response.status).to eq(200)
+
+          body = response.parsed_body
+          posts = body["post_stream"]["posts"]
+
+          expect(posts.first["cooked"]).to eq("<p>Original 2 JA</p>")
+        end
+      end
+    end
   end
 
   describe "#feed" do
@@ -4467,7 +4561,7 @@ RSpec.describe TopicsController do
 
         it "dismisses topics for tag" do
           TopicTrackingState.expects(:publish_dismiss_new).with(user.id, topic_ids: [tag_topic.id])
-          put "/topics/reset-new.json?tag_id=#{tag.name}"
+          put "/topics/reset-new.json?tag_name=#{tag.name}"
           expect(DismissedTopicUser.where(user_id: user.id).pluck(:topic_id)).to eq([tag_topic.id])
         end
 
@@ -4489,7 +4583,7 @@ RSpec.describe TopicsController do
             group.add(user)
             messages =
               MessageBus.track_publish do
-                put "/topics/reset-new.json", params: { tag_id: restricted_tag.name }
+                put "/topics/reset-new.json", params: { tag_name: restricted_tag.name }
               end
             expect(messages.size).to eq(1)
             expect(messages[0].data["payload"]["topic_ids"]).to contain_exactly(
@@ -4503,7 +4597,7 @@ RSpec.describe TopicsController do
           it "ignores the tag param and dismisses all topics if the user can't see the tag" do
             messages =
               MessageBus.track_publish do
-                put "/topics/reset-new.json", params: { tag_id: restricted_tag.name }
+                put "/topics/reset-new.json", params: { tag_name: restricted_tag.name }
               end
             expect(messages.size).to eq(1)
             expect(messages[0].data["payload"]["topic_ids"]).to contain_exactly(
@@ -4531,7 +4625,7 @@ RSpec.describe TopicsController do
             user.id,
             topic_ids: [tag_and_category_topic.id],
           )
-          put "/topics/reset-new.json?tag_id=#{tag.name}&category_id=#{category.id}"
+          put "/topics/reset-new.json?tag_name=#{tag.name}&category_id=#{category.id}"
           expect(DismissedTopicUser.where(user_id: user.id).pluck(:topic_id)).to eq(
             [tag_and_category_topic.id],
           )
@@ -4762,7 +4856,7 @@ RSpec.describe TopicsController do
                 dismiss_topics: true,
                 dismiss_posts: true,
                 untrack: true,
-                tag_id: tag.name,
+                tag_name: tag.name,
               }
 
           expect(response.status).to eq(200)
@@ -4869,12 +4963,6 @@ RSpec.describe TopicsController do
 
       it "raises an error when the user doesn't have permission to convert topic" do
         sign_in(user)
-        put "/t/#{topic.id}/convert-topic/public.json"
-        expect(response).to be_forbidden
-      end
-
-      it "raises an error when a moderator doesn't have permission to convert topic" do
-        sign_in(moderator)
         put "/t/#{topic.id}/convert-topic/public.json"
         expect(response).to be_forbidden
       end
@@ -5044,7 +5132,7 @@ RSpec.describe TopicsController do
 
         post "/t/#{topic.id}/timer.json",
              params: {
-               time: Time.current - 1.day,
+               time: 1.day.ago,
                status_type: TopicTimer.types[1],
              }
         expect(response.status).to eq(400)
@@ -5211,6 +5299,25 @@ RSpec.describe TopicsController do
 
         expect(response.status).to eq(403)
         expect(response.parsed_body["error_type"]).to eq("invalid_access")
+      end
+
+      it "allows category moderators to set delete_replies timer" do
+        user.update!(trust_level: TrustLevel[4])
+        Group.user_trust_level_change!(user.id, user.trust_level)
+        Fabricate(:category_moderation_group, category: topic.category, group: user.groups.first)
+
+        sign_in(user)
+
+        post "/t/#{topic.id}/timer.json",
+             params: {
+               duration_minutes: 1440,
+               status_type: "delete_replies",
+             }
+
+        expect(response.status).to eq(200)
+
+        topic_timer = TopicTimer.last
+        expect(topic_timer.status_type).to eq(TopicTimer.types[:delete_replies])
       end
     end
   end
@@ -5770,6 +5877,8 @@ RSpec.describe TopicsController do
 
         before do
           SiteSetting.content_localization_enabled = true
+          SiteSetting.allow_user_locale = true
+          SiteSetting.set_locale_from_param = true
 
           topic.update!(category: subcategory, tags: [tag], locale: "en")
           topic.first_post.update(locale: "en")

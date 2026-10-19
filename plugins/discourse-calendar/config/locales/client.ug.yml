@@ -5,12 +5,6 @@
 # https://translate.discourse.org/
 
 ug:
-  admin_js:
-    admin:
-      calendar: "يىلنامە"
-      site_settings:
-        categories:
-          discourse_calendar: "Discourse يىلنامە"
   js:
     discourse_automation:
       triggerables:
@@ -29,7 +23,7 @@ ug:
         month: "ئاي"
         week: "ھەپتە"
         day: "كۈن"
-        list: "تىزىم"
+        year: "يىل"
     discourse_post_event:
       notifications:
         invite_user_notification: "%{username} %{description}"

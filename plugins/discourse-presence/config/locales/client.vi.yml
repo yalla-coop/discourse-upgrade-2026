@@ -10,6 +10,6 @@ vi:
       replying:
         other: "Đang trả lời"
       editing:
-        other: "đang chỉnh sửa"
+        other: "Đang chỉnh sửa"
       replying_to_topic:
         other: "đang trả lời"

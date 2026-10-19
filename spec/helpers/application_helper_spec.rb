@@ -614,20 +614,20 @@ RSpec.describe ApplicationHelper do
 
         expect(helper.crawlable_meta_data).to include(SiteSetting.site_opengraph_image_url)
 
-        SiteSetting.opengraph_image = nil
+        SiteSetting.opengraph_image = ""
 
         expect(helper.crawlable_meta_data).to include(SiteSetting.site_x_summary_large_image_url)
 
-        SiteSetting.x_summary_large_image = nil
+        SiteSetting.x_summary_large_image = ""
 
         expect(helper.crawlable_meta_data).to include(SiteSetting.site_large_icon_url)
 
-        SiteSetting.large_icon = nil
-        SiteSetting.logo_small = nil
+        SiteSetting.large_icon = ""
+        SiteSetting.logo_small = ""
 
         expect(helper.crawlable_meta_data).to include(SiteSetting.site_logo_url)
 
-        SiteSetting.logo = nil
+        SiteSetting.logo = ""
 
         expect(helper.crawlable_meta_data).to include(
           Upload.find(SiteIconManager::SKETCH_LOGO_ID).url,
@@ -991,7 +991,7 @@ RSpec.describe ApplicationHelper do
     it "renders a 'light' color-scheme if no dark scheme is set and the current scheme is light" do
       ColorSchemeRevisor.revise(
         color_scheme,
-        colors: [{ name: "primary", hex: "333333" }, { name: "secondary", hex: "DDDDDD" }],
+        { colors: [{ name: "primary", hex: "333333" }, { name: "secondary", hex: "DDDDDD" }] },
       )
 
       helper.request.cookies["color_scheme_id"] = color_scheme.id
@@ -1004,7 +1004,7 @@ RSpec.describe ApplicationHelper do
     it "renders a 'dark' color-scheme if no dark scheme is set and the default scheme is dark" do
       ColorSchemeRevisor.revise(
         color_scheme,
-        colors: [{ name: "primary", hex: "F8F8F8" }, { name: "secondary", hex: "232323" }],
+        { colors: [{ name: "primary", hex: "F8F8F8" }, { name: "secondary", hex: "232323" }] },
       )
       @scheme_id = color_scheme.id
 

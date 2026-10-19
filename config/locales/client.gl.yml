@@ -160,7 +160,7 @@ gl:
     welcome_banner:
       header:
         anonymous_members: "Dámoslle a benvida a %{site_name}!"
-      search: "Buscar"
+      search_placeholder: "Buscar"
     themes:
       default_description: "Predeterminado"
     s3:
@@ -205,7 +205,7 @@ gl:
     joined: "Inscrito"
     admin_title: "Admin"
     show_more: "amosar máis"
-    show_help: "opcións"
+    show_help: "Opcións"
     links: "Ligazóns"
     links_lowercase:
       one: "ligazón"
@@ -332,6 +332,7 @@ gl:
       other: "Ver %{count} temas novos"
     preview: "visualizar"
     cancel: "Cancelar"
+    done: "Feito"
     save: "Gardar cambios"
     saved: "Gardado!"
     upload: "Cargar"
@@ -389,10 +390,6 @@ gl:
         required: "Debes reclamar os elementos antes de revisalos."
         claimed_by_you: "Reclamaches este elemento e podes revisalo."
         claimed_by_other: "Este elemento só pode revisalo <b>%{username}</b>."
-      claim:
-        title: "reclamar este tema"
-      unclaim:
-        help: "eliminar esta reclamación"
       awaiting_approval: "Agardando a aprobación"
       delete: "Eliminar"
       settings:
@@ -412,8 +409,6 @@ gl:
       title: "Revisar"
       topic: "Tema:"
       filtered_topic: "Filtrou o contido revisábel nun único tema."
-      filtered_user: "Usuario"
-      filtered_reviewed_by: "Revisado por"
       show_all_topics: "buscar todos os temas"
       deleted_post: "(publicación eliminada)"
       deleted_user: "(usuario eliminado)"
@@ -455,7 +450,7 @@ gl:
       replies:
         one: "%{count} resposta"
         other: "%{count} respostas"
-      edit: "Editar"
+      edit: "Editar publicación"
       save: "Gardar"
       cancel: "Cancelar"
       new_topic: "A aprobación deste elemento creará un tema novo"
@@ -476,7 +471,6 @@ gl:
           created_at: "Creado o"
           created_at_asc: "Creado o (inverso)"
         priority:
-          title: "Prioridade mínima"
           any: "(calquera)"
           low: "Baixa"
           medium: "Media"
@@ -519,8 +513,10 @@ gl:
         reviewable_post:
           title: "Publicación"
           noun: "publicación"
+      user_label: "Usuario"
       notes:
         delete: "Eliminar"
+      topic_label: "Tema"
       review_user: "Usuario"
       insights:
         activities:
@@ -892,7 +888,6 @@ gl:
         one: "%{count} tema novo no último mes."
         other: "%{count} temas novos no último mes."
     ip_lookup:
-      title: Busca do enderezo IP
       hostname: Nome do servidor
       location: Localización
       location_not_found: (descoñecido)
@@ -1189,7 +1184,7 @@ gl:
         invalid: "Este nome de usuario non é correcto. Só pode conter números e letras."
       add_email:
         title: "Engadir correo electrónico"
-        add: "engadir"
+        add: "Engadir"
       change_email:
         title: "Cambiar o correo electrónico"
         taken: "Sentímolo pero este correo non está dispoñíbel."
@@ -1827,6 +1822,7 @@ gl:
       create_whisper: "Rumor"
       create_shared_draft: "Crear borrador compartido"
       edit_shared_draft: "Editar o borrador compartido"
+      discard: "Desbotar"
       title_placeholder: "Sobre que trata a discusión, nunha soa frase?"
       title_or_link_placeholder: "Escriba o título ou pegue unha ligazón aquí"
       edit_reason_placeholder: "por que o está editando?"
@@ -1859,14 +1855,9 @@ gl:
       upload_title: "Cargar"
       upload_description: "introducir a descrición da carga aquí"
       list_item: "Elemento da listaxe"
+      wrap_modal:
+        apply: "Aplicar"
       help: "Axuda para a edición con Markdown"
-      collapse: "minimizar o panel de composición"
-      open: "abrir o panel de composición"
-      abandon: "pechar o panel de composición e desbotar o borrador"
-      enter_fullscreen: "abrir o panel de composición en pantalla completa"
-      exit_fullscreen: "saír do panel de composición en pantalla completa"
-      show_toolbar: "amosar a barra de ferramentas de composición"
-      hide_toolbar: "agochar a barra de ferramentas de composición"
       modal_ok: "De acordo"
       cant_send_pm: "Sentímolo pero non pode enviar unha mensaxe a %{username}."
       yourself_confirm:
@@ -1892,8 +1883,9 @@ gl:
         toggle_whisper:
           label: Trocar rumor
           desc: Os rumores son visíbeis unicamente para os membros do equipo
-        create_topic:
-          label: "Novo tema"
+        create_personal_message:
+          label: "Nova mensaxe"
+          desc: "Crear unha nova mensaxe privada"
         shared_draft:
           label: "Borrador compartido"
           desc: "Facer borrador dun tema que soamente será visíbel por usuarios admitidos"
@@ -1902,6 +1894,7 @@ gl:
           desc: "Responder sen cambiar a data da última resposta"
       reload: "Recargar"
       ignore: "Ignorar"
+      image: "imaxe"
     notifications:
       tooltip:
         regular:
@@ -2110,6 +2103,9 @@ gl:
         unlist_topics: "Retirar temas da listaxe"
         relist_topics: "Refacer a listaxe de temas"
         delete: "Eliminar temas"
+        delete_topics_count:
+          one: "Eliminar tema"
+          other: "Eliminar temas"
         dismiss: "Desbotar"
         dismiss_read: "Desbotar os non lidos"
         dismiss_button: "Desbotar…"
@@ -2180,7 +2176,6 @@ gl:
         one: "%{count} publicación no tema"
         other: "%{count} publicacións no tema"
       create: "Novo tema"
-      create_long: "Crear un novo tema"
       open_draft: "Abrir borrador"
       private_message: "Iniciar unha mensaxe"
       archive_message:
@@ -2222,7 +2217,6 @@ gl:
       bumped_at: "Últimas: %{date}"
       deleted: "Eliminouse o tema"
       slow_mode_update:
-        title: "Modo lento"
         select: "Os usuarios só poden publicar neste tema unha vez cada:"
         description: "Para promover unha discusión reflexiva en discusións rápidas ou polémicas, os usuarios deben esperar antes de publicar de novo neste tema."
         enable: "Activar"
@@ -2289,9 +2283,6 @@ gl:
       auto_close_immediate:
         one: "A última publicación deste tema xa ten %{count} hora. O tema pecharase inmediatamente."
         other: "A última publicación deste tema xa ten %{count} horas. O tema pecharase inmediatamente."
-      auto_close_momentarily:
-        one: "A última publicación deste tema xa ten %{count} hora. O tema pecharase axiña."
-        other: "A última publicación deste tema xa ten %{count} horas. O tema pecharase axiña."
       timeline:
         back: "Atrás"
         back_description: "Volver á última publicación pendente de lectura"
@@ -2606,10 +2597,7 @@ gl:
         attachment_upload_not_allowed_for_new_user: "Sentímolo pero os novos usuarios non poden cargar anexos."
         attachment_download_requires_login: "Sentímolo pero debe iniciar sesión para descargar anexos."
       cancel_composer:
-        confirm: "Que quere facer coa súa publicación?"
         discard: "Desbotar"
-        save_draft: "Gardar borrador para máis tarde"
-        keep_editing: "Seguir editando"
       via_email: "esta publicación chegou por correo"
       via_auto_generated_email: "esta publicación chegou dun correo electrónico xerado automaticamente"
       whisper: "este é un rumor privado para moderadores"
@@ -2775,19 +2763,14 @@ gl:
       required_tag_group:
         delete: "Eliminar"
       topic_featured_link_allowed: "Permitir ligazóns de actualidade nesta categoría"
-      delete: "Eliminar categoría"
-      create: "Nova categoría"
       create_long: "Crear unha nova categoría"
-      save: "Gardar categoría"
-      slug: "URL compacto da categoría"
       slug_placeholder: "Inserir guións entre palabras para o url (opcional)"
       creation_error: Produciuse un erro durante a creación desta categoría.
       save_error: Produciuse un erro gardando a categoría.
-      name: "Nome da categoría"
       description: "Descrición"
-      logo: "Logotipo da categoría"
-      background_image: "Imaxe do fondo da categoría"
       background_color: "Cor"
+      color_validations:
+        cant_be_empty: "non pode quedar en branco"
       styles:
         icon: "Icona"
         emoji: "Emoji"
@@ -2798,9 +2781,7 @@ gl:
       color_placeholder: "Calquera cor web"
       delete_confirm: "Confirma a eliminación desta categoría?"
       delete_error: "Produciuse un erro elimando esta categoría."
-      list: "Listar categorías"
       no_description: "Engada unha descrición a esta categoría."
-      change_in_category_topic: "Editar a descrición"
       already_used: "Esta cor usouna outra categoría"
       security: "Seguranza"
       security_add_group: "Engadir grupo"
@@ -2828,20 +2809,13 @@ gl:
       subcategory_num_featured_topics: "Número de temas de actualidade na páxina da categoría primaria:"
       all_topics_wiki: "Fai novas publicacións de wiki de modo predeterminado"
       subcategory_list_style: "Estilo da listaxe de subcategorías:"
-      sort_order: "Ordenar listaxe de temas por:"
-      default_view: "Listaxe de temas predeterminada:"
-      default_top_period: "Período predeterminado como importante:"
-      default_list_filter: "Filtro de listaxe predeterminado:"
       allow_badges_label: "Permitir adxudicar insignias nesta categoría"
-      edit_permissions: "Editar permisos"
       review_group_name: "nome do grupo"
       require_topic_approval: "Require a aprobación de todos os temas novos polo moderador"
       require_reply_approval: "Require a aprobación de todas as respostas novas polo moderador"
       this_year: "este ano"
       position: "Posición na páxina de categorías:"
-      default_position: "Posición predeterminada"
       minimum_required_tags: "Número mínimo de etiquetas requiridas nun tema:"
-      parent: "Categoría primaria"
       num_auto_bump_daily: "Número de temas abertos que se promoven automaticamente cada día:"
       navigate_to_first_post_after_read: "Ir á primeira publicación despois de ler os temas"
       notifications:
@@ -2861,18 +2835,14 @@ gl:
           title: "Silenciado"
           description: "Non se lle notificarán novos temas nestas categorías e non aparecerán nos Últimos."
       search_priority:
-        label: "Prioridade da busca"
         options:
           normal: "Normal"
           ignore: "Ignorar"
-          very_low: "Moi baixa"
           low: "Baixa"
           high: "Alta"
-          very_high: "Moi alta"
       sort_options:
         default: "predeterminado"
         likes: "Gústames"
-        op_likes: "Gústames da publicación orixinal"
         views: "Vistas"
         posts: "Publicacións"
         activity: "Actividade"
@@ -2891,9 +2861,6 @@ gl:
         moderation: "Moderación"
         appearance: "Aparencia"
         email: "Correo electrónico"
-      list_filters:
-        all: "todos os temas"
-        none: "sen subcategorías"
       colors_disabled: "Non pode seleccionar cores porque ten un estilo de categoría con ningún."
     flagging:
       action: "Sinalar a publicación"
@@ -3055,8 +3022,6 @@ gl:
       top:
         title: "Destacados"
         help: "os temas máis activos no último ano, mes, semana ou día"
-        all:
-          title: "Desde o principio"
         yearly:
           title: "Anual"
         quarterly:
@@ -3067,19 +3032,19 @@ gl:
           title: "Semanal"
         daily:
           title: "Diario"
-        all_time: "Desde o principio"
         this_year: "Ano"
         this_quarter: "Trimestre"
         this_month: "Mes"
         this_week: "Semana"
         today: "Hoxe"
+        custom: "Personalizado"
     permission_types:
       full: "Crear / Responder / Ver"
       create_post: "Responder / Ver"
       readonly: "Ver"
     preloader_text: "Cargando"
     lightbox:
-      download: "descargar"
+      download: "Descargar"
       previous: "Anterior (tecla de frecha cara á esquerda)"
       next: "Seguinte (tecla de frecha cara á dereita)"
       counter: "%curr% de %total%"
@@ -3117,7 +3082,6 @@ gl:
         go_to_unread_post: "%{shortcut} Ir á primeira publicación pendente de lectura"
       application:
         title: "Aplicativo"
-        create: "%{shortcut} Crear un novo tema"
         notifications: "%{shortcut} Abrir notificacións"
         user_profile_menu: "%{shortcut} Abrir o menú do usuario"
         show_incoming_updated_topics: "%{shortcut} Amosar temas actualizados"
@@ -3205,7 +3169,6 @@ gl:
       selector_remove_filter: "eliminar filtro"
       tags: "Etiquetas"
       choose_for_topic: "etiquetas opcionais"
-      info: "Información"
       default_info: "Esta etiqueta non se restrinxe a ningunha categoría e non ten sinónimos."
       category_restricted: "Esta etiqueta restrínxese ás categorías ás que non ten permiso para acceder."
       synonyms: "Sinónimos"
@@ -3241,6 +3204,7 @@ gl:
       upload_description: "Cargar un ficheiro csv para crear etiquetas en lote"
       upload_instructions: "Unha por liña, opcionalmente cun grupo de etiquetas co formato «etiqueta_nome, etiqueta_grupo»."
       upload_successful: "Etiquetas cargadas correctamente"
+      bulk_create_button: "Crear"
       delete_unused_confirmation:
         one: "Será(n) eliminada(s) %{count}etiqueta(s): %{tags}"
         other: "Eliminaranse %{count}etiquetas: %{tags}"
@@ -3273,12 +3237,9 @@ gl:
           title: "Silenciado"
           description: "Non recibirá notificacións de nada relacionado cos novos temas con esta etiqueta e non aparecerán no separador de elementos pendentes de ler."
       groups:
-        title: "Etiquetar grupos"
-        new: "Novo grupo"
         tags_label: "Etiquetas neste grupo"
         parent_tag_label: "Etiqueta primaria"
         one_per_topic_label: "Limitar a unha etiqueta por tema neste grupo"
-        new_name: "Novo grupo de etiquetas"
         name_placeholder: "Nome"
         save: "Gardar"
         delete: "Eliminar"
@@ -3428,6 +3389,7 @@ gl:
         categories: "Todas as categorías"
   admin_js:
     settings: "Configuración"
+    reset_filter: "Restabelecer"
     admin:
       title: "Administrador de Discourse"
       moderator: "Moderador"
@@ -3455,6 +3417,22 @@ gl:
           title: "Seguranza"
         plugins:
           title: "Complementos"
+      upcoming_changes:
+        name: "Nome"
+        enabled: "Activado"
+        preview: "Visualizar"
+        enabled_for_options:
+          everyone: "Todos"
+          staff: "Soamente ao equipo"
+        impact_roles:
+          admins: "Administradores"
+          moderators: "Moderadores"
+          staff: "Equipo"
+        filter:
+          all: "Todas"
+          enabled: "Activado"
+          disabled: "Desactivado"
+          impact_type_other: "Outro"
       config:
         developer:
           title: "Desenvolvedor"
@@ -3466,6 +3444,12 @@ gl:
           title: "Ficheiros"
         legal:
           title: "Legal"
+        login:
+          sub_pages:
+            common_settings:
+              title: "Configuración"
+        discourse_id:
+          learn_more: "Saber máis"
         logo:
           form:
             mobile: "Móbil"
@@ -3481,6 +3465,12 @@ gl:
               title: "Tipo de letra de título"
           backfill_modal:
             modal_yes: "Si"
+        welcome_banner:
+          form:
+            location:
+              label: "Localización"
+            header_anonymous:
+              placeholder: "Dámoslle a benvida a %{site_name}!"
         navigation:
           title: "Navegación"
         notifications:
@@ -4019,7 +4009,6 @@ gl:
         copy_to_clipboard: "Copiar ao portapapeis"
         copied_to_clipboard: "Copiado ao portapapeis"
         copy_to_clipboard_error: "Erro ao copiar os datos ao portapapeis"
-        theme_owner: "Non editábel, propiedade de:"
         email_templates:
           title: "Correo electrónico"
           subject: "Asunto"
@@ -4027,6 +4016,7 @@ gl:
           body: "Corpo"
           revert: "Reverter os cambios"
           revert_confirm: "Confirma a reversión dos cambios?"
+          edit: "Editar"
         component:
           all_filter: "Todas"
           enabled_filter: "Activado"
@@ -4060,7 +4050,6 @@ gl:
           extra_files_upload: "Exportar tema para ver estes ficheiros."
           extra_files_remote: "Exportar o tema ou comprobar o repositorio git para ver estes ficheiros."
           preview: "Previsualizar"
-          default: "Predeterminado"
           is_default: "O tema está activado de modo predeterminado"
           user_selectable: "O tema pode ser seleccionado polos usuarios"
           auto_update: "Actualización automática cando Discourse estea actualizado"
@@ -4479,7 +4468,6 @@ gl:
           success: "Feito"
           exists: "Xa existe"
           upload: "Engadir desde ficheiro"
-          upload_successful: "Carga realizada correctamente. Engadíronse palabras."
           html_label: "HTML"
         test:
           button_label: "Proba"
@@ -4674,8 +4662,6 @@ gl:
             transfer_and_delete: "Transferir e eliminar @%{username}"
             cancel: "Cancelar"
         merge_failed: "Produciuse un erro ao combinar os usuarios."
-        delete_forbidden_because_staff: "Non é posíbel eliminar os administradores e moderadores."
-        delete_posts_forbidden_because_staff: "Non é posíbel eliminar todas as publicacións dos administradores ou moderadores."
         delete_forbidden:
           one: "Non é posíbel eliminar usuarios se teñen publicacións. Elimine as publicacións antes de eliminar o usuario (non é posíbel eliminar publicacións de máis de %{count} día)"
           other: "Non é posíbel eliminar usuarios se teñen publicacións. Elimine as publicacións antes de eliminar o usuario (non é posíbel eliminar publicacións de máis de %{count} días)"
@@ -4898,6 +4884,8 @@ gl:
         no_user_badges: "A %{name} non se lle concedeu ningunha insignia."
         no_badges: Non hai insignias para conceder.
         none_selected: "Seleccione unha insignia para comezar"
+        sections:
+          settings: Configuración
         allow_title: Permitir que se use a insignia como un título
         multiple_grant: Pode concederse múltiples veces
         visibility_heading: Visibilidade
@@ -5012,47 +5000,3 @@ gl:
           categories: "Categorías"
           topics: "Temas"
           replace: "Substituír"
-  wizard_js:
-    wizard:
-      back: "Volver"
-      next: "Seguinte"
-      step-text: "Paso"
-      step: "%{current} de %{total}"
-      upload_error: "Sentímolo pero produciuse un erro ao cargar ese ficheiro. Ténteo de novo."
-      staff_count:
-        one: "A súa comunidade ten %{count} en equipo (vostede)."
-        other: "A súa comunidade ten %{count} en equipo, incluído vostede."
-      invites:
-        add_user: "engadir"
-        none_added: "Non convidou a ninguén do equipo. Confirma que quere continuar?"
-        roles:
-          admin: "Administración"
-          moderator: "Moderador"
-          regular: "Usuario normal"
-      homepage_choices:
-        custom:
-          label: "Personalizado"
-        style_type:
-          categories: "categoría"
-          topics: "tema"
-      top_menu_items:
-        new: "Novo"
-        unread: "Pendentes de lectura"
-        top: "Destacados"
-        latest: "Últimos"
-        categories: "Categorías"
-        read: "Lidas"
-        bookmarks: "Marcadores"
-      previews:
-        share_button: "Compartir"
-        reply_button: "Responder"
-      homepage_preview:
-        nav_buttons:
-          all_categories: "todas as categorías"
-        category_names:
-          site_feedback: "Opinións sobre o sitio"
-        table_headers:
-          topic: "Tema"
-          replies: "Réplicas"
-          views: "Visualizacións"
-          activity: "Actividade"

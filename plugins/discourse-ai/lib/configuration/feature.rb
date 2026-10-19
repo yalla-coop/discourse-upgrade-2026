@@ -5,7 +5,7 @@ module DiscourseAi
     class Feature
       class << self
         def feature_cache
-          @feature_cache ||= ::DiscourseAi::MultisiteHash.new("feature_cache")
+          @feature_cache ||= DiscourseAi::MultisiteHash.new("feature_cache")
         end
 
         def summarization_features
@@ -30,7 +30,7 @@ module DiscourseAi
           feature_cache[:search] ||= [
             new(
               "discoveries",
-              "ai_bot_discover_persona",
+              "ai_discover_persona",
               DiscourseAi::Configuration::Module::SEARCH_ID,
               DiscourseAi::Configuration::Module::SEARCH,
             ),
@@ -121,6 +121,12 @@ module DiscourseAi
               DiscourseAi::Configuration::Module::AI_HELPER_ID,
               DiscourseAi::Configuration::Module::AI_HELPER,
             ),
+            new(
+              "post_illustrator",
+              "ai_helper_post_illustrator_persona",
+              DiscourseAi::Configuration::Module::AI_HELPER_ID,
+              DiscourseAi::Configuration::Module::AI_HELPER,
+            ),
           ]
         end
 
@@ -171,7 +177,10 @@ module DiscourseAi
         end
 
         def lookup_bot_llms
-          LlmModel.where(enabled_chat_bot: true).to_a
+          persona_llms = AiPersona.where(id: lookup_bot_persona_ids).pluck(:default_llm_id)
+          enabled_chat_bot_llm_ids = LlmModel.enabled_chat_bot_ids
+
+          LlmModel.where(id: (persona_llms + enabled_chat_bot_llm_ids).uniq).to_a
         end
 
         def translation_features

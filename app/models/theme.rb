@@ -6,7 +6,7 @@ require "json_schemer"
 class Theme < ActiveRecord::Base
   include GlobalPath
 
-  BASE_COMPILER_VERSION = 98
+  BASE_COMPILER_VERSION = 100
   CORE_THEMES = { "foundation" => -1, "horizon" => -2 }
   EDITABLE_SYSTEM_ATTRIBUTES = %w[
     child_theme_ids
@@ -244,7 +244,7 @@ class Theme < ActiveRecord::Base
     get_set_cache "compiler_version" do
       dependencies = [
         BASE_COMPILER_VERSION,
-        EmberCli.ember_version,
+        AssetProcessor.new.ember_version,
         GlobalSetting.cdn_url,
         GlobalSetting.s3_cdn_url,
         GlobalSetting.s3_endpoint,
@@ -402,9 +402,21 @@ class Theme < ActiveRecord::Base
     end
   end
 
-  def screenshot_url
+  def screenshot_dark_url
     theme_fields
-      .find { |field| field.type_id == ThemeField.types[:theme_screenshot_upload_var] }
+      .find do |field|
+        field.type_id == ThemeField.types[:theme_screenshot_upload_var] &&
+          field.name == "screenshot_dark"
+      end
+      &.upload_url
+  end
+
+  def screenshot_light_url
+    theme_fields
+      .find do |field|
+        field.type_id == ThemeField.types[:theme_screenshot_upload_var] &&
+          field.name == "screenshot_light"
+      end
       &.upload_url
   end
 
@@ -535,10 +547,9 @@ class Theme < ActiveRecord::Base
     when :extra_js
       get_set_cache("#{theme_ids.join(",")}:extra_js:#{Theme.compiler_version}") do
         require_rebake =
-          ThemeField.where(theme_id: theme_ids, target_id: Theme.targets[:extra_js]).where(
-            "compiler_version <> ?",
-            Theme.compiler_version,
-          )
+          ThemeField
+            .where(theme_id: theme_ids, target_id: targets[:extra_js])
+            .where.not(compiler_version: compiler_version)
 
         ActiveRecord::Base.transaction do
           require_rebake.each { |tf| tf.ensure_baked! }

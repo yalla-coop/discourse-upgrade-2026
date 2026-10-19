@@ -5,10 +5,11 @@
 # https://translate.discourse.org/
 
 cs:
-  site_settings:
-    min_trust_to_flag_posts_voting_comments: "Minimální úroveň důvěry pro nahlášení komentáře k hlasování v příspěvku"
-    keywords:
-      flag_posts_voting_comments_allowed_groups: "min_trust_to_flag_posts_voting_comments"
+  discourse_post_voting:
+    reviewables:
+      actions:
+        no_action_comment:
+          title: "Bez akce"
   post_action_types:
     vote:
       title: "Hlasovat"
@@ -22,8 +23,6 @@ cs:
           agree_and_silence:
             title: "Ztišení uživatele"
             description: "Schválit nahlášení a ztišit uživatele."
-          delete_and_agree:
-            title: "Ignorovat nahlášení a odstranit komentář"
           disagree:
             title: "Neschvaluji"
           ignore:

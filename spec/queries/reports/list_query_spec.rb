@@ -2,7 +2,9 @@
 
 RSpec.describe Reports::ListQuery do
   describe ".call" do
-    subject(:result) { described_class.call(admin: true) }
+    subject(:result) { described_class.call }
+
+    fab!(:current_user, :admin)
 
     let(:result_page_view_report_types) do
       result.filter { |r| r[:type].starts_with?("page_view") }.map { |r| r[:type] }
@@ -80,22 +82,6 @@ RSpec.describe Reports::ListQuery do
             page_view_legacy_total_reqs
           ],
         )
-      end
-    end
-
-    context "when admin is true" do
-      subject(:result) { described_class.call(admin: true) }
-
-      it "includes admin-only reports" do
-        expect(result.map { |r| r[:type] }).to include(*Report::ADMIN_ONLY_REPORTS)
-      end
-    end
-
-    context "when admin is false" do
-      subject(:result) { described_class.call(admin: false) }
-
-      it "excludes admin-only reports" do
-        expect(result.map { |r| r[:type] }).not_to include(*Report::ADMIN_ONLY_REPORTS)
       end
     end
   end

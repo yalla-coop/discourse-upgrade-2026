@@ -3,17 +3,17 @@
 module DiscourseAi
   module AiBot
     class BotController < ::ApplicationController
-      requires_plugin ::DiscourseAi::PLUGIN_NAME
-      requires_login
+      include AiCreditLimitHandler
 
-      before_action :check_discover_permissions, only: %i[discover discover_continue_convo]
+      requires_plugin PLUGIN_NAME
+      requires_login
 
       def show_debug_info_by_id
         log = AiApiAuditLog.find(params[:id])
         raise Discourse::NotFound if !log.topic
 
         guardian.ensure_can_debug_ai_bot_conversation!(log.topic)
-        render json: AiApiAuditLogSerializer.new(log, root: false), status: 200
+        render json: AiApiAuditLogSerializer.new(log, root: false), status: :ok
       end
 
       def show_debug_info
@@ -28,7 +28,7 @@ module DiscourseAi
 
         debug_info = AiApiAuditLog.where(post: posts).order(created_at: :desc).first
 
-        render json: AiApiAuditLogSerializer.new(debug_info, root: false), status: 200
+        render json: AiApiAuditLogSerializer.new(debug_info, root: false), status: :ok
       end
 
       def stop_streaming_response
@@ -37,81 +37,73 @@ module DiscourseAi
 
         Discourse.redis.del("gpt_cancel:#{post.id}")
 
-        render json: {}, status: 200
+        render json: {}, status: :ok
+      end
+
+      def retry_response
+        post = Post.find(params[:post_id])
+        guardian.ensure_can_see!(post)
+
+        if !DiscourseAi::AiBot::EntryPoint.all_bot_ids.include?(post.user_id)
+          raise Discourse::InvalidParameters.new(:post_id)
+        end
+
+        prompt_post = find_prompt_post(post)
+        raise Discourse::NotFound if prompt_post.blank?
+
+        guardian.ensure_can_see!(prompt_post)
+
+        persona_id = retry_persona_id(post, prompt_post)
+        llm_model_id = post.custom_fields[DiscourseAi::AiBot::POST_AI_LLM_MODEL_ID_FIELD]
+
+        args = {
+          post_id: prompt_post.id,
+          bot_user_id: post.user_id,
+          persona_id: persona_id,
+          reply_post_id: post.id,
+        }
+
+        args[:llm_model_id] = llm_model_id.to_i if !llm_model_id.to_i.zero?
+
+        Jobs.enqueue(:create_ai_reply, args)
+
+        render json: success_json
       end
 
       def show_bot_username
         bot_user = DiscourseAi::AiBot::EntryPoint.find_user_from_model(params[:username])
         raise Discourse::InvalidParameters.new(:username) if !bot_user
 
-        render json: { bot_username: bot_user.username_lower }, status: 200
-      end
-
-      def discover
-        if ai_discover_persona.default_llm_id.blank?
-          render_json_error "Discover persona is missing a default LLM model.", status: 503
-          return
-        end
-
-        query = params[:query]
-        raise Discourse::InvalidParameters.new("Missing query to discover") if query.blank?
-
-        RateLimiter.new(current_user, "ai_bot_discover_#{current_user.id}", 3, 1.minute).performed!
-
-        Jobs.enqueue(:stream_discover_reply, user_id: current_user.id, query: query)
-
-        render json: {}, status: 200
-      end
-
-      def discover_continue_convo
-        raise Discourse::InvalidParameters.new("query") if !params[:query]
-        raise Discourse::InvalidParameters.new("context") if !params[:context]
-
-        RateLimiter.new(
-          current_user,
-          "ai_discover_#{current_user.id}_continue_convo",
-          3,
-          1.minute,
-        ).performed!
-
-        bot_user_id = ai_discover_persona.user_id
-        bot_username = User.find_by(id: bot_user_id).username
-
-        query = params[:query]
-        context = "[quote]\n#{params[:context]}\n[/quote]"
-
-        post =
-          PostCreator.create!(
-            current_user,
-            title:
-              I18n.t("discourse_ai.ai_bot.discoveries.continue_conversation.title", query: query),
-            raw:
-              I18n.t(
-                "discourse_ai.ai_bot.discoveries.continue_conversation.raw",
-                query: query,
-                context: context,
-              ),
-            archetype: Archetype.private_message,
-            target_usernames: bot_username,
-            skip_validations: true,
-          )
-
-        render json: success_json.merge(topic_id: post.topic_id)
-      rescue StandardError => e
-        render json: failed_json.merge(errors: [e.message]), status: 422
+        render json: { bot_username: bot_user.username_lower }, status: :ok
       end
 
       private
 
-      def ai_discover_persona
-        @discover_persona ||= AiPersona.find_by(id: SiteSetting.ai_bot_discover_persona)
+      def find_prompt_post(bot_reply_post)
+        bot_ids = DiscourseAi::AiBot::EntryPoint.all_bot_ids
+
+        bot_reply_post
+          .topic
+          .posts
+          .where("post_number < ?", bot_reply_post.post_number)
+          .where.not(user_id: bot_ids)
+          .reorder(post_number: :desc)
+          .first
       end
 
-      def check_discover_permissions
-        if ai_discover_persona.nil? || current_user.nil? ||
-             !current_user.in_any_groups?(ai_discover_persona.allowed_group_ids.to_a)
-          raise Discourse::InvalidAccess.new
+      def retry_persona_id(bot_reply_post, prompt_post)
+        persona_id =
+          bot_reply_post.custom_fields[DiscourseAi::AiBot::POST_AI_PERSONA_ID_FIELD].presence
+
+        persona_id ||= prompt_post.topic.custom_fields["ai_persona_id"].presence
+
+        if persona_id.blank?
+          persona_name = prompt_post.topic.custom_fields["ai_persona"].presence
+          persona_id = AiPersona.find_by(name: persona_name)&.id if persona_name.present?
         end
+
+        persona_id ||= DiscourseAi::Personas::General.id
+        persona_id.to_i
       end
     end
   end

@@ -24,13 +24,17 @@ cs:
             label: Název
           raw:
             label: Tělo
-          prefers_encrypt:
-            label: Šifruje soukromé zprávy, je-li k dispozici
         group:
           label: Skupina
         text:
           label: Text
       triggerables:
+        post_flag_created:
+          fields:
+            categories:
+              label: Kategorie
+            tags:
+              label: Tagy
         user_badge_granted:
           fields:
             badge:
@@ -146,6 +150,8 @@ cs:
               label: ID tématu
             user:
               label: Uživatel
+        set_topic_timer:
+          title: Nastavení časovače tématu
       models:
         trigger:
           name:

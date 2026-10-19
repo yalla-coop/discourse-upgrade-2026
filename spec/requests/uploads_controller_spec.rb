@@ -199,6 +199,12 @@ RSpec.describe UploadsController do
         expect(response.status).to eq(422)
       end
 
+      it "ensures uploads fail when auth_overrides_avatar is enabled" do
+        SiteSetting.auth_overrides_avatar = true
+        post "/uploads.json", params: { file: logo, upload_type: "avatar" }
+        expect(response.status).to eq(422)
+      end
+
       it "allows staff to upload any file in PM" do
         SiteSetting.authorized_extensions = "jpg"
         SiteSetting.allow_staff_to_upload_any_file_in_pm = true
@@ -493,66 +499,6 @@ RSpec.describe UploadsController do
         get fake_upload.short_path
 
         expect(response.status).to eq(200)
-      end
-
-      it "includes CSP sandbox header for all uploads" do
-        get image_upload.short_path
-
-        expect(response.status).to eq(200)
-        expect(response.headers["Content-Security-Policy"]).to eq("sandbox;")
-      end
-
-      it "serves PNG images inline with CSP header when inline param is given" do
-        png_upload = upload_file("smallest.png")
-        get "#{png_upload.short_path}?inline=1"
-
-        expect(response.status).to eq(200)
-        expect(response.headers["Content-Disposition"]).to include("inline")
-        expect(response.headers["Content-Security-Policy"]).to eq("sandbox;")
-      end
-
-      it "serves PDFs inline with CSP header when inline param is given" do
-        SiteSetting.authorized_extensions = "pdf|png"
-        pdf_upload = upload_file("smallest.png")
-        pdf_upload.update!(original_filename: "document.pdf", extension: "pdf")
-        get "#{pdf_upload.short_path}?inline=1"
-
-        expect(response.status).to eq(200)
-        expect(response.headers["Content-Disposition"]).to include("inline")
-        expect(response.headers["Content-Security-Policy"]).to eq("sandbox;")
-      end
-
-      it "forces attachment disposition for HTML files with CSP header" do
-        SiteSetting.authorized_extensions = "html|png"
-        html_upload = upload_file("smallest.png")
-        html_upload.update!(original_filename: "page.html", extension: "html")
-        get "#{html_upload.short_path}?inline=1"
-
-        expect(response.status).to eq(200)
-        expect(response.headers["Content-Disposition"]).to include("attachment")
-        expect(response.headers["Content-Security-Policy"]).to eq("sandbox;")
-      end
-
-      it "forces attachment disposition for XML files with CSP header" do
-        SiteSetting.authorized_extensions = "xml|png"
-        xml_upload = upload_file("smallest.png")
-        xml_upload.update!(original_filename: "data.xml", extension: "xml")
-        get "#{xml_upload.short_path}?inline=1"
-
-        expect(response.status).to eq(200)
-        expect(response.headers["Content-Disposition"]).to include("attachment")
-        expect(response.headers["Content-Security-Policy"]).to eq("sandbox;")
-      end
-
-      it "forces attachment disposition for SVG files with CSP header" do
-        SiteSetting.authorized_extensions = "svg|png"
-        svg_upload = upload_file("smallest.png")
-        svg_upload.update!(original_filename: "image.svg", extension: "svg")
-        get "#{svg_upload.short_path}?inline=1"
-
-        expect(response.status).to eq(200)
-        expect(response.headers["Content-Disposition"]).to include("attachment")
-        expect(response.headers["Content-Security-Policy"]).to eq("sandbox;")
       end
 
       it "returns the right response when anon tries to download a file " \

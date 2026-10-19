@@ -3,7 +3,7 @@
 # Responsible for logging the actions of admins and moderators.
 class StaffActionLogger
   def self.base_attrs
-    %i[topic_id post_id category_id context subject ip_address previous_value new_value]
+    %i[topic_id post_id context subject ip_address previous_value new_value]
   end
 
   def initialize(admin)
@@ -251,6 +251,37 @@ class StaffActionLogger
     UserHistory.create!(
       params(opts).merge(
         action: UserHistory.actions[:change_site_setting],
+        subject: setting_name,
+        previous_value: previous_value&.to_s,
+        new_value: new_value&.to_s,
+      ),
+    )
+  end
+
+  # This is different from site settings because, even though an upcoming change
+  # is a site setting, we want to be able to distinguish it from the other hundreds
+  # of other site setting change events, so we need a unique distinguishing type
+  def log_upcoming_change_toggle(setting_name, previous_value, new_value, opts = {})
+    unless setting_name.present? && SiteSetting.respond_to?(setting_name)
+      raise Discourse::InvalidParameters.new(:setting_name)
+    end
+    UserHistory.create!(
+      params(opts).merge(
+        action: UserHistory.actions[:upcoming_change_toggled],
+        subject: setting_name,
+        previous_value: previous_value ? "true" : "false",
+        new_value: new_value ? "true" : "false",
+      ),
+    )
+  end
+
+  def log_site_setting_groups_change(setting_name, previous_value, new_value, opts = {})
+    unless setting_name.present? && SiteSetting.respond_to?(setting_name)
+      raise Discourse::InvalidParameters.new(:setting_name)
+    end
+    UserHistory.create!(
+      params(opts).merge(
+        action: UserHistory.actions[:change_site_setting_groups],
         subject: setting_name,
         previous_value: previous_value&.to_s,
         new_value: new_value&.to_s,
@@ -846,12 +877,7 @@ class StaffActionLogger
     ]
 
     UserHistory.create!(
-      params(opts).merge(
-        action: UserHistory.actions[:post_rejected],
-        details: details.join("\n"),
-        topic_id: topic&.id,
-        category_id: reviewable.category_id,
-      ),
+      params(opts).merge(action: UserHistory.actions[:post_rejected], details: details.join("\n")),
     )
   end
 

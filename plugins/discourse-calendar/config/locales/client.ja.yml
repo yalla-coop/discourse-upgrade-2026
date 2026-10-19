@@ -7,11 +7,9 @@
 ja:
   admin_js:
     admin:
-      calendar: "カレンダー"
       site_settings:
         categories:
           discourse_post_event: "Discourse イベント"
-          discourse_calendar: "Discourse カレンダー"
   js:
     notifications:
       titles:
@@ -138,6 +136,7 @@ ja:
           dk: "デンマーク"
           ee: "エストニア"
           el: "ギリシャ"
+          gr: "ギリシャ"
           es_an: "スペイン（es_an）"
           es_ar: "スペイン（es_ar）"
           es_ce: "スペイン（es_ce）"
@@ -314,7 +313,7 @@ ja:
         month: "今月"
         week: "今週"
         day: "日"
-        list: "リスト"
+        year: "今年"
     group_timezones:
       search: "検索..."
       group_availability: "%{group} の空き状況"

@@ -7,11 +7,9 @@
 es:
   admin_js:
     admin:
-      calendar: "Calendario"
       site_settings:
         categories:
           discourse_post_event: "Evento de Discourse"
-          discourse_calendar: "Calendario de Discourse"
   js:
     notifications:
       titles:
@@ -138,6 +136,7 @@ es:
           dk: "Dinamarca"
           ee: "Estonia"
           el: "Grecia"
+          gr: "Grecia"
           es_an: "España (es_an)"
           es_ar: "España (es_ar)"
           es_ce: "España (es_ce)"
@@ -314,7 +313,7 @@ es:
         month: "Mes"
         week: "Semana"
         day: "Día"
-        list: "Lista"
+        year: "Año"
     group_timezones:
       search: "Buscar..."
       group_availability: "Disponibilidad de %{group}"

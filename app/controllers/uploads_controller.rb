@@ -50,10 +50,10 @@ class UploadsController < ApplicationController
 
     if type == "avatar" &&
          (
-           SiteSetting.discourse_connect_overrides_avatar ||
+           SiteSetting.discourse_connect_overrides_avatar || SiteSetting.auth_overrides_avatar ||
              !me.in_any_groups?(SiteSetting.uploaded_avatars_allowed_groups_map)
          )
-      return render json: failed_json, status: 422
+      return render json: failed_json, status: :unprocessable_entity
     end
 
     url = params[:url]
@@ -81,7 +81,8 @@ class UploadsController < ApplicationController
             retain_hours: retain_hours,
           )
       rescue => e
-        render json: failed_json.merge(message: e.message&.split("\n")&.first), status: 422
+        render json: failed_json.merge(message: e.message&.split("\n")&.first),
+               status: :unprocessable_entity
       else
         render json: UploadsController.serialize_upload(info), status: Upload === info ? 200 : 422
       end
@@ -357,13 +358,11 @@ class UploadsController < ApplicationController
       content_type: MiniMime.lookup_by_filename(upload.original_filename)&.content_type,
     }
 
-    if !FileHelper.is_inline_safe?(upload.original_filename)
+    if !FileHelper.is_inline_image?(upload.original_filename)
       opts[:disposition] = "attachment"
     elsif params[:inline]
       opts[:disposition] = "inline"
     end
-
-    response.headers["Content-Security-Policy"] = "sandbox;"
 
     file_path = Discourse.store.path_for(upload)
     return render_404 unless file_path

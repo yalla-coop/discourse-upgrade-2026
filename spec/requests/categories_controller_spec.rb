@@ -246,15 +246,8 @@ RSpec.describe CategoriesController do
         end
 
         it "does not include the sort parameter in more_topics_url" do
-          # we need to create more topics for more_topics_url to be serialized
           SiteSetting.categories_topics = 5
-          Fabricate.times(
-            5,
-            :topic,
-            category: category,
-            created_at: 1.day.ago,
-            bumped_at: 1.day.ago,
-          )
+          Fabricate.times(5, :topic, category:, created_at: 1.day.ago, bumped_at: 1.day.ago)
 
           get "/categories_and_latest.json"
           expect(response.status).to eq(200)
@@ -277,15 +270,8 @@ RSpec.describe CategoriesController do
         end
 
         it "includes the sort parameter in more_topics_url" do
-          # we need to create more topics for more_topics_url to be serialized
           SiteSetting.categories_topics = 5
-          Fabricate.times(
-            5,
-            :topic,
-            category: category,
-            created_at: 1.day.ago,
-            bumped_at: 1.day.ago,
-          )
+          Fabricate.times(5, :topic, category:, created_at: 1.day.ago, bumped_at: 1.day.ago)
 
           get "/categories_and_latest.json"
           expect(response.status).to eq(200)
@@ -349,7 +335,6 @@ RSpec.describe CategoriesController do
       CategoryFeaturedTopic.feature_topics
       SiteSetting.desktop_category_page_style = "categories_with_featured_topics"
 
-      # warmup
       get "/categories.json"
       expect(response.status).to eq(200)
 
@@ -515,6 +500,20 @@ RSpec.describe CategoriesController do
           expect(response.status).to eq(422)
           expect(response.parsed_body["errors"]).to be_present
         end
+
+        it "rejects too long descriptions" do
+          limit = CategoriesController::MAX_DESCRIPTION_PARAM_LENGTH
+          post "/categories.json",
+               params: {
+                 name: "Long Description Category",
+                 description: "a" * (limit + 1),
+               }
+
+          expect(response.status).to eq(422)
+          expect(response.parsed_body["errors"].first).to eq(
+            I18n.t("category.errors.description_too_long", count: limit),
+          )
+        end
       end
 
       describe "success" do
@@ -556,6 +555,41 @@ RSpec.describe CategoriesController do
           )
           expect(UserHistory.count).to eq(5)
         end
+
+        it "creates category with description containing markdown" do
+          post "/categories.json",
+               params: {
+                 name: "Test Category",
+                 description: "This is a **test** with [link](https://example.com)",
+               }
+
+          expect(response.status).to eq(200)
+          cat_json = response.parsed_body["category"]
+
+          category = Category.find(cat_json["id"])
+          expect(category.description).to include("<strong>test</strong>")
+          expect(category.description).to include('<a href="https://example.com')
+          expect(category.description).not_to include("**test**")
+          expect(category.topic.first_post.raw).to include("**test**")
+          expect(category.topic.first_post.raw).to include("[link](https://example.com)")
+        end
+
+        it "sanitizes description to prevent XSS" do
+          post "/categories.json",
+               params: {
+                 name: "XSS Test Category",
+                 description:
+                   "This has <script>alert('xss')</script> and <img src=x onerror=alert('xss')>",
+               }
+
+          expect(response.status).to eq(200)
+          cat_json = response.parsed_body["category"]
+
+          category = Category.find(cat_json["id"])
+          expect(category.description).not_to include("<script>")
+          expect(category.description).not_to include("&lt;script&gt;")
+          expect(category.description).to include("&lt;img")
+        end
       end
     end
   end
@@ -584,6 +618,51 @@ RSpec.describe CategoriesController do
         get "/c/#{category.id}/show.json"
         expect(response.status).to eq(200)
       end
+    end
+  end
+
+  describe "#find_by_slug" do
+    fab!(:category) { Fabricate(:category, name: "Parent Category") }
+
+    it "preloads user fields including has_children when category has subcategories" do
+      Fabricate(:category, parent_category: category)
+      sign_in(admin)
+
+      get "/c/#{category.slug}/find_by_slug.json"
+
+      expect(response.status).to eq(200)
+      cat_json = response.parsed_body["category"]
+      expect(cat_json["has_children"]).to eq(true)
+      expect(cat_json["subcategory_count"]).to eq(1)
+    end
+
+    it "returns has_children false when category has no subcategories" do
+      sign_in(admin)
+
+      get "/c/#{category.slug}/find_by_slug.json"
+
+      expect(response.status).to eq(200)
+      cat_json = response.parsed_body["category"]
+      expect(cat_json["has_children"]).to eq(false)
+      expect(cat_json["subcategory_count"]).to eq(nil)
+    end
+
+    it "preloads user fields for restricted categories" do
+      category.set_permissions(admins: :full)
+      category.save!
+      Fabricate(:category, parent_category: category).tap do |subcategory|
+        subcategory.set_permissions(admins: :full)
+        subcategory.save!
+      end
+      sign_in(admin)
+
+      get "/c/#{category.slug}/find_by_slug.json"
+
+      expect(response.status).to eq(200)
+      cat_json = response.parsed_body["category"]
+      expect(cat_json["has_children"]).to eq(true)
+      expect(cat_json["subcategory_count"]).to eq(1)
+      expect(cat_json["notification_level"]).not_to be_nil
     end
   end
 
@@ -786,6 +865,39 @@ RSpec.describe CategoriesController do
           expect(UserHistory.count).to eq(6)
         end
 
+        it "does not log false permission changes when everyone group name is localized" do
+          original_name = Group[:everyone].name
+          localized_name = "jeder"
+
+          Group[:everyone].update!(name: localized_name)
+
+          category_with_no_permissions = Fabricate(:category, user: admin)
+          category_with_no_permissions.category_groups.destroy_all
+
+          put "/categories/#{category_with_no_permissions.id}.json",
+              params: {
+                name: category_with_no_permissions.name,
+                color: category_with_no_permissions.color,
+                text_color: category_with_no_permissions.text_color,
+                slug: category_with_no_permissions.slug,
+                permissions: {
+                  localized_name => CategoryGroup.permission_types[:full],
+                },
+              }
+
+          expect(response.status).to eq(200)
+
+          expect(
+            UserHistory.exists?(
+              action: UserHistory.actions[:change_category_settings],
+              category_id: category_with_no_permissions.id,
+              subject: "permissions",
+            ),
+          ).to eq(false)
+        ensure
+          Group[:everyone].update!(name: original_name)
+        end
+
         it "updates per-category settings correctly" do
           category.require_topic_approval = false
           category.require_reply_approval = false
@@ -833,6 +945,25 @@ RSpec.describe CategoriesController do
           expect(response.status).to eq(200)
           category.reload
           expect(category.category_required_tag_groups).to be_empty
+        end
+
+        it "preloads user fields including has_children" do
+          Fabricate(:category, parent_category: category)
+
+          put "/categories/#{category.id}.json", params: { default_list_filter: "none" }
+          expect(response.status).to eq(200)
+          cat_json = response.parsed_body["category"]
+          expect(cat_json["has_children"]).to eq(true)
+          expect(cat_json["subcategory_count"]).to eq(1)
+        end
+
+        it "returns has_children false when category has no children" do
+          put "/categories/#{category.id}.json", params: { default_list_filter: "all" }
+
+          expect(response.status).to eq(200)
+          cat_json = response.parsed_body["category"]
+          expect(cat_json["has_children"]).to eq(false)
+          expect(cat_json["subcategory_count"]).to eq(nil)
         end
 
         it "does not update other fields" do
@@ -950,6 +1081,72 @@ RSpec.describe CategoriesController do
         end
       end
     end
+
+    describe "plugin category parameters" do
+      let(:plugin_instance) { Plugin::Instance.new.tap { |p| p.stubs(:enabled?).returns(true) } }
+      let(:callback) do
+        Proc.new do |category, value|
+          @callback_category = category
+          @callback_value = value
+        end
+      end
+
+      before { sign_in(admin) }
+
+      after { DiscoursePluginRegistry.reset_register!(:category_update_param_with_callback) }
+
+      it "processes plugin parameters when plugin is enabled" do
+        plugin_instance.register_category_update_param_with_callback(:test_param, &callback)
+
+        put "/categories/#{category.id}.json",
+            params: {
+              name: category.name,
+              color: category.color,
+              test_param: "test_value",
+            }
+
+        expect(response.status).to eq(200)
+        expect(@callback_category.id).to eq(category.id)
+        expect(@callback_value).to eq("test_value")
+      end
+
+      it "ignores plugin parameters when plugin is disabled" do
+        plugin_instance.register_category_update_param_with_callback(:test_param, &callback)
+        plugin_instance.stubs(:enabled?).returns(false)
+
+        put "/categories/#{category.id}.json",
+            params: {
+              name: category.name,
+              color: category.color,
+              test_param: "test_value",
+            }
+
+        expect(response.status).to eq(200)
+        expect(@callback_category).to eq(nil)
+        expect(@callback_value).to eq(nil)
+      end
+
+      it "safely handles when attribute is absent" do
+        plugin_instance.register_category_update_param_with_callback(:test_param, &callback)
+
+        put "/categories/#{category.id}.json", params: {}
+
+        expect(response.status).to eq(200)
+      end
+
+      it "rolls back category update if plugin callback fails" do
+        original_name = category.name
+        plugin_instance.register_category_update_param_with_callback(:test_param) do |_|
+          raise "Plugin callback error"
+        end
+
+        put "/categories/#{category.id}.json", params: { test_param: 1 }
+
+        expect(response.status).to eq(500)
+        category.reload
+        expect(category.name).to eq(original_name)
+      end
+    end
   end
 
   describe "#update_slug" do
@@ -999,7 +1196,7 @@ RSpec.describe CategoriesController do
   end
 
   describe "#categories_and_topics" do
-    before { 10.times.each { Fabricate(:topic) } }
+    before { 10.times { Fabricate(:topic) } }
 
     it "works when SiteSetting.categories_topics is non-null" do
       SiteSetting.categories_topics = 5

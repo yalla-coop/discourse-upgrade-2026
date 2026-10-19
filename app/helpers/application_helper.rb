@@ -26,10 +26,7 @@ module ApplicationHelper
       EmberENV: {
         FEATURES: {
         },
-        EXTEND_PROTOTYPES: {
-          Date: false,
-          String: false,
-        },
+        EXTEND_PROTOTYPES: false,
       },
       APP: {
         name: "discourse",
@@ -363,14 +360,7 @@ module ApplicationHelper
   end
 
   private def generate_twitter_card_metadata(result, opts)
-    img_url =
-      (
-        if opts[:x_summary_large_image].present?
-          opts[:x_summary_large_image]
-        else
-          opts[:image]
-        end
-      )
+    img_url = (opts[:x_summary_large_image].presence || opts[:image])
 
     # Twitter does not allow SVGs, see https://developer.twitter.com/en/docs/twitter-for-websites/cards/overview/markup
     if img_url.ends_with?(".svg")
@@ -526,20 +516,44 @@ module ApplicationHelper
     CategoryBadge.html_for(category, opts).html_safe
   end
 
-  def self.all_connectors
-    @all_connectors = Dir.glob("plugins/*/app/views/connectors/**/*.html.erb")
+  SERVER_PLUGIN_OUTLET_PLUGINS_PREFIXES = [Rails.root.join("plugins/").to_s]
+  private_constant :SERVER_PLUGIN_OUTLET_PLUGINS_PREFIXES
+
+  if Rails.env.test?
+    SERVER_PLUGIN_OUTLET_PLUGINS_PREFIXES << Rails.root.join("spec/fixtures/plugins/").to_s
   end
+
+  SERVER_PLUGIN_OUTLET_CONNECTOR_TEMPLATES =
+    SERVER_PLUGIN_OUTLET_PLUGINS_PREFIXES.each_with_object({}) do |plugins_prefix, connectors|
+      Dir
+        .glob("#{plugins_prefix}*/app/views/connectors/**/*.html.erb")
+        .each do |template_path|
+          template_path =~ Regexp.new("/connectors/(.*)/.*\.html\.erb$")
+          outlet_name = Regexp.last_match(1)
+          connectors[outlet_name] ||= []
+
+          connectors[outlet_name] << begin
+            ActionView::Template.new(
+              File.read(template_path),
+              "discourse_plugin_outlet__#{name}",
+              ActionView::Template.handler_for_extension("erb"),
+              locals: [],
+              format: :html,
+              virtual_path: template_path,
+            )
+          end
+        end
+    end
+  private_constant :SERVER_PLUGIN_OUTLET_CONNECTOR_TEMPLATES
 
   def server_plugin_outlet(name, locals: {})
     return "" if !GlobalSetting.load_plugins?
+    return "" if !SERVER_PLUGIN_OUTLET_CONNECTOR_TEMPLATES.key?(name)
 
-    matcher = Regexp.new("/connectors/#{name}/.*\.html\.erb$")
-    erbs = ApplicationHelper.all_connectors.select { |c| c =~ matcher }
-    return "" if erbs.blank?
-
-    result = +""
-    erbs.each { |erb| result << render(inline: File.read(erb), locals: locals) }
-    result.html_safe
+    SERVER_PLUGIN_OUTLET_CONNECTOR_TEMPLATES[name]
+      .map { |template| render template:, locals: }
+      .join
+      .html_safe
   end
 
   def topic_featured_link_domain(link)
@@ -596,9 +610,9 @@ module ApplicationHelper
     current_user&.user_option&.homepage || HomepageHelper.resolve(request, current_user)
   end
 
-  def build_plugin_html(name)
+  def build_plugin_html(name, **kwargs)
     return "" unless allow_plugins?
-    DiscoursePluginRegistry.build_html(name, controller) || ""
+    DiscoursePluginRegistry.build_html(name, controller, **kwargs) || ""
   end
 
   # If there is plugin HTML return that, otherwise yield to the template
@@ -825,6 +839,10 @@ module ApplicationHelper
       disable_custom_css: loading_admin?,
       highlight_js_path: HighlightJs.path,
       svg_sprite_path: SvgSprite.path(theme_id),
+      media_optimization_bundle:
+        script_asset_path(
+          EmberCli.script_chunks["media-optimization-bundle"]&.first || "media-optimization-bundle",
+        ),
       enable_js_error_reporting: GlobalSetting.enable_js_error_reporting,
       color_scheme_is_dark: dark_color_scheme?,
       user_color_scheme_id: user_scheme_id || -1,
@@ -836,6 +854,20 @@ module ApplicationHelper
 
       setup_data[:debug_preloaded_app_data] = true if ENV["DEBUG_PRELOADED_APP_DATA"]
       setup_data[:mb_last_file_change_id] = MessageBus.last_id("/file-change")
+    end
+
+    if Rails.env.test?
+      if ENV["CAPYBARA_PLAYWRIGHT_DEBUG_CLIENT_SETTLED"].present?
+        setup_data[:capybara_playwright_debug_client_settled] = true
+      end
+
+      # Allow controlling deprecation behavior in tests via environment variable
+      # Used to enforce or disable deprecation throwing for specific test runs
+      if ENV["EMBER_RAISE_ON_DEPRECATION"] == "1"
+        setup_data[:raise_on_deprecation] = true
+      elsif ENV["EMBER_RAISE_ON_DEPRECATION"] == "0"
+        setup_data[:raise_on_deprecation] = false
+      end
     end
 
     if guardian.can_enable_safe_mode? && params["safe_mode"]

@@ -45,6 +45,7 @@ RSpec.describe TopicsFilter do
         in:muted
         in:normal
         in:watching_first_post
+        in:unseen
       ]
 
       user_specific_options.each { |option| expect(anon_option_names).not_to include(option) }
@@ -88,6 +89,166 @@ RSpec.describe TopicsFilter do
   end
 
   describe "#filter_from_query_string" do
+    describe "when filtering with the `users` and `group` filters" do
+      fab!(:u1) { Fabricate(:user, username: "alice") }
+      fab!(:u2) { Fabricate(:user, username: "bob") }
+      fab!(:u3) { Fabricate(:user, username: "cara") }
+      fab!(:g1) { Fabricate(:group, name: "group1") }
+      fab!(:g2) { Fabricate(:group, name: "group2") }
+
+      before do
+        g1.add(u1)
+        g2.add(u2)
+      end
+
+      fab!(:topic_by_u1) { Fabricate(:topic).tap { |t| Fabricate(:post, topic: t, user: u1) } }
+      fab!(:topic_by_u2) { Fabricate(:topic).tap { |t| Fabricate(:post, topic: t, user: u2) } }
+      fab!(:topic_by_u1_and_u2) do
+        Fabricate(:topic).tap do |t|
+          Fabricate(:post, topic: t, user: u1)
+          Fabricate(:post, topic: t, user: u2)
+        end
+      end
+
+      it "users:alice returns topics where alice participated" do
+        ids =
+          TopicsFilter
+            .new(guardian: Guardian.new)
+            .filter_from_query_string("users:alice")
+            .pluck(:id)
+        expect(ids).to include(topic_by_u1.id, topic_by_u1_and_u2.id)
+        expect(ids).not_to include(topic_by_u2.id)
+      end
+
+      it "users:alice,bob returns topics with either alice or bob" do
+        ids =
+          TopicsFilter
+            .new(guardian: Guardian.new)
+            .filter_from_query_string("users:alice,bob")
+            .pluck(:id)
+        expect(ids).to include(topic_by_u1.id, topic_by_u2.id, topic_by_u1_and_u2.id)
+      end
+
+      it "users:alice+bob returns only topics where both participated/allowed" do
+        ids =
+          TopicsFilter
+            .new(guardian: Guardian.new)
+            .filter_from_query_string("users:alice+bob")
+            .pluck(:id)
+        expect(ids).to contain_exactly(topic_by_u1_and_u2.id)
+      end
+
+      it "-users:alice,bob returns topics where neither alice nor bob participated" do
+        post = Fabricate(:post)
+        ids =
+          TopicsFilter
+            .new(guardian: Guardian.new)
+            .filter_from_query_string("-users:alice,bob")
+            .pluck(:id)
+        expect(ids).to contain_exactly(post.topic_id)
+      end
+
+      it "-users:alice+bob returns topics where bob and alice did not participate together" do
+        ids =
+          TopicsFilter
+            .new(guardian: Guardian.new)
+            .filter_from_query_string("-users:alice+bob")
+            .pluck(:id)
+        expect(ids).to contain_exactly(topic_by_u1.id, topic_by_u2.id)
+      end
+
+      it "-user:alice,bob (alias) returns topics where neither alice nor bob participated" do
+        ids =
+          TopicsFilter
+            .new(guardian: Guardian.new)
+            .filter_from_query_string("-user:alice,bob")
+            .pluck(:id)
+        expect(ids).to contain_exactly()
+      end
+
+      it "group:group1 returns topics with participants from the group or group-allowed PMs" do
+        ids =
+          TopicsFilter
+            .new(guardian: Guardian.new)
+            .filter_from_query_string("group:group1")
+            .pluck(:id)
+        expect(ids).to include(topic_by_u1.id, topic_by_u1_and_u2.id)
+      end
+
+      it "groups:group1,group2 returns union of both groups" do
+        ids =
+          TopicsFilter
+            .new(guardian: Guardian.new)
+            .filter_from_query_string("groups:group1,group2")
+            .pluck(:id)
+        expect(ids).to include(topic_by_u1.id, topic_by_u2.id, topic_by_u1_and_u2.id)
+      end
+
+      it "group:group1+group2 returns only topics with both groups represented" do
+        ids =
+          TopicsFilter
+            .new(guardian: Guardian.new)
+            .filter_from_query_string("group:group1+group2")
+            .pluck(:id)
+        expect(ids).to contain_exactly(topic_by_u1_and_u2.id)
+      end
+
+      context "with whispers" do
+        fab!(:whisperer_group, :group)
+        fab!(:whisperer_user) { Fabricate(:user).tap { |u| whisperer_group.add(u) } }
+        fab!(:regular_user, :user)
+        fab!(:topic_with_whisper_only) do
+          Fabricate(:post, user: u1, post_type: Post.types[:whisper]).topic
+        end
+
+        before { SiteSetting.whispers_allowed_groups = "#{whisperer_group.id}" }
+
+        it "users:alice should not return topics where alice only whispered when viewed by non-whisperer" do
+          ids =
+            TopicsFilter
+              .new(guardian: Guardian.new(regular_user))
+              .filter_from_query_string("users:alice")
+              .pluck(:id)
+          expect(ids).not_to include(topic_with_whisper_only.id)
+          expect(ids).to include(topic_by_u1.id, topic_by_u1_and_u2.id)
+        end
+
+        it "group:group1 should not return topics where group members only whispered when viewed by non-whisperer" do
+          ids =
+            TopicsFilter
+              .new(guardian: Guardian.new(regular_user))
+              .filter_from_query_string("group:group1")
+              .pluck(:id)
+          expect(ids).not_to include(topic_with_whisper_only.id)
+          expect(ids).to include(topic_by_u1.id, topic_by_u1_and_u2.id)
+        end
+      end
+    end
+
+    describe "ordering by hot score" do
+      fab!(:t1, :topic)
+      fab!(:t2, :topic)
+
+      before do
+        TopicHotScore.create!(topic_id: t1.id, score: 2.0)
+        TopicHotScore.create!(topic_id: t2.id, score: 3.0)
+      end
+
+      it "order:hot sorts by topic_hot_scores.score desc" do
+        expect(
+          TopicsFilter.new(guardian: Guardian.new).filter_from_query_string("order:hot").pluck(:id),
+        ).to start_with(t2.id, t1.id)
+      end
+
+      it "order:hot-asc sorts ascending" do
+        expect(
+          TopicsFilter
+            .new(guardian: Guardian.new)
+            .filter_from_query_string("order:hot-asc")
+            .pluck(:id),
+        ).to start_with(t1.id, t2.id)
+      end
+    end
     describe "when filtering with multiple filters" do
       fab!(:tag) { Fabricate(:tag, name: "tag1") }
       fab!(:tag2) { Fabricate(:tag, name: "tag2") }
@@ -114,7 +275,7 @@ RSpec.describe TopicsFilter do
       end
 
       fab!(:expired_pinned_topic) do
-        Fabricate(:topic, pinned_at: 2.hour.ago, pinned_until: 1.hour.ago)
+        Fabricate(:topic, pinned_at: 2.hours.ago, pinned_until: 1.hour.ago)
       end
 
       describe "when query string is `in:pinned`" do
@@ -140,7 +301,7 @@ RSpec.describe TopicsFilter do
       end
 
       describe "new / unread operators" do
-        fab!(:user_for_new_filters) { Fabricate(:user) }
+        fab!(:user_for_new_filters, :user)
         let!(:new_topic) { Fabricate(:topic) }
         let!(:unread_topic) do
           Fabricate(:topic, created_at: 2.days.ago).tap do |t|
@@ -184,6 +345,20 @@ RSpec.describe TopicsFilter do
               .where(id: [new_topic.id, unread_topic.id])
               .pluck(:id)
           expect(ids).to contain_exactly(new_topic.id, unread_topic.id)
+        end
+
+        it "in:unseen returns only unseen topics" do
+          user_for_unseen_filters = user_for_new_filters
+          seen_topic = Fabricate(:topic)
+          TopicUser.update_last_read(user_for_unseen_filters, seen_topic.id, 1, 1, 0)
+          unseen_topic = Fabricate(:topic)
+          ids =
+            TopicsFilter
+              .new(guardian: user_for_unseen_filters.guardian)
+              .filter_from_query_string("in:unseen")
+              .where(id: [seen_topic.id, unseen_topic.id])
+              .pluck(:id)
+          expect(ids).to contain_exactly(unseen_topic.id)
         end
 
         it "anonymous user with in:new returns none" do
@@ -344,6 +519,95 @@ RSpec.describe TopicsFilter do
                 .pluck(:id),
             ).to contain_exactly(user_muted_topic.id, user_tracking_topic.id)
           end
+        end
+      end
+
+      describe "when query string is `in:watching_first_post`" do
+        fab!(:category_watching_first_post, :category)
+        fab!(:category_regular, :category)
+        fab!(:tag_watching_first_post, :tag)
+        fab!(:tag_regular, :tag)
+
+        fab!(:topic_in_watched_category) do
+          Fabricate(:topic, category: category_watching_first_post)
+        end
+        fab!(:topic_in_regular_category) { Fabricate(:topic, category: category_regular) }
+        fab!(:topic_with_watched_tag) { Fabricate(:topic, tags: [tag_watching_first_post]) }
+        fab!(:topic_with_regular_tag) { Fabricate(:topic, tags: [tag_regular]) }
+        fab!(:topic_with_both) do
+          Fabricate(:topic, category: category_watching_first_post, tags: [tag_watching_first_post])
+        end
+
+        before do
+          CategoryUser.set_notification_level_for_category(
+            user,
+            CategoryUser.notification_levels[:watching_first_post],
+            category_watching_first_post.id,
+          )
+          TagUser.change(
+            user.id,
+            tag_watching_first_post.id,
+            TagUser.notification_levels[:watching_first_post],
+          )
+        end
+
+        it "should not return any topics if the user is anonymous" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("in:watching_first_post")
+              .pluck(:id),
+          ).to be_empty
+        end
+
+        it "should return the union of topics in watched categories and topics with watched tags" do
+          ids =
+            TopicsFilter
+              .new(guardian: Guardian.new(user))
+              .filter_from_query_string("in:watching_first_post")
+              .pluck(:id)
+
+          expect(ids).to contain_exactly(
+            topic_in_watched_category.id,
+            topic_with_watched_tag.id,
+            topic_with_both.id,
+          )
+        end
+
+        it "should work when combined with other filters" do
+          topic_in_watched_category.update!(closed: true)
+
+          ids =
+            TopicsFilter
+              .new(guardian: Guardian.new(user))
+              .filter_from_query_string("in:watching_first_post status:closed")
+              .pluck(:id)
+
+          expect(ids).to contain_exactly(topic_in_watched_category.id)
+        end
+
+        it "should work with comma-separated notification levels" do
+          user_watching_topic =
+            Fabricate(:topic).tap do |topic|
+              TopicUser.change(
+                user.id,
+                topic.id,
+                notification_level: TopicUser.notification_levels[:watching],
+              )
+            end
+
+          ids =
+            TopicsFilter
+              .new(guardian: Guardian.new(user))
+              .filter_from_query_string("in:watching,watching_first_post")
+              .pluck(:id)
+
+          expect(ids).to contain_exactly(
+            user_watching_topic.id,
+            topic_in_watched_category.id,
+            topic_with_watched_tag.id,
+            topic_with_both.id,
+          )
         end
       end
     end
@@ -1296,6 +1560,93 @@ RSpec.describe TopicsFilter do
         ).to eq([])
       end
     end
+
+    describe "when filtering by locale" do
+      fab!(:en_topic) { Fabricate(:topic, locale: "en") }
+      fab!(:ja_topic) { Fabricate(:topic, locale: "ja") }
+      fab!(:es_topic) { Fabricate(:topic, locale: "es") }
+      fab!(:no_locale_topic, :topic)
+
+      describe "when query string is `locale:en`" do
+        it "should only return topics with locale en" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("locale:en")
+              .pluck(:id),
+          ).to contain_exactly(en_topic.id)
+        end
+      end
+
+      describe "when query string is `locale:ja,es`" do
+        it "should return topics with locale ja or es" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("locale:ja,es")
+              .pluck(:id),
+          ).to contain_exactly(ja_topic.id, es_topic.id)
+        end
+      end
+
+      describe "when query string is `locale:ja locale:es`" do
+        it "should return topics with locale ja or es" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("locale:ja locale:es")
+              .pluck(:id),
+          ).to contain_exactly(ja_topic.id, es_topic.id)
+        end
+      end
+
+      describe "when query string is `-locale:en`" do
+        it "should return topics without locale en" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("-locale:en")
+              .pluck(:id),
+          ).to contain_exactly(ja_topic.id, es_topic.id, no_locale_topic.id)
+        end
+      end
+
+      describe "when query string is `-locale:en,ja`" do
+        it "should return topics without locale en or ja" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("-locale:en,ja")
+              .pluck(:id),
+          ).to contain_exactly(es_topic.id, no_locale_topic.id)
+        end
+      end
+
+      describe "when query string is `locale:invalid`" do
+        it "should return no topics" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("locale:invalid")
+              .pluck(:id),
+          ).to eq([])
+        end
+      end
+
+      describe "when combining with other filters" do
+        before { en_topic.update!(closed: true) }
+
+        it "should work with status:closed" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("locale:en status:closed")
+              .pluck(:id),
+          ).to contain_exactly(en_topic.id)
+        end
+      end
+    end
+
     describe "when filtering by topic author" do
       fab!(:user2) { Fabricate(:user, username: "username2") }
       fab!(:topic_by_user) { Fabricate(:topic, user: user) }
@@ -1367,6 +1718,169 @@ RSpec.describe TopicsFilter do
               .filter_from_query_string("created-by:@invalid")
               .pluck(:id),
           ).to eq([])
+        end
+      end
+
+      describe "when query string is `created-by:me`" do
+        it "should return the topics created by the current user" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new(user))
+              .filter_from_query_string("created-by:me")
+              .pluck(:id),
+          ).to contain_exactly(topic_by_user.id, topic2_by_user.id)
+        end
+
+        it "should not return any topics when there is no current user" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("created-by:me")
+              .pluck(:id),
+          ).to eq([])
+        end
+      end
+    end
+
+    describe "when filtering by topic creator's group" do
+      fab!(:group1) { Fabricate(:group, name: "group1") }
+      fab!(:group2) { Fabricate(:group, name: "group2") }
+
+      fab!(:user_in_group1) { Fabricate(:user).tap { |u| group1.add(u) } }
+      fab!(:user_in_group2) { Fabricate(:user).tap { |u| group2.add(u) } }
+      fab!(:user_in_both_groups) do
+        Fabricate(:user).tap do |u|
+          group1.add(u)
+          group2.add(u)
+        end
+      end
+
+      fab!(:topic_by_group1_user) { Fabricate(:topic, user: user_in_group1) }
+      fab!(:topic_by_group2_user) { Fabricate(:topic, user: user_in_group2) }
+      fab!(:topic_by_both_groups_user) { Fabricate(:topic, user: user_in_both_groups) }
+
+      describe "when query string is `created-by:group1`" do
+        it "should return topics created by users in the specified group" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("created-by:group1")
+              .pluck(:id),
+          ).to contain_exactly(topic_by_group1_user.id, topic_by_both_groups_user.id)
+        end
+      end
+
+      describe "when query string is `created-by:group2`" do
+        it "should return topics created by users in the specified group" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("created-by:group2")
+              .pluck(:id),
+          ).to contain_exactly(topic_by_group2_user.id, topic_by_both_groups_user.id)
+        end
+      end
+
+      describe "when query string is `created-by:group1,group2`" do
+        it "should return topics created by users in any of the specified groups" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("created-by:group1,group2")
+              .pluck(:id),
+          ).to contain_exactly(
+            topic_by_group1_user.id,
+            topic_by_group2_user.id,
+            topic_by_both_groups_user.id,
+          )
+        end
+      end
+
+      describe "when query string is `created-by:invalid`" do
+        it "should not return any topics" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("created-by:invalid")
+              .pluck(:id),
+          ).to eq([])
+        end
+      end
+
+      describe "when query string is `created-by:group1,invalid`" do
+        it "should only return topics created by users in the valid group" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("created-by:group1,invalid")
+              .pluck(:id),
+          ).to contain_exactly(topic_by_group1_user.id, topic_by_both_groups_user.id)
+        end
+      end
+
+      describe "with group visibility restrictions" do
+        fab!(:private_group) do
+          Fabricate(:group, visibility_level: Group.visibility_levels[:members])
+        end
+        fab!(:super_private_group) do
+          Fabricate(:group, visibility_level: Group.visibility_levels[:owners])
+        end
+
+        fab!(:owner_of_super_private_group) do
+          Fabricate(:user).tap { |u| super_private_group.add_owner(u) }
+        end
+
+        fab!(:user_in_private_group) { Fabricate(:user).tap { |u| private_group.add(u) } }
+        fab!(:user_in_super_private_group) do
+          Fabricate(:user).tap { |u| super_private_group.add(u) }
+        end
+
+        fab!(:topic_by_private_group_user) { Fabricate(:topic, user: user_in_private_group) }
+        fab!(:topic_by_super_private_group_owner) do
+          Fabricate(:topic, user: owner_of_super_private_group)
+        end
+        fab!(:topic_by_super_private_group_user) do
+          Fabricate(:topic, user: user_in_super_private_group)
+        end
+        it "should not return topics when user cannot see the group" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new)
+              .filter_from_query_string("created-by:#{private_group.name}")
+              .pluck(:id),
+          ).to eq([])
+        end
+
+        it "should return topics when user is a member of the private group" do
+          private_group.add(user)
+
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new(user))
+              .filter_from_query_string("created-by:#{private_group.name}")
+              .pluck(:id),
+          ).to contain_exactly(topic_by_private_group_user.id)
+        end
+
+        it "does not filter topics when user cannot see members of the group" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new(user_in_super_private_group))
+              .filter_from_query_string("created-by:#{super_private_group.name}")
+              .pluck(:id),
+          ).to eq([])
+        end
+
+        it "returns topics when user can see group members" do
+          expect(
+            TopicsFilter
+              .new(guardian: Guardian.new(owner_of_super_private_group))
+              .filter_from_query_string("created-by:#{super_private_group.name}")
+              .pluck(:id),
+          ).to contain_exactly(
+            topic_by_super_private_group_owner.id,
+            topic_by_super_private_group_user.id,
+          )
         end
       end
     end
@@ -1905,6 +2419,19 @@ RSpec.describe TopicsFilter do
       filter = TopicsFilter.new(guardian: guardian)
       scope = filter.filter_from_query_string("keyword1 keyword2")
       expect(scope.pluck(:id)).to eq([post1.topic_id])
+    end
+
+    it "excludes topics with only deleted or hidden posts from keyword search" do
+      SearchIndexer.enable
+      visible_post = Fabricate(:post, raw: "searchterm")
+      _deleted_post = Fabricate(:post, raw: "searchterm", deleted_at: Time.zone.now)
+      _hidden_post = Fabricate(:post, raw: "searchterm", hidden: true)
+      _whisper_post = Fabricate(:post, raw: "searchterm", post_type: Post.types[:whisper])
+
+      filter = TopicsFilter.new(guardian: Guardian.new)
+      scope = filter.filter_from_query_string("searchterm")
+
+      expect(scope.pluck(:id)).to contain_exactly(visible_post.topic_id)
     end
 
     describe "with a custom filter" do

@@ -619,7 +619,6 @@ RSpec.describe Guardian do
       end
 
       it "is false if user has not met minimum trust level" do
-        SiteSetting.min_trust_to_create_topic = 1
         SiteSetting.create_topic_allowed_groups = Group::AUTO_GROUPS[:trust_level_1]
         expect(
           Guardian.new(Fabricate(:user, trust_level: 0)).can_create?(Topic, plain_category),
@@ -1430,7 +1429,6 @@ RSpec.describe Guardian do
     end
 
     it "returns false for user with insufficient trust level" do
-      SiteSetting.min_trust_to_create_topic = 3
       SiteSetting.create_topic_allowed_groups = Group::AUTO_GROUPS[:trust_level_3]
       expect(Guardian.new(user).can_create_topic?(topic)).to eq(false)
     end
@@ -2045,16 +2043,16 @@ RSpec.describe Guardian do
       expect(Guardian.new(admin).can_change_primary_group?(user, group)).to eq(true)
     end
 
-    context "when moderators_manage_categories_and_groups site setting is enabled" do
-      before { SiteSetting.moderators_manage_categories_and_groups = true }
+    context "when moderators_manage_groups site setting is enabled" do
+      before { SiteSetting.moderators_manage_groups = true }
 
       it "returns true for moderators" do
         expect(Guardian.new(moderator).can_change_primary_group?(user, group)).to eq(true)
       end
     end
 
-    context "when moderators_manage_categories_and_groups site setting is disabled" do
-      before { SiteSetting.moderators_manage_categories_and_groups = false }
+    context "when moderators_manage_groups site setting is disabled" do
+      before { SiteSetting.moderators_manage_groups = false }
 
       it "returns false for moderators" do
         expect(Guardian.new(moderator).can_change_primary_group?(user, group)).to eq(false)
@@ -2208,12 +2206,8 @@ RSpec.describe Guardian do
         expect(Guardian.new(user).can_edit_email?(user)).to be_truthy
       end
 
-      it "is true for moderators to edit their own email" do
-        expect(Guardian.new(moderator).can_edit_email?(moderator)).to be_truthy
-      end
-
-      it "is false for moderators to edit another user's email" do
-        expect(Guardian.new(moderator).can_edit_email?(user)).to be_falsey
+      it "is true for moderators" do
+        expect(Guardian.new(moderator).can_edit_email?(user)).to be_truthy
       end
 
       it "is true for admins" do
@@ -2622,7 +2616,7 @@ RSpec.describe Guardian do
     context "when post is older than post_edit_time_limit" do
       let(:old_post) { Fabricate(:post, user: trust_level_2, created_at: 6.minutes.ago) }
       before do
-        SiteSetting.min_trust_to_allow_self_wiki = 2
+        SiteSetting.self_wiki_allowed_groups = "1|2|12"
         SiteSetting.tl2_post_edit_time_limit = 5
       end
 
@@ -3181,7 +3175,6 @@ RSpec.describe Guardian do
     end
 
     it "works with trust levels" do
-      SiteSetting.min_trust_level_for_here_mention = 2
       SiteSetting.here_mention_allowed_groups = Group::AUTO_GROUPS[:trust_level_2]
 
       expect(trust_level_0.guardian.can_mention_here?).to eq(false)
@@ -3194,7 +3187,6 @@ RSpec.describe Guardian do
     end
 
     it "works with staff" do
-      SiteSetting.min_trust_level_for_here_mention = "staff"
       SiteSetting.here_mention_allowed_groups = Group::AUTO_GROUPS[:staff]
 
       expect(trust_level_4.guardian.can_mention_here?).to eq(false)
@@ -3203,7 +3195,6 @@ RSpec.describe Guardian do
     end
 
     it "works with admin or moderator" do
-      SiteSetting.min_trust_level_for_here_mention = "admin"
       SiteSetting.here_mention_allowed_groups = Group::AUTO_GROUPS[:admins]
 
       expect(trust_level_4.guardian.can_mention_here?).to eq(false)

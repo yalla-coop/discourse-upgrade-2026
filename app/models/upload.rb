@@ -11,8 +11,6 @@ class Upload < ActiveRecord::Base
   URL_REGEX = %r{(/original/\dX[/\.\w]*/(\h+)[\.\w]*)}
   MAX_IDENTIFY_SECONDS = 5
   DOMINANT_COLOR_COMMAND_TIMEOUT_SECONDS = 5
-  # the maximum length of a base62 encoded sha1
-  MAX_BASE62_SHA1_LENGTH = 27
 
   belongs_to :user
   belongs_to :access_control_post, class_name: "Post"
@@ -32,6 +30,7 @@ class Upload < ActiveRecord::Base
   has_many :posts, through: :upload_references, source: :target, source_type: "Post"
   has_many :topic_thumbnails
   has_many :badges, foreign_key: :image_upload_id, dependent: :nullify
+  after_create :enqueue_video_conversion_job, if: :should_convert_video?
 
   attr_accessor :for_group_message
   attr_accessor :for_theme
@@ -40,10 +39,11 @@ class Upload < ActiveRecord::Base
   attr_accessor :for_site_setting
   attr_accessor :for_gravatar
   attr_accessor :validate_file_size
+  attr_accessor :skip_video_conversion
 
-  validates_presence_of :filesize
-  validates_presence_of :original_filename
-  validates :dominant_color, length: { is: 6 }, allow_blank: true, allow_nil: true
+  validates :filesize, presence: true
+  validates :original_filename, presence: true
+  validates :dominant_color, length: { is: 6 }, allow_blank: true
 
   validates_with UploadValidator
 
@@ -78,6 +78,10 @@ class Upload < ActiveRecord::Base
         invalid_etag: 3, # Used by S3Inventory to mark S3 Upload records that have an invalid ETag value compared to the ETag value of the inventory file
         s3_file_missing_confirmed: 4, # Used by S3Inventory to skip S3 Upload records that are confirmed to not be backed by a file in the S3 file store
       )
+  end
+
+  def self.fetch_from(sha1:, url:)
+    sha1.presence.try { |_| find_by(sha1:) } || get_from_url(url)
   end
 
   def self.mark_invalid_s3_uploads_as_missing
@@ -339,11 +343,11 @@ class Upload < ActiveRecord::Base
   # on demand image size calculation, this allows us to null out image sizes
   # and still handle as needed
   def get_dimension(key)
-    if v = read_attribute(key)
+    if v = self[key]
       return v
     end
     fix_dimensions!
-    read_attribute(key)
+    self[key]
   end
 
   def width
@@ -465,7 +469,6 @@ class Upload < ActiveRecord::Base
   end
 
   def self.sha1_from_base62_encoded(encoded_sha1)
-    return nil if encoded_sha1.length > MAX_BASE62_SHA1_LENGTH
     sha1 = Base62.decode(encoded_sha1).to_s(16)
 
     if sha1.length > SHA1_LENGTH
@@ -500,9 +503,24 @@ class Upload < ActiveRecord::Base
 
     if secure_status_did_change && Discourse.store.external?
       Discourse.store.update_upload_access_control(self)
+      sync_optimized_videos_secure_status(mark_secure)
     end
 
     secure_status_did_change
+  end
+
+  def sync_optimized_videos_secure_status(mark_secure)
+    optimized_videos
+      .includes(:optimized_upload)
+      .each do |optimized_video|
+        optimized_upload = optimized_video.optimized_upload
+        if optimized_upload.secure? != mark_secure
+          optimized_upload.update_secure_status(
+            source: "sync_with_original_upload",
+            override: mark_secure,
+          )
+        end
+      end
   end
 
   def secure_params(secure, reason, source = "unknown")
@@ -662,6 +680,16 @@ class Upload < ActiveRecord::Base
 
   def short_url_basename
     "#{Upload.base62_sha1(sha1)}#{extension.present? ? ".#{extension}" : ""}"
+  end
+
+  def should_convert_video?
+    !skip_video_conversion && SiteSetting.video_conversion_enabled &&
+      SiteSetting.Upload.enable_s3_uploads && FileHelper.is_supported_video?(original_filename) &&
+      !OptimizedVideo.exists?(upload_id: id)
+  end
+
+  def enqueue_video_conversion_job
+    Jobs.enqueue(:convert_video, upload_id: id)
   end
 end
 

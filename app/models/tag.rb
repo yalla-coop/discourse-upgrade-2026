@@ -4,10 +4,7 @@ class Tag < ActiveRecord::Base
   include Searchable
   include HasDestroyedWebHook
   include HasSanitizableFields
-
-  self.ignored_columns = [
-    "topic_count", # TODO: Remove when 20240212034010_drop_deprecated_columns has been promoted to pre-deploy
-  ]
+  include Localizable
 
   RESERVED_TAGS = [
     "none",
@@ -180,7 +177,7 @@ class Tag < ActiveRecord::Base
     user_id = allowed_user.id
 
     DB.query_hash(<<~SQL).map!(&:symbolize_keys!)
-      SELECT tags.name as id, tags.name as text, COUNT(topics.id) AS count
+      SELECT tags.id as id, tags.name as name, COUNT(topics.id) AS count
         FROM tags
         JOIN topic_tags ON tags.id = topic_tags.tag_id
         JOIN topics ON topics.id = topic_tags.topic_id
@@ -196,7 +193,7 @@ class Tag < ActiveRecord::Base
             JOIN group_users gu ON gu.user_id = #{user_id.to_i}
                                AND gu.group_id = tg.group_id
        )
-       GROUP BY tags.name
+       GROUP BY tags.id, tags.name
        ORDER BY count DESC
        LIMIT #{limit.to_i}
     SQL
@@ -278,6 +275,7 @@ end
 # Table name: tags
 #
 #  id                 :integer          not null, primary key
+#  locale             :string(20)
 #  name               :string           not null
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null

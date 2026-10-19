@@ -4,6 +4,7 @@ RSpec.describe Admin::ColorSchemesController do
   fab!(:admin)
   fab!(:moderator)
   fab!(:user)
+  fab!(:theme)
 
   let(:valid_params) do
     {
@@ -148,6 +149,152 @@ RSpec.describe Admin::ColorSchemesController do
         expect(response.status).to eq(422)
         expect(response.parsed_body["errors"]).to be_present
       end
+
+      it "can set a light and dark color scheme as default on the theme" do
+        Theme.find_default.update!(color_scheme_id: nil, dark_color_scheme_id: nil)
+        params = valid_params
+
+        params[:color_scheme][:default_light_on_theme] = true
+        params[:color_scheme][:default_dark_on_theme] = true
+
+        put "/admin/color_schemes/#{existing.id}.json", params: params
+
+        default_theme = Theme.find_default
+        expect(default_theme.color_scheme_id).to eq(existing.id)
+        expect(default_theme.dark_color_scheme_id).to eq(existing.id)
+      end
+
+      it "can unset a light and dark color scheme as default on the theme" do
+        Theme.find_default.update!(color_scheme_id: existing.id, dark_color_scheme_id: existing.id)
+        params = valid_params
+
+        params[:color_scheme][:default_light_on_theme] = false
+        params[:color_scheme][:default_dark_on_theme] = false
+
+        put "/admin/color_schemes/#{existing.id}.json", params: params
+
+        default_theme = Theme.find_default
+        expect(default_theme.color_scheme_id).to be_nil
+        expect(default_theme.dark_color_scheme_id).to be_nil
+      end
+
+      it "does not change color schame default when params are not present" do
+        Theme.find_default.update!(color_scheme_id: existing.id, dark_color_scheme_id: existing.id)
+
+        put "/admin/color_schemes/#{existing.id}.json", params: valid_params
+
+        default_theme = Theme.find_default
+        expect(default_theme.color_scheme_id).to eq(existing.id)
+        expect(default_theme.dark_color_scheme_id).to eq(existing.id)
+      end
+
+      it "creates a copy of the scheme with the original colors when editing colors of a theme-owned scheme" do
+        existing.update!(theme_id: theme.id, base_scheme_id: nil)
+        existing.colors.destroy_all
+        existing.colors = [{ name: "primary", hex: "CCBB11" }, { name: "secondary", hex: "9900AA" }]
+        existing.save!
+
+        expect do
+          put "/admin/color_schemes/#{existing.id}.json",
+              params: {
+                color_scheme: {
+                  colors: [{ name: "primary", hex: "7711EE" }],
+                },
+              }
+        end.to change { ColorScheme.unscoped.where(remote_copy: true).count }.by(1)
+        expect(response.status).to eq(200)
+        expect(response.parsed_body["colors"].find { |c| c["name"] == "primary" }["hex"]).to eq(
+          "7711EE",
+        )
+        expect(
+          response.parsed_body["colors"].find { |c| c["name"] == "primary" }["default_hex"],
+        ).to eq("CCBB11")
+
+        expect(existing.reload.base_scheme_id).to be_present
+
+        base_scheme = ColorScheme.unscoped.find_by(id: existing.base_scheme_id)
+        expect(base_scheme.colors.find_by(name: "primary").hex).to eq("CCBB11")
+        expect(base_scheme.colors.find_by(name: "secondary").hex).to eq("9900AA")
+
+        expect(existing.colors.find_by(name: "primary").hex).to eq("7711EE")
+        expect(existing.colors.find_by(name: "secondary").hex).to eq("9900AA")
+
+        expect do
+          put "/admin/color_schemes/#{existing.id}.json",
+              params: {
+                color_scheme: {
+                  colors: [{ name: "primary", hex: "2200FF" }],
+                },
+              }
+        end.not_to change { ColorScheme.unscoped.count }
+        expect(response.status).to eq(200)
+        expect(response.parsed_body["colors"].find { |c| c["name"] == "primary" }["hex"]).to eq(
+          "2200FF",
+        )
+        expect(
+          response.parsed_body["colors"].find { |c| c["name"] == "primary" }["default_hex"],
+        ).to eq("CCBB11")
+
+        expect(base_scheme.colors.find_by(name: "primary").hex).to eq("CCBB11")
+        expect(base_scheme.colors.find_by(name: "secondary").hex).to eq("9900AA")
+
+        expect(existing.colors.find_by(name: "primary").hex).to eq("2200FF")
+        expect(existing.colors.find_by(name: "secondary").hex).to eq("9900AA")
+      end
+
+      it "doesn't create a copy of the scheme when editing the user-selectable status of a theme-owned scheme" do
+        existing.update!(theme_id: theme.id, user_selectable: false, base_scheme_id: nil)
+
+        expect do
+          put "/admin/color_schemes/#{existing.id}.json",
+              params: {
+                color_scheme: {
+                  user_selectable: true,
+                },
+              }
+        end.not_to change { ColorScheme.unscoped.count }
+
+        expect(response.status).to eq(200)
+        expect(existing.reload.user_selectable).to eq(true)
+      end
+
+      it "doesn't allow editing the name or base scheme of a theme-owned scheme" do
+        existing.update!(theme_id: theme.id, name: "original name", base_scheme_id: nil)
+        put "/admin/color_schemes/#{existing.id}.json",
+            params: {
+              color_scheme: {
+                name: "A new name",
+              },
+            }
+        expect(response.status).to eq(403)
+
+        put "/admin/color_schemes/#{existing.id}.json",
+            params: {
+              color_scheme: {
+                base_scheme_id: Fabricate(:color_scheme).id,
+              },
+            }
+        expect(response.status).to eq(403)
+
+        expect(existing.reload.name).to eq("original name")
+        expect(existing.base_scheme_id).to be_nil
+      end
+
+      it "allows making a theme-owned palette the default theme's palette" do
+        existing.update!(theme_id: theme.id)
+
+        expect do
+          put "/admin/color_schemes/#{existing.id}.json",
+              params: {
+                color_scheme: {
+                  default_light_on_theme: true,
+                },
+              }
+        end.not_to change { ColorScheme.unscoped.count }
+
+        expect(response.status).to eq(200)
+        expect(Theme.find_default.reload.color_scheme_id).to eq(existing.id)
+      end
     end
 
     shared_examples "color scheme update not allowed" do
@@ -183,6 +330,15 @@ RSpec.describe Admin::ColorSchemesController do
           ColorScheme.count
         }.by(-1)
         expect(response.status).to eq(200)
+      end
+
+      it "doesn't allow deleting a theme-owned palette" do
+        existing.update!(theme_id: theme.id)
+
+        expect { delete "/admin/color_schemes/#{existing.id}.json" }.not_to change {
+          ColorScheme.count
+        }
+        expect(response.status).to eq(403)
       end
     end
 

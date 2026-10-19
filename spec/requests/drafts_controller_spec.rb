@@ -320,15 +320,6 @@ RSpec.describe DraftsController do
           expect(response).to have_http_status :bad_request
         end
       end
-
-      context "when data is not a string" do
-        before { sign_in(user) }
-
-        it "returns an error" do
-          post "/drafts.json", params: { draft_key: "xyz", data: { cat: "tomtom" }, sequence: 0 }
-          expect(response).to have_http_status :bad_request
-        end
-      end
     end
 
     it "returns 403 when the maximum amount of drafts per users is reached" do
@@ -368,25 +359,6 @@ RSpec.describe DraftsController do
       # check the draft counts just to be safe
       expect(Draft.where(user_id: user1.id).count).to eq(2)
       expect(Draft.where(user_id: user2.id).count).to eq(1)
-    end
-
-    it "does not leak conflict info for posts user cannot see" do
-      private_post = Fabricate(:private_message_post)
-
-      sign_in(user)
-      post "/drafts.json",
-           params: {
-             draft_key: "topic_#{private_post.topic_id}",
-             sequence: 0,
-             data: {
-               postId: private_post.id,
-               action: "edit",
-               original_text: "wrong text to trigger conflict",
-             }.to_json,
-           }
-
-      expect(response.status).to eq(200)
-      expect(response.parsed_body).not_to have_key("conflict_user")
     end
   end
 
@@ -468,6 +440,170 @@ RSpec.describe DraftsController do
         let(:recipient) { Fabricate(:admin) }
         let(:response_code) { 200 }
         let(:draft_deleted) { true }
+      end
+    end
+  end
+
+  describe "#bulk_destroy" do
+    it "requires you to be logged in" do
+      delete "/drafts/bulk_destroy.json"
+      expect(response.status).to eq(403)
+    end
+
+    it "destroys multiple drafts when required" do
+      sign_in(user)
+
+      # Create multiple drafts
+      Draft.set(user, "draft1", 0, '{"reply": "draft 1 content"}')
+      Draft.set(user, "draft2", 0, '{"reply": "draft 2 content"}')
+      Draft.set(user, "draft3", 0, '{"reply": "draft 3 content"}')
+
+      expect(Draft.where(user: user).count).to eq(3)
+
+      delete "/drafts/bulk_destroy.json",
+             params: {
+               draft_keys: %w[draft1 draft2],
+               sequences: {
+                 "draft1" => 0,
+                 "draft2" => 0,
+               },
+             }
+
+      expect(response.status).to eq(200)
+      expect(response.parsed_body["success"]).to eq("OK")
+      expect(response.parsed_body["deleted_count"]).to eq(2)
+
+      # Verify drafts were deleted
+      expect(Draft.get(user, "draft1", 0)).to eq(nil)
+      expect(Draft.get(user, "draft2", 0)).to eq(nil)
+      expect(Draft.get(user, "draft3", 0)).to be_present
+      expect(Draft.where(user: user).count).to eq(1)
+    end
+
+    it "handles empty draft_keys array" do
+      sign_in(user)
+
+      delete "/drafts/bulk_destroy.json", params: { draft_keys: [] }
+
+      expect(response.status).to eq(200)
+      expect(response.parsed_body["deleted_count"]).to eq(0)
+    end
+
+    it "validates sequences and returns error for conflicts" do
+      sign_in(user)
+
+      Draft.set(user, "draft1", 0, '{"reply": "draft 1 content"}')
+      Draft.set(user, "draft2", 0, '{"reply": "draft 2 content"}')
+
+      delete "/drafts/bulk_destroy.json",
+             params: {
+               draft_keys: %w[draft1 draft2],
+               sequences: {
+                 "draft1" => 0,
+                 "draft2" => 99,
+               }, # Wrong sequence for draft2
+             }
+
+      expect(response.status).to eq(409)
+      expect(response.parsed_body["failed"]).to eq("FAILED")
+      expect(response.parsed_body["errors"]).to include("draft2")
+
+      # Verify no drafts were deleted due to sequence conflict
+      expect(Draft.get(user, "draft1", 0)).to be_present
+      expect(Draft.get(user, "draft2", 0)).to be_present
+    end
+
+    it "handles missing sequences parameter gracefully" do
+      sign_in(user)
+
+      Draft.set(user, "draft1", 0, '{"reply": "draft 1 content"}')
+
+      delete "/drafts/bulk_destroy.json", params: { draft_keys: ["draft1"] }
+
+      expect(response.status).to eq(200)
+      expect(response.parsed_body["deleted_count"]).to eq(1)
+      expect(Draft.get(user, "draft1", 0)).to eq(nil)
+    end
+
+    it "requires draft_keys parameter" do
+      sign_in(user)
+
+      delete "/drafts/bulk_destroy.json", params: {}
+
+      expect(response.status).to eq(400)
+    end
+
+    it "updates user draft count after bulk deletion" do
+      sign_in(user)
+
+      # Create multiple drafts
+      3.times { |i| Draft.set(user, "draft#{i}", 0, '{"reply": "content"}') }
+
+      initial_draft_count = user.user_stat.draft_count
+      expect(initial_draft_count).to be >= 3
+
+      delete "/drafts/bulk_destroy.json",
+             params: {
+               draft_keys: %w[draft0 draft1 draft2],
+               sequences: {
+                 "draft0" => 0,
+                 "draft1" => 0,
+                 "draft2" => 0,
+               },
+             }
+
+      expect(response.status).to eq(200)
+
+      # Verify user draft count was updated
+      user.user_stat.reload
+      expect(user.user_stat.draft_count).to eq(initial_draft_count - 3)
+    end
+
+    context "when using API access" do
+      it "allows admin to delete other user's drafts via API" do
+        admin = Fabricate(:admin)
+        api_key = Fabricate(:api_key, user: admin)
+
+        Draft.set(user, "draft1", 0, '{"reply": "draft content"}')
+
+        delete "/drafts/bulk_destroy.json",
+               params: {
+                 draft_keys: ["draft1"],
+                 sequences: {
+                   "draft1" => 0,
+                 },
+                 username: user.username,
+               },
+               headers: {
+                 "Api-Key" => api_key.key,
+                 "Api-Username" => admin.username,
+               }
+
+        expect(response.status).to eq(200)
+        expect(Draft.get(user, "draft1", 0)).to eq(nil)
+      end
+
+      it "denies non-admin API access to other user's drafts" do
+        non_admin = Fabricate(:user)
+        api_key = Fabricate(:api_key, user: non_admin)
+
+        Draft.set(user, "draft1", 0, '{"reply": "draft content"}')
+
+        delete "/drafts/bulk_destroy.json",
+               params: {
+                 draft_keys: ["draft1"],
+                 sequences: {
+                   "draft1" => 0,
+                 },
+                 username: user.username,
+               },
+               headers: {
+                 "Api-Key" => api_key.key,
+                 "Api-Username" => non_admin.username,
+               }
+
+        expect(response.status).to eq(403)
+        expect(Draft.get(user, "draft1", 0)).to be_present
       end
     end
   end

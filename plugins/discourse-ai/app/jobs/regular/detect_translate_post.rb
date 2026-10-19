@@ -9,13 +9,24 @@ module Jobs
       return if !DiscourseAi::Translation.enabled?
       return if args[:post_id].blank?
 
+      unless DiscourseAi::Translation.credits_available_for_post_detection?
+        Rails.logger.info(
+          "Translation skipped for post: insufficient credits. Will resume when credits reset.",
+        )
+        return
+      end
+
       post = Post.find_by(id: args[:post_id])
       return if post.blank? || post.raw.blank? || post.deleted_at.present? || post.user_id <= 0
 
       topic = post.topic
       return if topic.blank?
 
-      if SiteSetting.ai_translation_backfill_limit_to_public_content
+      force = args[:force] || false
+
+      if force
+        # no restrictions
+      elsif SiteSetting.ai_translation_backfill_limit_to_public_content
         return if topic.category&.read_restricted? || topic.archetype == Archetype.private_message
       else
         if topic.archetype == Archetype.private_message &&
@@ -43,9 +54,8 @@ module Jobs
         next if LocaleNormalizer.is_same?(locale, detected_locale)
         exists = post.localizations.matching_locale(locale).exists?
 
-        if exists && !DiscourseAi::Translation::PostLocalizer.has_relocalize_quota?(post, locale)
-          next
-        end
+        has_quota = DiscourseAi::Translation::PostLocalizer.has_relocalize_quota?(post, locale)
+        next if !force && exists && !has_quota
 
         localize(post, locale)
       end

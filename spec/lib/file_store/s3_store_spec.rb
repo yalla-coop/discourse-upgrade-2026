@@ -54,6 +54,97 @@ RSpec.describe FileStore::S3Store do
         expect(upload.etag).to eq(etag)
       end
 
+      it "adds `stale-while-revalidate` response directive when `s3_stale_while_revalidate` site setting is set" do
+        SiteSetting.s3_stale_while_revalidate = 3600
+        expected_cache_control = "max-age=31556952, public, immutable, stale-while-revalidate=3600"
+        s3_helper.expects(:s3_bucket).returns(s3_bucket).at_least_once
+
+        s3_bucket
+          .expects(:object)
+          .with(regexp_matches(%r{original/\d+X.*/#{upload.sha1}\.png}))
+          .returns(s3_object)
+
+        s3_object
+          .expects(:put)
+          .with(
+            {
+              acl: FileStore::S3Store::CANNED_ACL_PUBLIC_READ,
+              cache_control: expected_cache_control,
+              content_type: "image/png",
+              content_disposition: "inline; filename=\"logo.png\"; filename*=UTF-8''logo.png",
+              body: uploaded_file,
+            },
+          )
+          .returns(Aws::S3::Types::PutObjectOutput.new(etag: "\"#{etag}\""))
+
+        expect(store.store_upload(uploaded_file, upload)).to match(
+          %r{//s3-upload-bucket\.s3\.dualstack\.us-west-1\.amazonaws\.com/original/\d+X.*/#{upload.sha1}\.png},
+        )
+
+        expect(upload.etag).to eq(etag)
+      end
+
+      it "respects `s3_max_age` site setting for cache_control" do
+        SiteSetting.s3_max_age = 60
+        expected_cache_control = "max-age=60, public, immutable"
+        s3_helper.expects(:s3_bucket).returns(s3_bucket).at_least_once
+
+        s3_bucket
+          .expects(:object)
+          .with(regexp_matches(%r{original/\d+X.*/#{upload.sha1}\.png}))
+          .returns(s3_object)
+
+        s3_object
+          .expects(:put)
+          .with(
+            {
+              acl: FileStore::S3Store::CANNED_ACL_PUBLIC_READ,
+              cache_control: expected_cache_control,
+              content_type: "image/png",
+              content_disposition: "inline; filename=\"logo.png\"; filename*=UTF-8''logo.png",
+              body: uploaded_file,
+            },
+          )
+          .returns(Aws::S3::Types::PutObjectOutput.new(etag: "\"#{etag}\""))
+
+        expect(store.store_upload(uploaded_file, upload)).to match(
+          %r{//s3-upload-bucket\.s3\.dualstack\.us-west-1\.amazonaws\.com/original/\d+X.*/#{upload.sha1}\.png},
+        )
+
+        expect(upload.etag).to eq(etag)
+      end
+
+      describe "when default site settings are set" do
+        it "cache_control is `max-age=31556952, public, immutable`" do
+          default_cache_control = "max-age=31556952, public, immutable"
+
+          s3_helper.expects(:s3_bucket).returns(s3_bucket).at_least_once
+
+          s3_bucket
+            .expects(:object)
+            .with(regexp_matches(%r{original/\d+X.*/#{upload.sha1}\.png}))
+            .returns(s3_object)
+
+          s3_object
+            .expects(:put)
+            .with(
+              {
+                acl: FileStore::S3Store::CANNED_ACL_PUBLIC_READ,
+                cache_control: default_cache_control,
+                content_type: "image/png",
+                content_disposition: "inline; filename=\"logo.png\"; filename*=UTF-8''logo.png",
+                body: uploaded_file,
+              },
+            )
+            .returns(Aws::S3::Types::PutObjectOutput.new(etag: "\"#{etag}\""))
+
+          expect(store.store_upload(uploaded_file, upload)).to match(
+            %r{//s3-upload-bucket\.s3\.dualstack\.us-west-1\.amazonaws\.com/original/\d+X.*/#{upload.sha1}\.png},
+          )
+          expect(upload.etag).to eq(etag)
+        end
+      end
+
       describe "when s3_upload_bucket includes folders path" do
         before do
           s3_object.stubs(:put).returns(Aws::S3::Types::PutObjectOutput.new(etag: "\"#{etag}\""))
@@ -201,166 +292,6 @@ RSpec.describe FileStore::S3Store do
 
           expect(store.store_upload(uploaded_file, upload)).to match(
             %r{//s3-upload-bucket\.s3\.dualstack\.us-west-1\.amazonaws\.com/original/\d+X.*/#{upload.sha1}\.pdf},
-          )
-        end
-
-        context "when testing content-disposition security" do
-          it "sets inline disposition for safe images (PNG)" do
-            upload = Fabricate(:upload, original_filename: "safe.png", extension: "png")
-            uploaded_file = file_from_fixtures("logo.png")
-
-            s3_helper.expects(:s3_bucket).returns(s3_bucket).at_least_once
-            s3_bucket.expects(:object).returns(s3_object)
-            s3_object
-              .expects(:put)
-              .with(
-                has_entries(
-                  content_disposition: "inline; filename=\"safe.png\"; filename*=UTF-8''safe.png",
-                ),
-              )
-              .returns(Aws::S3::Types::PutObjectOutput.new(etag: "\"#{etag}\""))
-
-            store.store_upload(uploaded_file, upload)
-          end
-
-          it "sets inline disposition for PDFs" do
-            SiteSetting.authorized_extensions = "pdf|png"
-            upload = Fabricate(:upload, original_filename: "document.pdf", extension: "pdf")
-
-            s3_helper.expects(:s3_bucket).returns(s3_bucket).at_least_once
-            s3_bucket.expects(:object).returns(s3_object)
-            s3_object
-              .expects(:put)
-              .with(
-                has_entries(
-                  content_disposition:
-                    "inline; filename=\"document.pdf\"; filename*=UTF-8''document.pdf",
-                ),
-              )
-              .returns(Aws::S3::Types::PutObjectOutput.new(etag: "\"#{etag}\""))
-
-            store.store_upload(uploaded_file, upload)
-          end
-
-          it "sets attachment disposition for HTML files" do
-            SiteSetting.authorized_extensions = "html|png"
-            upload = Fabricate(:upload, original_filename: "evil.html", extension: "html")
-            uploaded_file = file_from_fixtures("logo.png")
-
-            s3_helper.expects(:s3_bucket).returns(s3_bucket).at_least_once
-            s3_bucket.expects(:object).returns(s3_object)
-            s3_object
-              .expects(:put)
-              .with(
-                has_entries(
-                  content_disposition:
-                    "attachment; filename=\"evil.html\"; filename*=UTF-8''evil.html",
-                ),
-              )
-              .returns(Aws::S3::Types::PutObjectOutput.new(etag: "\"#{etag}\""))
-
-            store.store_upload(uploaded_file, upload)
-          end
-
-          it "sets attachment disposition for XML files" do
-            SiteSetting.authorized_extensions = "xml|png"
-            upload = Fabricate(:upload, original_filename: "data.xml", extension: "xml")
-            uploaded_file = file_from_fixtures("logo.png")
-
-            s3_helper.expects(:s3_bucket).returns(s3_bucket).at_least_once
-            s3_bucket.expects(:object).returns(s3_object)
-            s3_object
-              .expects(:put)
-              .with(
-                has_entries(
-                  content_disposition:
-                    "attachment; filename=\"data.xml\"; filename*=UTF-8''data.xml",
-                ),
-              )
-              .returns(Aws::S3::Types::PutObjectOutput.new(etag: "\"#{etag}\""))
-
-            store.store_upload(uploaded_file, upload)
-          end
-
-          it "sets attachment disposition for SVG files" do
-            SiteSetting.authorized_extensions = "svg|png"
-            upload = Fabricate(:upload, original_filename: "image.svg", extension: "svg")
-            uploaded_file = file_from_fixtures("logo.png")
-
-            s3_helper.expects(:s3_bucket).returns(s3_bucket).at_least_once
-            s3_bucket.expects(:object).returns(s3_object)
-            s3_object
-              .expects(:put)
-              .with(
-                has_entries(
-                  content_disposition:
-                    "attachment; filename=\"image.svg\"; filename*=UTF-8''image.svg",
-                ),
-              )
-              .returns(Aws::S3::Types::PutObjectOutput.new(etag: "\"#{etag}\""))
-
-            store.store_upload(uploaded_file, upload)
-          end
-        end
-      end
-
-      context "when video conversion is enabled" do
-        let(:video_file) { file_from_fixtures("small.mp4", "media") }
-        let(:video_upload) do
-          Fabricate.build(:upload, original_filename: "small.mp4", extension: "mp4", id: 42)
-        end
-
-        before do
-          # Set up required MediaConvert settings
-          SiteSetting.video_conversion_service = "aws_mediaconvert"
-          SiteSetting.mediaconvert_role_arn = "arn:aws:iam::123456789012:role/MediaConvertRole"
-          SiteSetting.video_conversion_enabled = true
-          # Default stub that returns false for any argument
-          allow(FileHelper).to receive(:is_supported_video?).and_return(false)
-          # Override for the specific video file case
-          allow(FileHelper).to receive(:is_supported_video?).with("small.mp4").and_return(true)
-          allow(store.s3_helper).to receive(:upload).and_return(["some/path.mp4", "\"etag\""])
-          # Setup Jobs as a spy
-          allow(Jobs).to receive(:enqueue)
-        end
-
-        it "enqueues a convert_video job for supported video files" do
-          store.store_upload(video_file, video_upload)
-
-          expect(Jobs).to have_received(:enqueue).with(:convert_video, upload_id: video_upload.id)
-        end
-
-        it "does not enqueue a convert_video job for unsupported video files" do
-          allow(FileHelper).to receive(:is_supported_video?).with("small.mp4").and_return(false)
-
-          store.store_upload(video_file, video_upload)
-
-          expect(Jobs).not_to have_received(:enqueue).with(
-            :convert_video,
-            upload_id: video_upload.id,
-          )
-        end
-
-        it "does not enqueue a convert_video job when video conversion is disabled" do
-          SiteSetting.video_conversion_enabled = false
-
-          store.store_upload(video_file, video_upload)
-
-          expect(Jobs).not_to have_received(:enqueue).with(
-            :convert_video,
-            upload_id: video_upload.id,
-          )
-        end
-
-        it "does not enqueue a convert_video job for non-video files" do
-          non_video_upload =
-            Fabricate.build(:upload, original_filename: "image.png", extension: "png", id: 43)
-
-          store.store_upload(uploaded_file, non_video_upload)
-
-          expect(Jobs).not_to have_received(:enqueue).with(
-            :convert_video,
-            upload_id: non_video_upload.id,
           )
         end
       end

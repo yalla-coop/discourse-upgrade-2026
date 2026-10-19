@@ -5,7 +5,7 @@ RSpec.describe PostGuardian do
   fab!(:user) { Fabricate(:user, refresh_auto_groups: true) }
   fab!(:anon, :anonymous)
   fab!(:admin)
-  fab!(:another_admin) { Fabricate(:admin) }
+  fab!(:another_admin, :admin)
   fab!(:moderator)
   fab!(:trust_level_0) { Fabricate(:trust_level_0, refresh_auto_groups: true) }
   fab!(:trust_level_4) { Fabricate(:trust_level_4, refresh_auto_groups: true) }
@@ -458,7 +458,14 @@ RSpec.describe PostGuardian do
     end
 
     context "with system message" do
-      fab!(:private_message) { Fabricate(:system_message_topic, user: user) }
+      fab!(:private_message) do
+        Fabricate(
+          :topic,
+          archetype: Archetype.private_message,
+          subtype: "system_message",
+          category_id: nil,
+        )
+      end
 
       before { user.save! }
       it "allows the user to reply to system messages" do
@@ -469,7 +476,9 @@ RSpec.describe PostGuardian do
     end
 
     context "with private message" do
-      fab!(:private_message, :private_message_topic)
+      fab!(:private_message) do
+        Fabricate(:topic, archetype: Archetype.private_message, category_id: nil)
+      end
 
       before { user.save! }
 
@@ -478,16 +487,8 @@ RSpec.describe PostGuardian do
         expect(Guardian.new(user).can_create?(Post, private_message)).to be_truthy
       end
 
-      it "allows new posts by people included via allowed groups" do
-        group = Fabricate(:group)
-        group.add(user)
-        private_message.topic_allowed_groups.create!(group: group)
-
-        expect(Guardian.new(user).can_create_post?(private_message)).to be_truthy
-      end
-
-      it "doesn't allow new posts by people not included in the pm" do
-        expect(Guardian.new(user).can_create_post?(private_message)).to be_falsey
+      it "doesn't allow new posts by people not invited to the pm" do
+        expect(Guardian.new(user).can_create?(Post, private_message)).to be_falsey
       end
 
       it "allows new posts from silenced users included in the pm" do
@@ -634,7 +635,7 @@ RSpec.describe PostGuardian do
     end
 
     it "returns false if the edit_all_post_groups is empty" do
-      SiteSetting.edit_all_post_groups = nil
+      SiteSetting.edit_all_post_groups = ""
 
       expect(Guardian.new(user).is_in_edit_post_groups?).to eq(false)
     end

@@ -84,7 +84,6 @@ fi:
               help: "esim. #kanava, @käyttäjänimi."
           errors:
             action_prohibited: "Botilla ei ole oikeuksia lähettää viestejä tälle kanavalle"
-            channel_not_found: "Kyseistä kanavaa ei ole olemassa Slackissa"
         telegram:
           title: "Telegram"
           param:
@@ -131,7 +130,6 @@ fi:
               help: "Kanavaa kuvaava nimi. Sitä ei käytetä Matrixiin yhdistämiseen."
             room_id:
               title: "Huoneen tunnus"
-              help: "Huoneen \"yksityinen tunniste\". Sen pitäisi näyttää tältä: !abcdefg:matrix.org"
           errors:
             unknown_token: "Käyttöoikeustunnus on virheellinen"
             unknown_room: "Huoneen tunnus ei kelpaa"

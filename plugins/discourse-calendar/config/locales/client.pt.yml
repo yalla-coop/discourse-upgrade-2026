@@ -5,6 +5,12 @@
 # https://translate.discourse.org/
 
 pt:
+  admin_js:
+    admin:
+      calendar: "Calendário e Eventos"
+      site_settings:
+        categories:
+          discourse_calendar: "Calendário e Eventos"
   js:
     discourse_automation:
       triggerables:
@@ -16,6 +22,8 @@ pt:
     discourse_calendar:
       disable_holiday: "Desativar"
       enable_holiday: "Ativar"
+      holidays:
+        header_description: "Escolha uma região para ver as férias dessa região. Os feriados desativados serão excluídos do calendário de férias dos funcionários."
       date: "Data"
       region:
         none: "Nenhuma"
@@ -24,6 +32,7 @@ pt:
         month: "Mês"
         week: "Semana"
         day: "Dia"
+        year: "Ano"
     group_timezones:
       search: "Pesquisar..."
     discourse_post_event:
@@ -31,10 +40,10 @@ pt:
         invite_user_notification: "%{username}%{description}"
       show_all: "Mostrar tudo"
       add_to_calendar: "Adicionar ao calendário"
-      bulk_invite: "Convite em Série"
+      bulk_invite: "Convite em massa"
       bulk_invite_modal:
         confirm: "confirmar"
-        title: "Convite em Série"
+        title: "Convite em massa"
         success: "Ficheiro enviado corretamente, será notificado via mensagem quando o processo estiver concluído."
         error: "Desculpe, o ficheiro deverá estar no formato CSV."
         group_selector_placeholder: "Escolher um grupo..."

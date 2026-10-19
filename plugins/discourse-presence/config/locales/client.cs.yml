@@ -17,6 +17,11 @@ cs:
         few: "upravují"
         many: "upravují"
         other: "upravují"
+      translating:
+        one: "překládá"
+        few: "překládají"
+        many: "překládají"
+        other: "překládají"
       replying_to_topic:
         one: "odpovídá"
         few: "odpovídají"

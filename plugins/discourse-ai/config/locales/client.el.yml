@@ -85,7 +85,7 @@ el:
         groups: "Ομάδες:"
         no_persona: "Δεν έχει οριστεί"
         no_groups: "Κανένα"
-        edit: "Επεξεργασία"
+        edit: "Ρυθμίσεις"
         expand_list:
           one: "(%{count} περισσότερο)"
           other: "(%{count} περισσότερα)"
@@ -101,6 +101,20 @@ el:
         select_option: "Διαλέξτε μία επιλογή..."
       translations:
         title: "Μεταφράσεις"
+        stats:
+          eta_minutes:
+            one: "%{count} λεπτό"
+            other: "%{count} λεπτά"
+          eta_hours:
+            one: "%{count} ω"
+            other: "%{count} ω"
+          eta_days:
+            one: "%{count} ημ"
+            other: "%{count} ημ"
+        progress_chart:
+          bar_done:
+            one: "%{count} ανάρτηση"
+            other: "%{count} αναρτήσεις"
       spam:
         short_title: "Ανεπιθύμητα"
         last_seven_days: "Τελευταίες 7 ημέρες"
@@ -114,6 +128,7 @@ el:
         model: "Μοντέλο"
         username: "Όνομα Χρήστη"
         total_requests: "Σύνολο αιτήσεων"
+        total: "Σύνολο"
         periods:
           last_day: "Τελευταίες 24 ώρες"
           custom: "Προσαρμοσμένο..."
@@ -124,10 +139,7 @@ el:
         export: "Εξαγωγή"
         import: "Εισαγωγή"
         description: "Περιγραφή"
-        mentionable: Να επιτρέπονται επισημάνσεις
         user: Χρήστης
-        allow_chat_channel_mentions: "Να επιτρέπονται επισημάνσεις καναλιών συνομιλίας"
-        allow_topic_mentions: "Να επιτρέπονται επισημάνσεις θεμάτων"
         save: "Αποθήκευση"
         enabled: "Ενεργοποιημένο;"
         allowed_groups: "Επιτρεπόμενες ομάδες"
@@ -175,7 +187,7 @@ el:
           ai_summarization: "Συνοψίστε"
           ai_spam: "Ανεπιθύμητα"
         model_description:
-          open_router-x-ai-grok-3-beta: "Τελευταίο μοντέλο της xAI"
+          open_router-x-ai-grok-4: "Τελευταίο μοντέλο της xAI"
         next:
           title: "Επόμενο"
         tests:
@@ -196,6 +208,7 @@ el:
         thumbnail_suggestions:
           select: "Επιλογή"
           selected: "Επιλεγμένα"
+          try_again: "Δοκίμασε ξανά"
         image_caption:
           save_caption: "Αποθήκευση"
       embeddings:
@@ -211,7 +224,9 @@ el:
           fake: "Προσαρμοσμένο"
       ai_bot:
         llm: "Μοντέλο"
+        try_again: "Δοκιμάστε ξανά"
         shortcut_title: "Ξεκινήστε ένα ΠΜ με ένα AI bot"
+        shortcut_link: "AI bot"
         debug_ai_modal:
           request: "Αίτημα"
           response: "Απάντηση"

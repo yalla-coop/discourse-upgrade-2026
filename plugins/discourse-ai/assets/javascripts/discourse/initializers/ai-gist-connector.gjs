@@ -1,10 +1,10 @@
+import Component from "@glimmer/component";
 import { ajax } from "discourse/lib/ajax";
 import { apiInitializer } from "discourse/lib/api";
 import { i18n } from "discourse-i18n";
 import AiTopicGist from "../components/ai-topic-gist";
 
 export default apiInitializer((api) => {
-  const site = api.container.lookup("service:site");
   const settings = api.container.lookup("service:site-settings");
   const MAX_ALLOWED_GISTS_REGENERATE = 30;
 
@@ -87,15 +87,59 @@ export default apiInitializer((api) => {
   });
 
   if (settings.discourse_ai_enabled && settings.ai_summarization_enabled) {
-    const gistTemplate = <template>
-      <AiTopicGist @topic={{@outletArgs.topic}} />
-    </template>;
+    const OUTLETS = {
+      mobile: "topic-list-main-link-bottom",
+      desktop: "topic-list-topic-cell-link-bottom-line__before",
+    };
 
-    const outlet = site.mobileView
-      ? "topic-list-before-category"
-      : "topic-list-topic-cell-link-bottom-line__before";
+    function isGistEnabledRoute(routeName) {
+      if (routeName?.startsWith("discovery.")) {
+        return true;
+      }
 
-    api.renderInOutlet(outlet, gistTemplate);
+      if (routeName?.startsWith("filter")) {
+        return true;
+      }
+
+      if (routeName?.startsWith("userPrivateMessages")) {
+        return true;
+      }
+
+      if (routeName?.startsWith("topic.")) {
+        return true;
+      }
+
+      if (routeName?.startsWith("tag.")) {
+        return true;
+      }
+
+      if (routeName?.startsWith("tags.")) {
+        return true;
+      }
+
+      return false;
+    }
+
+    function renderGistInOutlet(outletName, shouldRenderFn) {
+      api.renderInOutlet(
+        outletName,
+        class extends Component {
+          static shouldRender(args, context, owner) {
+            if (!shouldRenderFn(context)) {
+              return false;
+            }
+
+            const router = owner.lookup("service:router");
+            return isGistEnabledRoute(router.currentRouteName);
+          }
+
+          <template><AiTopicGist @topic={{@topic}} /></template>
+        }
+      );
+    }
+
+    renderGistInOutlet(OUTLETS.mobile, (context) => context.site.mobileView);
+    renderGistInOutlet(OUTLETS.desktop, (context) => context.site.desktopView);
 
     api.addTopicAdminMenuButton((topic) => {
       if (!settings.ai_summary_gists_enabled) {

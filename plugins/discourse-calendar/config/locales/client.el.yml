@@ -7,10 +7,11 @@
 el:
   admin_js:
     admin:
-      calendar: "Ημερολόγιο"
+      calendar: "Ημερολόγιο και Εκδηλώσεις"
       site_settings:
         categories:
           discourse_post_event: "Εκδήλωση Discourse"
+          discourse_calendar: "Ημερολόγιο και Εκδηλώσεις"
   js:
     notifications:
       titles:
@@ -91,6 +92,7 @@ el:
           dk: "Δανία"
           ee: "Εσθονία"
           el: "Ελλάδα"
+          gr: "Ελλάδα"
           es_an: "Ισπανία (es_an)"
           es_ar: "Ισπανία (es_ar)"
           es_ce: "Ισπανία (es_ce)"
@@ -172,6 +174,7 @@ el:
         month: "Μήνας"
         week: "Εβδομάδα"
         day: "Ημέρα"
+        year: "Χρόνος"
     group_timezones:
       search: "Αναζήτηση..."
     discourse_post_event:
@@ -267,6 +270,7 @@ el:
         event:
           expired: "Έληξε"
           closed: "Κλειστή"
+          full: "Πλήρης"
           status:
             standalone:
               title: "Αυτόνομη"
@@ -318,6 +322,9 @@ el:
           every_week: "Κάθε εβδομάδα αυτήν την εργάσιμη ημέρα"
           every_two_weeks: "Κάθε δύο εβδομάδες αυτήν την εργάσιμη ημέρα"
           every_four_weeks: "Κάθε τέσσερις εβδομάδες αυτήν την εργάσιμη ημέρα"
+        max_attendees:
+          label: "Μέγιστος αριθμός συμμετεχόντων"
+          placeholder: "Χωρίς όριο"
         allow_chat:
           label: "Ενσωμάτωση συνομιλίας"
         url:

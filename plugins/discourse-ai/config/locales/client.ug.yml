@@ -52,7 +52,7 @@ ug:
         groups: "گۇرۇپپا:"
         no_persona: "تەڭشەلمىدى"
         no_groups: "يوق"
-        edit: "تەھرىر"
+        edit: "تەڭشەك"
         expand_list:
           one: "(%{count} تېخىمۇ كۆپ)"
           other: "(%{count} تېخىمۇ كۆپ)"
@@ -68,19 +68,27 @@ ug:
         select_option: "تاللانما تاللىنىدۇ..."
       translations:
         title: "تەرجىمە"
-        admin_actions:
-          disabled_state:
-            configure: "تەرجىمە سەپلىمىسى"
+        stats:
+          eta_minutes:
+            one: "%{count} مىنۇت"
+            other: "%{count} مىنۇت"
+          eta_hours:
+            one: "%{count} سائەت"
+            other: "%{count} سائەت"
+          eta_days:
+            one: "%{count} كۈن"
+            other: "%{count} كۈن"
         progress_chart:
-          title: "تەرجىمە ئىلگىرىلىشى"
-          completed: "تاماملاندى"
-          remaining: "قالغىنى"
+          bar_done:
+            one: "%{count} يازما"
+            other: "%{count} يازما"
       spam:
         short_title: "ئەخلەت خەت"
         enable: "قوزغات"
         save_button: "ئۆزگەرتىشنى ساقلا"
         test_modal:
           result: "نەتىجە"
+          llm: "LLM"
           run: "سىناقنى ئىجرا قىل"
           spam: "ئەخلەت خەت"
       usage:
@@ -88,6 +96,7 @@ ug:
         summary: "خۇلاسە"
         username: "ئىشلەتكۈچى ئاتى"
         total_requests: "جەمئىي ئىلتىماس"
+        total: "جەمئىي"
         periods:
           custom: "ئىختىيارى..."
       ai_persona:
@@ -145,9 +154,6 @@ ug:
         usage:
           ai_summarization: "خۇلاسە"
           ai_spam: "ئەخلەت خەت"
-        model_description:
-          open_ai-o3: "Open AI نىڭ ئەڭ كۈچلۈك تەپەككۈر ئەندىزىسى"
-          open_ai-gpt-5: "Open AI نىڭ بايراقداق ئەندىزىسى. ساھە ھالقىغان مەسىلىلەرنى ھەل قىلىشقا ماس كېلىدۇ"
         next:
           title: "كېيىنكى"
         tests:
@@ -169,6 +175,7 @@ ug:
         thumbnail_suggestions:
           select: "تاللا"
           selected: "تاللاندى"
+          try_again: "قايتا سىنا"
         image_caption:
           save_caption: "ساقلا"
       embeddings:

@@ -56,8 +56,6 @@ hu:
             identifier:
               title: Csatorna
               help: "pl. #csatorna, @felhasználónév"
-          errors:
-            channel_not_found: "A megadott csatorna nem létezik a Slacken."
         telegram:
           title: "Telegram"
           param:
@@ -91,7 +89,6 @@ hu:
               title: "Név"
             room_id:
               title: "Szoba ID"
-              help: "A szoba „privát azonosítója”. Valahogy így kell kinéznie: !abcdefg:matrix.org"
           errors:
             unknown_room: "Szoba ID érvénytelen"
         zulip:

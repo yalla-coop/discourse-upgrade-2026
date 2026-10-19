@@ -29,14 +29,6 @@ cs:
               label: "Kategorie"
             tags:
               label: "Štítky"
-        llm_tool_triage:
-          fields:
-            model:
-              label: "Model"
-              description: "Výchozí jazykový model používaný pro třídění"
-            tool:
-              label: "Nástroj"
-              description: "Nástroj pro třídění (nástroj nesmí mít definované žádné parametry)"
         llm_triage:
           fields:
             category:
@@ -52,7 +44,7 @@ cs:
         groups: "Skupiny:"
         no_persona: "Nenastaveno"
         no_groups: "Žádná"
-        edit: "Upravit"
+        edit: "Nastavení"
         expand_list:
           one: "(%{count} další)"
           few: "(%{count} další)"
@@ -76,14 +68,28 @@ cs:
         select_option: "Vyberte možnost..."
       translations:
         title: "Překlady"
-        admin_actions:
-          disabled_state:
-            configure: "Nastavit překlady"
-            empty_label: "Automatické překlady jsou zakázány, klikněte níže pro nastavení"
+        stats:
+          eta_minutes:
+            one: "%{count} minutu"
+            few: "%{count} minuty"
+            many: "%{count} minut"
+            other: "%{count} minut"
+          eta_hours:
+            one: "%{count} hodinu"
+            few: "%{count} hodiny"
+            many: "%{count} hodin"
+            other: "%{count} hodin"
+          eta_days:
+            one: "%{count} den"
+            few: "%{count} dny"
+            many: "%{count} dní"
+            other: "%{count} dní"
         progress_chart:
-          title: "Průběh překladu"
-          completed: "Dokončeno"
-          remaining: "Zbývá"
+          bar_done:
+            one: "%{count} příspěvek"
+            few: "%{count} příspěvků"
+            many: "%{count} příspěvky"
+            other: "%{count} příspěvky"
       spam:
         short_title: "Spam"
         last_seven_days: "Posledních 7 dní"
@@ -100,6 +106,7 @@ cs:
         total_requests: "Celkem požadavků"
         request_tokens: "Tokeny požadavku"
         response_tokens: "Tokeny odpovědi"
+        total: "Celkem"
         periods:
           last_day: "Posledních 24 hodin"
           custom: "Vlastní…"
@@ -110,8 +117,6 @@ cs:
         export: "Export"
         import: "Import"
         description: "Popis"
-        tool_details: Zobrazit detaily nástroje
-        tool_details_help: Zobrazí koncovým uživatelům podrobnosti o tom, které nástroje jazykový model spustil.
         user: Uživatel
         save: "Uložit"
         enabled: "Zapnuto?"
@@ -144,12 +149,10 @@ cs:
           run: "Spustit test"
       llms:
         display_name: "Název"
-        enabled_chat_bot: "Povolit výběr AI bota"
         save: "Uložit"
         edit: "Upravit"
         back: "Zpět"
         delete: Smazat
-        seeded_warning: "Tento model je na vašem webu předem nakonfigurován a nelze jej upravovat."
         quotas:
           group: "Skupina"
           max_usages: "Max. použití"
@@ -164,25 +167,11 @@ cs:
         usage:
           ai_summarization: "Shrnout"
           ai_spam: "Spam"
-        model_description:
-          anthropic-claude-opus-4-1: "Nejinteligentnější model společnosti Anthropic"
-          anthropic-claude-sonnet-4-0: "Optimální poměr rychlosti a nákladů"
-          anthropic-claude-3-7-sonnet-latest: "Optimální rovnováha rychlosti a nákladů (předchozí generace)"
-          anthropic-claude-3-5-haiku-latest: "Rychlé a cenově výhodné"
-          google-gemini-2-0-flash: "Lehký, rychlý a cenově efektivní s multimodálním uvažováním (předchozí generace)"
-          google-gemini-2-0-flash-lite: "Cenově efektivní model s nízkou latencí"
-          open_ai-o3: "Nejschopnější model uvažování Open AI"
-          open_ai-o4-mini: "Pokročilý cenově efektivní model uvažování"
-          open_ai-gpt-5: "Vlajkový model Open AI. Je vhodný pro řešení problémů napříč oblastmi."
-          open_router-x-ai-grok-3-beta: "Nejnovější model od xAI"
         next:
           title: "Další"
         tests:
           title: "Spustit test"
           success: "Úspěch!"
-        hints:
-          enabled_chat_bot: "Pokud je tato možnost povolena, mohou uživatelé tento model vybrat při vytváření soukromých zpráv pomocí AI bota."
-          cost_cached_input: "Vstupní náklady na 1 milion tokenů v mezipaměti pro tento model"
         providers:
           aws_bedrock: "AWS Bedrock"
           anthropic: "Anthropic"
@@ -198,8 +187,6 @@ cs:
           mistral: "Mistral"
           open_router: "OpenRouter"
           fake: "Přizpůsobené"
-        provider_fields:
-          enable_responses_api: "Povolit rozhraní API pro odpovědi (vyžadováno u některých modelů OpenAI)"
       related_topics:
         title: "Související témata"
         pill: "Související"
@@ -246,6 +233,7 @@ cs:
           title: "Navrhované miniatury"
           select: "Vybrat"
           selected: "Zaškrtnuté"
+          try_again: "Zkusit znovu"
         image_caption:
           button_label: "Popisek pomocí AI"
           generating: "Generování popisku..."
@@ -283,6 +271,7 @@ cs:
       ai_bot:
         pm_warning: "Zprávy chatbotů s umělou inteligencí jsou pravidelně monitorovány moderátory."
         cancel_streaming: "Zastavit odpověď"
+        try_again: "Zkusit znovu"
         default_pm_prefix: "[Nepojmenovaná SZ od AI bota]"
         shortcut_title: "Začněte SZ s AI botem"
         share: "Kopírovat konverzaci s AI"
@@ -376,7 +365,6 @@ cs:
       discobot_discoveries:
         regular_results: "Témata"
         collapse: "Sbalit"
-        user_setting: "Povolit vyhledávání"
         tooltip:
           actions:
             disable: "Vypnout"

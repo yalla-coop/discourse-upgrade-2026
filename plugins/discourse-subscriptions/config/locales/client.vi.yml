@@ -28,12 +28,6 @@ vi:
             single: "Cập nhật"
           created_at: Tạo bởi
           cancel: hủy
-      subscribe:
-        countries:
-          KI: "Kiribati"
-          RU: "Liên bang Nga"
-          TR: "Thổ Nhĩ Kỳ"
-          VN: "Việt Nam"
       billing:
         email: Email
       admin:
@@ -41,7 +35,7 @@ vi:
           title: Bảng điều khiển
           table:
             head:
-              user: Thành viên
+              user: Người dùng
         products:
           product:
             description: Mô tả
@@ -57,6 +51,6 @@ vi:
           actions: Hành động
         subscriptions:
           subscription:
-            user: Thành viên
+            user: Người dùng
             status: Trạng thái
             created_at: Tạo bởi

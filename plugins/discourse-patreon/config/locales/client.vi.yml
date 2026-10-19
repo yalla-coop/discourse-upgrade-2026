@@ -6,10 +6,6 @@
 
 vi:
   js:
-    login:
-      patreon:
-        name: Patreon
-        title: Đăng nhập bằng Patreon
     patreon:
       group: 'Nhóm'
       filter: 'Lọc'

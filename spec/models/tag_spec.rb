@@ -211,7 +211,7 @@ RSpec.describe Tag do
       SiteSetting.pm_tags_allowed_for_groups = "1|2|3"
       tags = Tag.pm_tags(guardian: Guardian.new(admin), allowed_user: regular_user)
       expect(tags.length).to eq(2)
-      expect(tags.map { |t| t[:id] }).to contain_exactly("tag-0", "tag-1")
+      expect(tags.map { |t| t[:name] }).to contain_exactly("tag-0", "tag-1")
     end
   end
 
@@ -405,6 +405,37 @@ RSpec.describe Tag do
       expect(tag.description.strip).to eq(
         "<div>hi</div>a=0; <a href=\"https://www.discourse.org\">discourse</a>",
       )
+    end
+  end
+
+  describe "localizations" do
+    fab!(:tag)
+
+    it "can have many localizations" do
+      localization1 = Fabricate(:tag_localization, tag:, locale: "ja")
+      localization2 = Fabricate(:tag_localization, tag:, locale: "es")
+
+      expect(tag.localizations).to contain_exactly(localization1, localization2)
+    end
+
+    describe ".get_localization" do
+      it "returns localization for exact locale match" do
+        localization = Fabricate(:tag_localization, tag:, locale: "ja", name: "テスト")
+
+        expect(tag.get_localization("ja")).to eq(localization)
+      end
+
+      it "returns localization for regionless locale fallback" do
+        localization = Fabricate(:tag_localization, tag:, locale: "en")
+
+        expect(tag.get_localization("en_US")).to eq(localization)
+      end
+
+      it "returns nil when no localization exists" do
+        Fabricate(:tag_localization, tag:, locale: "el")
+
+        expect(tag.get_localization("es")).to be_nil
+      end
     end
   end
 end

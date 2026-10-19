@@ -3,6 +3,7 @@
 describe "Admin Color Palette Config Area Page", type: :system do
   fab!(:admin)
   fab!(:color_scheme) { Fabricate(:color_scheme, user_selectable: false, name: "A Test Palette") }
+  fab!(:color_scheme_2, :color_scheme)
 
   let(:config_area) { PageObjects::Pages::AdminColorPaletteConfigArea.new }
   let(:toasts) { PageObjects::Components::Toasts.new }
@@ -10,6 +11,11 @@ describe "Admin Color Palette Config Area Page", type: :system do
   let(:cdp) { PageObjects::CDP.new }
 
   before { sign_in(admin) }
+
+  after do
+    Stylesheet::Manager.rm_cache_folder
+    Stylesheet::Manager.cache.clear
+  end
 
   it "allows editing the palette name" do
     config_area.visit(color_scheme.id)
@@ -84,6 +90,20 @@ describe "Admin Color Palette Config Area Page", type: :system do
     expect(color_scheme.colors.find_by(name: "primary").hex).to eq("abcdef")
   end
 
+  it "supports pasting color codes with and without leading #" do
+    config_area.visit(color_scheme.id)
+
+    config_area.color_palette_editor.input_for_hex("primary").click
+    cdp.copy_paste("#888888")
+
+    expect(config_area.color_palette_editor.input_for_color("primary").value).to eq("#888888")
+
+    config_area.color_palette_editor.input_for_hex("primary").click
+    cdp.copy_paste("#777777")
+
+    expect(config_area.color_palette_editor.input_for_color("primary").value).to eq("#777777")
+  end
+
   it "allows reverting colors to their default values" do
     color_scheme.update!(base_scheme_id: ColorScheme::NAMES_TO_ID_MAP["Dark"])
     color_scheme.colors.create!(name: "primary", hex: "aaaaaa")
@@ -156,11 +176,9 @@ describe "Admin Color Palette Config Area Page", type: :system do
       visible: false,
     )
 
-    try_until_success do
-      expect(get_rgb_color(find("html"), "backgroundColor")).to eq(
-        "rgb(#{"aa".to_i(16)}, #{"33".to_i(16)}, #{"9f".to_i(16)})",
-      )
-    end
+    expect(get_rgb_color(find("html"), "backgroundColor")).to eq(
+      "rgb(#{"aa".to_i(16)}, #{"33".to_i(16)}, #{"9f".to_i(16)})",
+    )
   end
 
   it "doesn't apply changes when editing a palette that's not currently active" do
@@ -190,5 +208,34 @@ describe "Admin Color Palette Config Area Page", type: :system do
     color_scheme.colors.each do |color|
       expect(color.hex).to eq(clipboard_scheme["light"][color.name])
     end
+  end
+
+  it "can toggle light and dark palette as default on default theme" do
+    Theme.find_default.update!(color_scheme: color_scheme)
+
+    config_area.visit(color_scheme.id)
+    expect(page).to have_text(
+      I18n.t(
+        "admin_js.admin.config_areas.color_palettes.color_options.toggle_default_light_on_theme",
+        themeName: "Foundation",
+      ),
+    )
+    expect(page).to have_text(
+      I18n.t(
+        "admin_js.admin.config_areas.color_palettes.color_options.toggle_default_dark_on_theme",
+        themeName: "Foundation",
+      ),
+    )
+    config_area.default_light_on_theme_field.have_value?(true)
+    config_area.default_dark_on_theme_field.have_value?(false)
+    config_area.default_light_on_theme_field.toggle
+    config_area.default_dark_on_theme_field.toggle
+    config_area.form.submit
+    config_area.default_light_on_theme_field.have_value?(false)
+    config_area.default_dark_on_theme_field.have_value?(true)
+
+    config_area.visit(color_scheme_2.id)
+    config_area.default_light_on_theme_field.have_value?(false)
+    config_area.default_dark_on_theme_field.have_value?(false)
   end
 end

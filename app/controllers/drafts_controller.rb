@@ -6,7 +6,6 @@ class DraftsController < ApplicationController
   skip_before_action :check_xhr, :preload_json
 
   INDEX_LIMIT = 50
-  BULK_DESTROY_LIMIT = 30
 
   def index
     params.permit(:offset)
@@ -39,7 +38,7 @@ class DraftsController < ApplicationController
   def create
     raise Discourse::NotFound.new if params[:draft_key].blank?
 
-    if !params[:data].is_a?(String) || params[:data].size > SiteSetting.max_draft_length
+    if params[:data].size > SiteSetting.max_draft_length
       raise Discourse::InvalidParameters.new(:data)
     end
 
@@ -104,7 +103,7 @@ class DraftsController < ApplicationController
       original_tags = data["original_tags"]
 
       if original_text.present?
-        if post = Draft.allowed_draft_posts_for_user(current_user).find_by(id: data["postId"])
+        if post = Post.find_by(id: data["postId"])
           conflict = original_text != post.raw
 
           if post.post_number == 1
@@ -148,11 +147,68 @@ class DraftsController < ApplicationController
     rescue Draft::OutOfSequence
       # nothing really we can do here, if try clearing a draft that is not ours, just skip it.
       # rendering an error causes issues in the composer
-    rescue StandardError
-      return render json: failed_json, status: :unauthorized
+    rescue StandardError => e
+      return render json: failed_json.merge(errors: e), status: :unauthorized
     end
 
     render json: success_json
+  end
+
+  def bulk_destroy
+    params.require(:draft_keys)
+
+    draft_keys = params[:draft_keys]
+    sequences = params[:sequences] || {}
+
+    return render json: success_json.merge(deleted_count: 0) if draft_keys.empty?
+
+    user =
+      if is_api?
+        if @guardian.is_admin?
+          fetch_user_from_params
+        else
+          raise Discourse::InvalidAccess
+        end
+      else
+        current_user
+      end
+
+    # Validate all sequences first (fail fast)
+    sequence_errors = []
+    draft_keys.each do |draft_key|
+      begin
+        current_sequence = DraftSequence.current(user, draft_key)
+        provided_sequence = sequences[draft_key].to_i
+        sequence_errors << draft_key if provided_sequence != current_sequence
+      rescue StandardError
+        # If we can't get sequence for some reason, skip validation for this draft
+        # This maintains the same lenient behavior as the single delete
+      end
+    end
+
+    if sequence_errors.any?
+      render json:
+               failed_json.merge(
+                 errors: "Draft sequence conflict for keys: #{sequence_errors.join(", ")}",
+               ),
+             status: :conflict
+      return
+    end
+
+    # Bulk delete in single transaction
+    deleted_count = 0
+    begin
+      ActiveRecord::Base.transaction do
+        deleted_count = Draft.where(user_id: user.id, draft_key: draft_keys).destroy_all.length
+
+        # Update user draft count
+        UserStat.update_draft_count(user.id)
+      end
+    rescue StandardError => e
+      return render json: failed_json.merge(errors: e.message), status: :internal_server_error
+    end
+
+    render json: success_json.merge(deleted_count: deleted_count)
   end
 
   private

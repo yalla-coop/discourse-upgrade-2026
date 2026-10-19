@@ -9,37 +9,39 @@ module DiscourseAi
         supported_locales =
           SiteSetting.content_localization_supported_locales.presence&.split("|") || []
 
-        result =
-          supported_locales.map do |locale|
-            completion_data =
-              DiscourseAi::Translation::PostCandidates.get_completion_per_locale(locale)
+        if supported_locales.empty?
+          return(
+            render json:
+                     base_result.merge(
+                       {
+                         translation_progress: [],
+                         total: 0,
+                         posts_with_detected_locale: 0,
+                         no_locales_configured: true,
+                       },
+                     )
+          )
+        end
 
-            total = completion_data[:total].to_f
-            done = completion_data[:done].to_f
-            remaining = total - done
+        data = DiscourseAi::Translation::PostCandidates.get_completion_all_locales
 
-            completion_percentage = safe_percentage(done, total)
-            remaining_percentage = safe_percentage(remaining, total)
-
-            {
-              locale: locale,
-              completion_percentage: completion_percentage,
-              remaining_percentage: remaining_percentage,
-            }
-          end
-
-        render json: {
-                 translation_progress: result,
-                 translation_id: DiscourseAi::Configuration::Module::TRANSLATION_ID,
-                 enabled: DiscourseAi::Translation.backfill_enabled?,
-               }
+        render json: base_result.merge(data)
       end
 
       private
 
-      def safe_percentage(part, total)
-        return 0.0 if total <= 0
-        (part / total) * 100
+      def base_result
+        {
+          translation_id: DiscourseAi::Configuration::Module::TRANSLATION_ID,
+          # the progress chart will be empty if max_age_days is 0
+          enabled:
+            DiscourseAi::Translation.enabled? &&
+              SiteSetting.ai_translation_backfill_max_age_days > 0,
+          backfill_enabled: DiscourseAi::Translation.backfill_enabled?,
+          translation_enabled: SiteSetting.ai_translation_enabled,
+          hourly_rate: SiteSetting.ai_translation_backfill_hourly_rate,
+          backfill_max_age_days: SiteSetting.ai_translation_backfill_max_age_days,
+        }
       end
     end
   end

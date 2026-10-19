@@ -13,12 +13,13 @@ class Admin::SearchController < Admin::AdminController
               filter_area: params[:filter_area],
               filter_plugin: params[:plugin],
               filter_categories: Array.wrap(params[:categories]),
-              include_locale_setting: params[:filter_area] == "localization",
+              include_locale_setting:
+                params[:filter_area].blank? || params[:filter_area] == "localization",
               basic_attributes: true,
             ),
           themes_and_components:
             serialize_data(Theme.include_relations.order(:name), BasicThemeSerializer),
-          reports: Reports::ListQuery.call(admin: current_user.admin?),
+          reports: Reports::ListQuery.call,
         )
       end
 
