@@ -2,7 +2,7 @@ import { array, concat, fn, hash } from "@ember/helper";
 import { on } from "@ember/modifier";
 import { getProperties } from "@ember/object";
 import { LinkTo } from "@ember/routing";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import AddCategoryTagClasses from "discourse/components/add-category-tag-classes";
 import AddTopicStatusClasses from "discourse/components/add-topic-status-classes";
 import AnonymousTopicFooterButtons from "discourse/components/anonymous-topic-footer-buttons";
@@ -11,6 +11,7 @@ import CookText from "discourse/components/cook-text";
 import DButton from "discourse/components/d-button";
 import DiscourseBanner from "discourse/components/discourse-banner";
 import DiscourseTopic from "discourse/components/discourse-topic";
+import EmbedTopicFooter from "discourse/components/embed-topic-footer";
 import MoreTopics from "discourse/components/more-topics";
 import PluginOutlet from "discourse/components/plugin-outlet";
 import PostStream from "discourse/components/post-stream";
@@ -27,6 +28,7 @@ import TopicCategory from "discourse/components/topic-category";
 import TopicFooterButtons from "discourse/components/topic-footer-buttons";
 import TopicLocalizedContentToggle from "discourse/components/topic-localized-content-toggle";
 import TopicMap from "discourse/components/topic-map/index";
+import TopicMetadata from "discourse/components/topic-metadata";
 import TopicNavigation from "discourse/components/topic-navigation";
 import TopicProgress from "discourse/components/topic-progress";
 import TopicSkipLinks from "discourse/components/topic-skip-links";
@@ -39,10 +41,9 @@ import ageWithTooltip from "discourse/helpers/age-with-tooltip";
 import bodyClass from "discourse/helpers/body-class";
 import icon from "discourse/helpers/d-icon";
 import hideApplicationFooter from "discourse/helpers/hide-application-footer";
+import hideScrollableContent from "discourse/helpers/hide-scrollable-content";
 import lazyHash from "discourse/helpers/lazy-hash";
 import routeAction from "discourse/helpers/route-action";
-import CategoryChooser from "discourse/select-kit/components/category-chooser";
-import MiniTagChooser from "discourse/select-kit/components/mini-tag-chooser";
 import { and, eq } from "discourse/truth-helpers";
 import { i18n } from "discourse-i18n";
 import booleanString from "../helpers/boolean-string";
@@ -71,28 +72,32 @@ export default <template>
       />
       <AddTopicStatusClasses @topic={{@controller.model}} />
       {{bodyClass (concat "archetype-" @controller.model.archetype)}}
-      <div class="container">
-        <DiscourseBanner
-          @overlay={{@controller.hasScrolled}}
-          @hide={{@controller.model.errorLoading}}
+      {{#unless @controller.shouldHideScrollableContentAbove}}
+        <div class="container">
+          <DiscourseBanner
+            @overlay={{@controller.hasScrolled}}
+            @hide={{@controller.model.errorLoading}}
+          />
+        </div>
+      {{/unless}}
+    {{/if}}
+
+    {{#unless @controller.shouldHideScrollableContentAbove}}
+      {{#if @controller.showSharedDraftControls}}
+        <SharedDraftControls @topic={{@controller.model}} />
+      {{/if}}
+
+      <span>
+        <PluginOutlet
+          @name="topic-above-post-stream"
+          @connectorTagName="div"
+          @outletArgs={{lazyHash
+            model=@controller.model
+            editFirstPost=@controller.editFirstPost
+          }}
         />
-      </div>
-    {{/if}}
-
-    {{#if @controller.showSharedDraftControls}}
-      <SharedDraftControls @topic={{@controller.model}} />
-    {{/if}}
-
-    <span>
-      <PluginOutlet
-        @name="topic-above-post-stream"
-        @connectorTagName="div"
-        @outletArgs={{lazyHash
-          model=@controller.model
-          editFirstPost=@controller.editFirstPost
-        }}
-      />
-    </span>
+      </span>
+    {{/unless}}
 
     {{#if @controller.model.postStream.loaded}}
       {{#if @controller.model.postStream.firstPostPresent}}
@@ -116,71 +121,17 @@ export default <template>
                 @buffered={{@controller.buffered}}
               />
 
-              {{#if @controller.showCategoryChooser}}
-                <div class="edit-category__wrapper">
-                  <PluginOutlet
-                    @name="edit-topic-category"
-                    @outletArgs={{lazyHash
-                      model=@controller.model
-                      buffered=@controller.buffered
-                    }}
-                  >
-                    <CategoryChooser
-                      @value={{@controller.buffered.category_id}}
-                      @onChange={{@controller.topicCategoryChanged}}
-                      class="small"
-                    />
-                  </PluginOutlet>
-                </div>
-              {{/if}}
-
-              {{#if @controller.canEditTags}}
-                <div class="edit-tags__wrapper">
-                  <PluginOutlet
-                    @name="edit-topic-tags"
-                    @outletArgs={{lazyHash
-                      model=@controller.model
-                      buffered=@controller.buffered
-                    }}
-                  >
-                    <MiniTagChooser
-                      @value={{@controller.buffered.tags}}
-                      @onChange={{@controller.topicTagsChanged}}
-                      @options={{hash
-                        filterable=true
-                        categoryId=@controller.buffered.category_id
-                        minimum=@controller.minimumRequiredTags
-                        filterPlaceholder="tagging.choose_for_topic"
-                        useHeaderFilter=true
-                      }}
-                    />
-                  </PluginOutlet>
-                </div>
-              {{/if}}
-
-              <PluginOutlet
-                @name="edit-topic"
-                @connectorTagName="div"
-                @outletArgs={{lazyHash
-                  model=@controller.model
-                  buffered=@controller.buffered
-                }}
-              />
-
-              <div class="edit-controls">
-                <DButton
-                  @action={{@controller.finishedEditingTopic}}
-                  @icon="check"
-                  @ariaLabel="composer.save_edit"
-                  class="btn-primary submit-edit"
-                />
-                <DButton
-                  @action={{@controller.cancelEditingTopic}}
-                  @icon="xmark"
-                  @ariaLabel="composer.cancel"
-                  class="btn-default cancel-edit"
-                />
-
+              <TopicMetadata
+                @buffered={{@controller.buffered}}
+                @model={{@controller.model}}
+                @showCategoryChooser={{@controller.showCategoryChooser}}
+                @canEditTags={{@controller.canEditTags}}
+                @minimumRequiredTags={{@controller.minimumRequiredTags}}
+                @onSave={{@controller.finishedEditingTopic}}
+                @onCancel={{@controller.cancelEditingTopic}}
+                @topicCategoryChanged={{@controller.topicCategoryChanged}}
+                @topicTagsChanged={{@controller.topicTagsChanged}}
+              >
                 {{#if @controller.canRemoveTopicFeaturedLink}}
                   <a
                     href
@@ -192,7 +143,7 @@ export default <template>
                     {{@controller.featuredLinkDomain}}
                   </a>
                 {{/if}}
-              </div>
+              </TopicMetadata>
             </div>
 
           {{else}}
@@ -224,7 +175,7 @@ export default <template>
                   {{on "click" @controller.handleTitleClick}}
                   class="fancy-title"
                 >
-                  {{htmlSafe @controller.model.fancyTitle~}}
+                  {{trustHTML @controller.model.fancyTitle~}}
                   {{~#if @controller.model.details.can_edit~}}
                     <span class="edit-topic__wrapper">
                       {{icon "pencil" class="edit-topic"}}
@@ -332,10 +283,6 @@ export default <template>
             }}
           />
 
-          {{#if @controller.model.has_localized_content}}
-            <TopicLocalizedContentToggle @topic={{@controller.model}} />
-          {{/if}}
-
           {{#if info.renderTimeline}}
             <TopicTimeline
               @info={{info}}
@@ -371,16 +318,14 @@ export default <template>
               @expanded={{info.topicProgressExpanded}}
               @jumpToPost={{@controller.jumpToPost}}
             >
-              <span>
-                <PluginOutlet
-                  @name="before-topic-progress"
-                  @connectorTagName="div"
-                  @outletArgs={{lazyHash
-                    model=@controller.model
-                    jumpToPost=@controller.jumpToPost
-                  }}
-                />
-              </span>
+              <PluginOutlet
+                @name="before-topic-progress"
+                @connectorTagName="div"
+                @outletArgs={{lazyHash
+                  model=@controller.model
+                  jumpToPost=@controller.jumpToPost
+                }}
+              />
               <TopicAdminMenu
                 @topic={{@controller.model}}
                 @toggleMultiSelect={{@controller.toggleMultiSelect}}
@@ -399,6 +344,9 @@ export default <template>
                 @convertToPublicTopic={{@controller.convertToPublicTopic}}
                 @convertToPrivateMessage={{@controller.convertToPrivateMessage}}
               />
+              {{#if @controller.model.has_localized_content}}
+                <TopicLocalizedContentToggle @topic={{@controller.model}} />
+              {{/if}}
             </TopicProgress>
           {{/if}}
 
@@ -423,6 +371,10 @@ export default <template>
                   @outletArgs={{lazyHash model=@controller.model}}
                 />
               </span>
+
+              {{#if @controller.model.postStream.firstPostNotLoaded}}
+                {{hideScrollableContent "above"}}
+              {{/if}}
 
               {{#unless @controller.model.postStream.loadingFilter}}
                 <PostStream
@@ -482,6 +434,10 @@ export default <template>
                   @topic={{@controller.model}}
                 />
               {{/unless}}
+
+              {{#if @controller.model.postStream.lastPostNotLoaded}}
+                {{hideScrollableContent "below"}}
+              {{/if}}
             </div>
             <div id="topic-bottom"></div>
 
@@ -538,7 +494,7 @@ export default <template>
                 {{#if @controller.model.queued_posts_count}}
                   <div class="has-pending-posts">
                     <div>
-                      {{htmlSafe
+                      {{trustHTML
                         (i18n
                           "review.topic_has_pending"
                           count=@controller.model.queued_posts_count
@@ -562,7 +518,6 @@ export default <template>
                 <SlowModeInfo
                   @topic={{@controller.model}}
                   @user={{@controller.currentUser}}
-                  @tagName=""
                 />
 
                 <TopicTimerInfo
@@ -672,12 +627,13 @@ export default <template>
           @name="topic-below-suggested"
           @outletArgs={{lazyHash model=@controller.model}}
         />
+        <EmbedTopicFooter @topic={{@controller.model}} />
       {{/if}}
     {{else}}
       <div class="container">
         <ConditionalLoadingSpinner @condition={{@controller.noErrorYet}}>
           {{#if @controller.model.errorHtml}}
-            <div class="not-found">{{htmlSafe
+            <div class="not-found">{{trustHTML
                 @controller.model.errorHtml
               }}</div>
           {{else}}

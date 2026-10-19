@@ -58,7 +58,7 @@ RSpec.describe SiteSerializer do
     serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
     c1 = serialized[:categories].find { |c| c[:id] == category.id }
 
-    expect(c1[:allowed_tags]).to contain_exactly(tag.name)
+    expect(c1[:allowed_tags]).to contain_exactly({ id: tag.id, name: tag.name, slug: tag.slug })
     expect(c1[:allowed_tag_groups]).to contain_exactly(tag_group.name)
     expect(c1[:required_tag_groups]).to eq([{ name: tag_group_2.name, min_count: 1 }])
   end
@@ -99,6 +99,28 @@ RSpec.describe SiteSerializer do
     serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
     expect(serialized[:user_color_schemes].count).to eq(1)
     expect(serialized[:user_color_schemes][0][:is_dark]).to eq(true)
+  end
+
+  describe "only_theme_color_schemes modifier" do
+    fab!(:theme)
+    fab!(:color_scheme) { Fabricate(:color_scheme, theme_id: theme.id, user_selectable: false) }
+
+    before do
+      theme.update!(user_selectable: true)
+      theme.theme_modifier_set.update!(only_theme_color_schemes: true)
+    end
+
+    it "includes theme color schemes in user_color_schemes when modifier is active" do
+      serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
+      scheme_ids = serialized[:user_color_schemes].map { |s| s[:id] }
+      expect(scheme_ids).to include(color_scheme.id)
+    end
+
+    it "includes only_theme_color_schemes flag in user_themes" do
+      serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
+      theme_data = serialized[:user_themes].find { |t| t["theme_id"] == theme.id }
+      expect(theme_data["only_theme_color_schemes"]).to eq(true)
+    end
   end
 
   it "includes default dark mode scheme" do
@@ -188,8 +210,20 @@ RSpec.describe SiteSerializer do
 
       expect(serialized[:anonymous_default_navigation_menu_tags]).to eq(
         [
-          { name: "dev", description: "some description", pm_only: false },
-          { name: "random", description: tag2.description, pm_only: false },
+          {
+            id: tag.id,
+            name: "dev",
+            slug: tag.slug,
+            description: "some description",
+            pm_only: false,
+          },
+          {
+            id: tag2.id,
+            name: "random",
+            slug: tag2.slug,
+            description: tag2.description,
+            pm_only: false,
+          },
         ],
       )
     end
@@ -308,7 +342,12 @@ RSpec.describe SiteSerializer do
 
         serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
 
-        expect(serialized[:top_tags]).to eq([tag3.name, tag2.name])
+        expect(serialized[:top_tags]).to eq(
+          [
+            { id: tag3.id, name: tag3.name, slug: tag3.slug },
+            { id: tag2.id, name: tag2.name, slug: tag2.slug },
+          ],
+        )
       end
     end
   end
@@ -339,9 +378,27 @@ RSpec.describe SiteSerializer do
 
       expect(serialized[:navigation_menu_site_top_tags]).to eq(
         [
-          { name: tag3.name, description: tag2.description, pm_only: false },
-          { name: tag1.name, description: tag1.description, pm_only: false },
-          { name: tag2.name, description: tag3.description, pm_only: false },
+          {
+            id: tag3.id,
+            name: tag3.name,
+            slug: tag3.slug_for_url,
+            description: tag3.description,
+            pm_only: false,
+          },
+          {
+            id: tag1.id,
+            name: tag1.name,
+            slug: tag1.slug_for_url,
+            description: tag1.description,
+            pm_only: false,
+          },
+          {
+            id: tag2.id,
+            name: tag2.name,
+            slug: tag2.slug_for_url,
+            description: tag2.description,
+            pm_only: false,
+          },
         ],
       )
     end
@@ -352,6 +409,19 @@ RSpec.describe SiteSerializer do
       serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
 
       expect(serialized[:navigation_menu_site_top_tags]).to eq(nil)
+    end
+
+    it "should use slug_for_url for tags with empty slugs" do
+      numeric_tag =
+        Fabricate(:tag, name: "1").tap { |tag| Fabricate.times(10, :topic, tags: [tag]) }
+
+      expect(numeric_tag.slug).to eq("")
+
+      serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
+      numeric_entry =
+        serialized[:navigation_menu_site_top_tags].find { |t| t[:id] == numeric_tag.id }
+
+      expect(numeric_entry[:slug]).to eq("#{numeric_tag.id}-tag")
     end
 
     it "should return an empty array if site has no top tags" do
@@ -464,6 +534,22 @@ RSpec.describe SiteSerializer do
     it "is false when enable_names setting is true and full_name_requirement is hidden_at_signup" do
       SiteSetting.full_name_requirement = "hidden_at_signup"
       expect(site_json[:full_name_visible_in_signup]).to eq(false)
+    end
+  end
+
+  describe "#email_configured" do
+    it "returns true when smtp_address is set" do
+      global_setting :smtp_address, "smtp.example.com"
+
+      serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
+      expect(serialized[:email_configured]).to eq(true)
+    end
+
+    it "returns false when smtp_address is blank" do
+      global_setting :smtp_address, ""
+
+      serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
+      expect(serialized[:email_configured]).to eq(false)
     end
   end
 

@@ -10,6 +10,7 @@ import {
   BUMP_TYPE,
   CLOSE_AFTER_LAST_POST_STATUS_TYPE,
   CLOSE_STATUS_TYPE,
+  DELETE_AFTER_LAST_POST_STATUS_TYPE,
   DELETE_REPLIES_TYPE,
   DELETE_STATUS_TYPE,
   OPEN_STATUS_TYPE,
@@ -64,7 +65,15 @@ export default class EditTopicTimerForm extends Component {
   }
 
   get useDuration() {
-    return this.autoCloseAfterLastPost || this.autoDeleteReplies;
+    return (
+      this.autoCloseAfterLastPost ||
+      this.autoDeleteAfterLastPost ||
+      this.autoDeleteReplies
+    );
+  }
+
+  get autoDeleteAfterLastPost() {
+    return this.statusType === DELETE_AFTER_LAST_POST_STATUS_TYPE;
   }
 
   get autoCloseAfterLastPost() {
@@ -87,6 +96,11 @@ export default class EditTopicTimerForm extends Component {
       this.args.topicTimer.based_on_last_post
     ) {
       return CLOSE_AFTER_LAST_POST_STATUS_TYPE;
+    } else if (
+      statusType === DELETE_STATUS_TYPE &&
+      this.args.topicTimer.based_on_last_post
+    ) {
+      return DELETE_AFTER_LAST_POST_STATUS_TYPE;
     } else {
       return statusType;
     }
@@ -142,6 +156,16 @@ export default class EditTopicTimerForm extends Component {
     }
   }
 
+  get willDeleteImmediately() {
+    if (this.autoDeleteAfterLastPost && this.args.topicTimer.duration_minutes) {
+      const deleteDate = moment(this.args.topic.last_posted_at).add(
+        this.args.topicTimer.duration_minutes,
+        "minutes"
+      );
+      return deleteDate < moment();
+    }
+  }
+
   get willCloseI18n() {
     if (this.autoCloseAfterLastPost) {
       const diff = Math.round(
@@ -149,6 +173,16 @@ export default class EditTopicTimerForm extends Component {
           (1000 * 60 * 60)
       );
       return i18n("topic.auto_close_immediate", { count: diff });
+    }
+  }
+
+  get willDeleteI18n() {
+    if (this.autoDeleteAfterLastPost) {
+      const diff = Math.round(
+        (new Date() - new Date(this.args.topic.last_posted_at)) /
+          (1000 * 60 * 60)
+      );
+      return i18n("topic.auto_delete_immediate", { count: diff });
     }
   }
 
@@ -161,7 +195,11 @@ export default class EditTopicTimerForm extends Component {
   }
 
   get showTopicTimerInfo() {
-    if (!this.statusType || this.willCloseImmediately) {
+    if (
+      !this.statusType ||
+      this.willCloseImmediately ||
+      this.willDeleteImmediately
+    ) {
       return false;
     }
 
@@ -251,6 +289,13 @@ export default class EditTopicTimerForm extends Component {
         <div class="warning">
           {{icon "triangle-exclamation"}}
           {{this.willCloseI18n}}
+        </div>
+      {{/if}}
+
+      {{#if this.willDeleteImmediately}}
+        <div class="warning">
+          {{icon "triangle-exclamation"}}
+          {{this.willDeleteI18n}}
         </div>
       {{/if}}
 

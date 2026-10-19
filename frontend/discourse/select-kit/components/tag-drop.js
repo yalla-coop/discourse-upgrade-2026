@@ -28,8 +28,8 @@ const MORE_TAGS_COLLECTION = "MORE_TAGS_COLLECTION";
 @classNames("tag-drop")
 @selectKitOptions({
   allowAny: false,
-  caretDownIcon: "caret-right",
-  caretUpIcon: "caret-down",
+  caretDownIcon: "angle-right",
+  caretUpIcon: "angle-down",
   fullWidthOnMobile: true,
   filterable: true,
   headerComponent: TagDropHeader,
@@ -75,7 +75,7 @@ export default class TagDrop extends ComboBoxComponent {
   }
 
   modifyNoSelection() {
-    if (this.value === NONE_TAG) {
+    if (this.tag?.name === NONE_TAG) {
       return this.defaultItem(NO_TAG_ID, i18n("tagging.selector_no_tags"));
     } else {
       return this.defaultItem(ALL_TAGS_ID, i18n("tagging.selector_tags"));
@@ -83,7 +83,7 @@ export default class TagDrop extends ComboBoxComponent {
   }
 
   modifySelection(content) {
-    if (this.value === NONE_TAG) {
+    if (this.tag?.name === NONE_TAG) {
       return this.defaultItem(NO_TAG_ID, i18n("tagging.selector_no_tags"));
     }
 
@@ -94,27 +94,27 @@ export default class TagDrop extends ComboBoxComponent {
     return content;
   }
 
-  @computed("value")
+  @computed("tag.slug")
   get tagClass() {
-    return this.value ? `tag-${this.value}` : "tag_all";
+    return this.tag?.slug ? `tag-${this.tag.slug}` : "tag_all";
   }
 
   modifyComponentForRow() {
     return TagRow;
   }
 
-  @computed("tag.id")
+  @computed("tag.name")
   get shortcuts() {
     const shortcuts = [];
 
-    if (this.tag?.id) {
+    if (this.tag?.name) {
       shortcuts.push({
         id: ALL_TAGS_ID,
         name: i18n("tagging.selector_remove_filter"),
       });
     }
 
-    if (this.tag?.id !== NONE_TAG) {
+    if (this.tag?.name !== NONE_TAG) {
       shortcuts.push({
         id: NO_TAG_ID,
         name: i18n("tagging.selector_no_tags"),
@@ -143,7 +143,9 @@ export default class TagDrop extends ComboBoxComponent {
   get content() {
     const topTags = this.topTags.slice(0, this.maxTagsInFilterList);
     if (this.sortTagsAlphabetically && topTags) {
-      return this.shortcuts.concat(topTags.sort());
+      return this.shortcuts.concat(
+        topTags.sort((a, b) => a.name.localeCompare(b.name))
+      );
     } else {
       return this.shortcuts.concat(makeArray(topTags));
     }
@@ -197,28 +199,34 @@ export default class TagDrop extends ComboBoxComponent {
       .sort((a, b) => a.name > b.name)
       .map((r) => {
         const content = this.defaultItem(r.id, r.name);
+        content.slug = r.slug;
         if (!this.currentCategory) {
           content.count = r.count;
         }
         content.pmCount = r.pm_count;
+        if (r.target_tag) {
+          content.targetTag = r.target_tag;
+        }
         return content;
       });
   }
 
   @action
   onChange(value, tag) {
-    let tagName;
+    let tagArg;
 
     if (value === NO_TAG_ID) {
-      tagName = NONE_TAG;
+      tagArg = NONE_TAG;
     } else if (value === ALL_TAGS_ID) {
-      tagName = null;
-    } else if (tag && tag.name) {
-      tagName = tag.name;
+      tagArg = null;
+    } else if (tag?.targetTag) {
+      tagArg = tag.targetTag;
+    } else if (tag) {
+      tagArg = tag;
     }
 
     DiscourseURL.routeToUrl(
-      getCategoryAndTagUrl(this.currentCategory, !this.noSubcategories, tagName)
+      getCategoryAndTagUrl(this.currentCategory, !this.noSubcategories, tagArg)
     );
   }
 }

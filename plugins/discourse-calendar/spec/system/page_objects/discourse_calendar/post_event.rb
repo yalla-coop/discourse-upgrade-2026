@@ -5,6 +5,7 @@ module PageObjects
     module DiscourseCalendar
       class PostEvent < PageObjects::Pages::Base
         TRIGGER_MENU_SELECTOR = ".discourse-post-event-more-menu-trigger"
+
         def open_more_menu
           find(TRIGGER_MENU_SELECTOR).click
           self
@@ -46,6 +47,12 @@ module PageObjects
           find("#dialog-holder .btn-primary").click
           has_css?(".discourse-post-event .status-and-creators .status:not(.closed)")
           has_no_css?("#{TRIGGER_MENU_SELECTOR}.--saving")
+          self
+        end
+
+        def add_to_calendar
+          open_more_menu
+          find(".add-to-calendar .btn").click
           self
         end
 

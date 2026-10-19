@@ -15,6 +15,8 @@ en:
       title: "Solved"
       allow_accepted_answers: "Allow topic owner and staff to mark a reply as the solution"
       solved_topics_auto_close_hours: "Auto close topic (n) hours after the last reply once the topic has been marked as solved."
+      notify_on_staff_accept_solved: "Notify topic creator when staff marks a solution"
+      empty_box_on_unsolved: "Display an empty checkbox next to unsolved topics in the topic list"
       accept_answer: "Select if this reply solves the problem"
       accepted_description: "This is the accepted solution to this topic"
       has_no_accepted_answer: "This topic has no solution"
@@ -35,12 +37,30 @@ en:
       no_solved_topics_title_others: "%{username} has not solved any topics yet"
       no_solved_topics_body: "When you provide a helpful reply to a topic, your reply might be selected as the solution by the topic owner or staff."
       marked_solved_by: "Marked as solved by %{user}"
+      confirm_move_solution_title: "Move solution post"
+      confirm_move_solution:
+        one: "The post you selected is marked as the solution for this topic. If you move it, the topic will be updated to unsolved."
+        other: "One of the posts you selected is marked as the solution for this topic. If you move them, the topic will be updated to unsolved."
+      move_post_confirm:
+        one: "Move post"
+        other: "Move posts"
+      move_post_cancel: "Cancel"
+      dont_show_again: "Got it, don't show me this again"
+      confirm_solved_removal_title: "Solution will be removed"
+      confirm_solved_removal: "This change will disable solutions for this topic and remove the accepted solution."
+      confirm_solved_removal_confirm: "Confirm"
+      confirm_solved_removal_cancel: "Cancel"
 
       no_answer:
         title: Has your question been answered?
         description: "Highlight the answer and help others by using the solution button below the correct reply."
       notification:
         title: "your post was marked as solution"
+      category_type_support:
+        title: "Support"
+        not_support_type: "Heads up! You've disabled the ability to mark posts as solutions in this category. To turn that back on, you'll find the relevant settings in the Settings tab."
+        remove_support_type: "Remove Support type"
+        confirm_remove_support_type: "Are you sure you want to remove the ability to mark posts as solutions in this category? You can re-enable it in the Settings tab later."
 
     topic_statuses:
       solved:

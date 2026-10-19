@@ -39,10 +39,11 @@ Discourse::Application.configure do
 
   config.action_mailer.smtp_settings =
     if GlobalSetting.try(:use_smtp_environment_in_development)
-      GlobalSetting.smtp_settings || { address: "localhost", port: 1025 }
+      GlobalSetting.smtp_settings ||
+        { address: "localhost", port: ENV["DISCOURSE_LOCAL_EMAIL_PORT"] || 1025 }
     else
       # we recommend you use mailpit: https://github.com/axllent/mailpit/
-      { address: "localhost", port: 1025 }
+      { address: "localhost", port: ENV["DISCOURSE_LOCAL_EMAIL_PORT"] || 1025 }
     end
 
   config.action_mailer.raise_delivery_errors = true
@@ -80,7 +81,7 @@ Discourse::Application.configure do
   end
 
   if ENV["DISCOURSE_SKIP_CSS_WATCHER"] != "1" &&
-       (defined?(Rails::Server) || defined?(Puma) || defined?(Unicorn) || defined?(Pitchfork))
+       (defined?(Rails::Server) || defined?(Unicorn) || defined?(Pitchfork))
     require "stylesheet/watcher"
     STDERR.puts "Starting CSS change watcher"
     @watcher = Stylesheet::Watcher.watch

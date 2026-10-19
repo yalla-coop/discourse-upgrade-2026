@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe "Param input", type: :system do
+RSpec.describe "Param input" do
   ALL_PARAMS_SQL = <<~SQL
     -- [params]
     -- int          :int
@@ -62,7 +62,7 @@ RSpec.describe "Param input", type: :system do
   end
 
   it "correctly displays parameter input boxes" do
-    visit("/admin/plugins/explorer/queries/#{all_params_query.id}")
+    visit("/admin/plugins/discourse-data-explorer/queries/#{all_params_query.id}")
 
     DiscourseDataExplorer::Parameter
       .create_from_sql(ALL_PARAMS_SQL)

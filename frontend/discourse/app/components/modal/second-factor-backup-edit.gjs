@@ -1,13 +1,13 @@
+/* eslint-disable ember/no-tracked-properties-from-args */
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import BackupCodes from "discourse/components/backup-codes";
 import ConditionalLoadingSection from "discourse/components/conditional-loading-section";
 import DButton from "discourse/components/d-button";
 import DModal from "discourse/components/d-modal";
 import { debounce } from "discourse/lib/decorators";
-import { SECOND_FACTOR_METHODS } from "discourse/models/user";
 import { i18n } from "discourse-i18n";
 
 export default class SecondFactorBackupEdit extends Component {
@@ -20,7 +20,6 @@ export default class SecondFactorBackupEdit extends Component {
   remainingCodes =
     this.args.model.secondFactor.second_factor_remaining_backup_codes;
   @tracked backupCodes;
-  @tracked secondFactorMethod = SECOND_FACTOR_METHODS.TOTP;
 
   @action
   copyBackupCode(successful) {
@@ -99,14 +98,14 @@ export default class SecondFactorBackupEdit extends Component {
         </ConditionalLoadingSection>
 
         {{#if this.backupEnabled}}
-          {{htmlSafe
+          {{trustHTML
             (i18n
               "user.second_factor_backup.remaining_codes"
               count=this.remainingCodes
             )
           }}
         {{else}}
-          {{htmlSafe (i18n "user.second_factor_backup.not_enabled")}}
+          {{trustHTML (i18n "user.second_factor_backup.not_enabled")}}
         {{/if}}
       </:body>
       <:footer>

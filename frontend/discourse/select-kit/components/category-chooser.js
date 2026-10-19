@@ -1,5 +1,5 @@
 import { computed, set } from "@ember/object";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import { isNone } from "@ember/utils";
 import { classNames } from "@ember-decorators/component";
 import { categoryBadgeHTML } from "discourse/helpers/category-link";
@@ -22,6 +22,7 @@ import { pluginApiIdentifiers, selectKitOptions } from "./select-kit";
   scopedCategoryId: null,
   prioritizedCategoryId: null,
   readOnlyCategoryId: null,
+  displayCategoryDescription: true,
 })
 @pluginApiIdentifiers(["category-chooser"])
 export default class CategoryChooser extends ComboBoxComponent {
@@ -54,10 +55,12 @@ export default class CategoryChooser extends ComboBoxComponent {
       const isString = typeof none === "string";
       return this.defaultItem(
         null,
-        htmlSafe(i18n(isString ? this.selectKit.options.none : "category.none"))
+        trustHTML(
+          i18n(isString ? this.selectKit.options.none : "category.none")
+        )
       );
     } else if (this.selectKit.options.readOnlyCategoryId) {
-      return this.defaultItem(null, htmlSafe(i18n("category.choose")));
+      return this.defaultItem(null, trustHTML(i18n("category.choose")));
     } else if (this.selectKit.options.allowUncategorized) {
       return Category.findUncategorized();
     } else {
@@ -66,7 +69,7 @@ export default class CategoryChooser extends ComboBoxComponent {
         10
       );
       if (!defaultCategoryId || defaultCategoryId < 0) {
-        return this.defaultItem(null, htmlSafe(i18n("category.choose")));
+        return this.defaultItem(null, trustHTML(i18n("category.choose")));
       }
     }
   }
@@ -78,7 +81,7 @@ export default class CategoryChooser extends ComboBoxComponent {
       set(
         content,
         "label",
-        htmlSafe(
+        trustHTML(
           categoryBadgeHTML(category, {
             link: false,
             hideParent: category ? !!category.parent_category_id : true,
@@ -150,7 +153,7 @@ export default class CategoryChooser extends ComboBoxComponent {
     prioritizedCategoryId = null,
   } = {}) {
     const categories = this.fixedCategoryPositionsOnCreate
-      ? Category.list()
+      ? Category.sortCategories(Category.list())
       : Category.listByActivity();
 
     let { readOnlyCategoryId } = this.selectKit.options;

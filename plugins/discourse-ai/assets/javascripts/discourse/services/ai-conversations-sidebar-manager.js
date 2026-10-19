@@ -1,8 +1,8 @@
 import { tracked } from "@glimmer/tracking";
+import { trackedArray } from "@ember/reactive/collections";
 import { scheduleOnce } from "@ember/runloop";
 import Service, { service } from "@ember/service";
-import { htmlSafe } from "@ember/template";
-import { TrackedArray } from "@ember-compat/tracked-built-ins";
+import { trustHTML } from "@ember/template";
 import { ajax } from "discourse/lib/ajax";
 import discourseDebounce from "discourse/lib/debounce";
 import { autoUpdatingRelativeAge } from "discourse/lib/formatter";
@@ -24,8 +24,9 @@ export default class AiConversationsSidebarManager extends Service {
   @service router;
 
   @tracked topics = [];
-  @tracked sections = new TrackedArray();
+  @tracked sections = trackedArray();
   @tracked isLoading = true;
+  @tracked lastKnownAppURL = null;
 
   api = null;
   isFetching = false;
@@ -102,10 +103,12 @@ export default class AiConversationsSidebarManager extends Service {
   forceCustomSidebar() {
     document.body.classList.add("has-ai-conversations-sidebar");
     if (!this.sidebarState.isForcingSidebar) {
+      this._captureLastKnownAppURL();
       this.appEvents.trigger("discourse-ai:force-conversations-sidebar");
     }
 
     this.sidebarState.isForcingSidebar = true;
+    this.sidebarState.forcingSidebarPanel = AI_CONVERSATIONS_PANEL;
 
     // calling this before fetching data
     // helps avoid flash of main sidebar mode
@@ -159,25 +162,34 @@ export default class AiConversationsSidebarManager extends Service {
     document.body.classList.remove("has-ai-conversations-sidebar");
     document.body.classList.remove("has-empty-ai-conversations-sidebar");
 
-    // Only reset if no other route has claimed the sidebar in its activate() hook
     const isStillAiPanel =
       this.sidebarState.currentPanel?.key === AI_CONVERSATIONS_PANEL;
 
-    if (this.sidebarState.isForcingSidebar && isStillAiPanel) {
-      this.sidebarState.setPanel(MAIN_PANEL);
+    // Only clear forcing if we were the ones who set it
+    const weSetForcing =
+      this.sidebarState.forcingSidebarPanel === AI_CONVERSATIONS_PANEL;
+
+    if (this.sidebarState.isForcingSidebar && weSetForcing) {
+      if (isStillAiPanel) {
+        // No other route claimed the sidebar, reset to main panel
+        this.sidebarState.setPanel(MAIN_PANEL);
+      }
+      // Clear the forcing flag since we set it and we're leaving
       this.sidebarState.isForcingSidebar = false;
+      this.sidebarState.forcingSidebarPanel = null;
       this.appEvents.trigger("discourse-ai:stop-forcing-conversations-sidebar");
     }
 
     this._removeScrollListener();
   }
 
-  get lastKnownAppURL() {
+  _captureLastKnownAppURL() {
     const lastForumUrl = this.routeHistory.history.find((url) => {
       return !url.startsWith("/discourse-ai");
     });
 
-    return lastForumUrl || this.router.urlFor(`discovery.${defaultHomepage()}`);
+    this.lastKnownAppURL =
+      lastForumUrl || this.router.urlFor(`discovery.${defaultHomepage()}`);
   }
 
   async fetchMessages() {
@@ -239,7 +251,7 @@ export default class AiConversationsSidebarManager extends Service {
     const todaySection = {
       name: "today",
       title: i18n("discourse_ai.ai_bot.conversations.today"),
-      links: new TrackedArray(),
+      links: trackedArray(),
     };
 
     fresh.push(todaySection);
@@ -280,7 +292,7 @@ export default class AiConversationsSidebarManager extends Service {
           default:
             title = autoUpdatingRelativeAge(new Date(t.last_posted_at));
         }
-        sec = { name: dateGroup, title, links: new TrackedArray() };
+        sec = { name: dateGroup, title, links: trackedArray() };
         fresh.push(sec);
       }
 
@@ -294,7 +306,7 @@ export default class AiConversationsSidebarManager extends Service {
       });
     });
 
-    this.sections = new TrackedArray(fresh);
+    this.sections = trackedArray(fresh);
 
     // register each new section once
     for (let sec of fresh) {
@@ -326,7 +338,7 @@ export default class AiConversationsSidebarManager extends Service {
           }
 
           get text() {
-            return htmlSafe(sec.title);
+            return trustHTML(sec.title);
           }
 
           get links() {

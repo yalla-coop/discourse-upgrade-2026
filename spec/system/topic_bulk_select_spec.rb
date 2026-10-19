@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-describe "Topic bulk select", type: :system do
+describe "Topic bulk select" do
   fab!(:topics) { Fabricate.times(10, :post).map(&:topic) }
   fab!(:admin)
   fab!(:user)
@@ -46,27 +46,98 @@ describe "Topic bulk select", type: :system do
 
       expect(page).to have_text(I18n.t("js.topics.none.education.unread"))
     end
-  end
 
-  context "when dismissing new topics" do
-    fab!(:topic) { Fabricate(:topic, user: user) }
-    fab!(:post1) { create_post(user: user, topic: topic) }
+    it "turns off bulk select after dismissing" do
+      other_topic = Fabricate(:topic, user: admin)
+      create_post(user: admin, topic: other_topic)
+      create_post(topic: other_topic)
 
-    it "removes the topics from the list" do
       sign_in(admin)
-      visit("/new")
+      visit("/unread")
 
       topic_list_header.click_bulk_select_button
-      expect(topic_list).to have_topic_checkbox(topic)
-
       topic_list.click_topic_checkbox(topic)
 
       topic_list_header.click_bulk_select_topics_dropdown
-      topic_list_header.click_bulk_button("dismiss-new")
+      topic_list_header.click_bulk_button("dismiss-unread")
 
       topic_bulk_actions_modal.click_dismiss_confirm
 
-      expect(page).to have_text(I18n.t("js.topics.none.education.new"))
+      expect(topic_list).to have_topic(other_topic)
+      expect(topic_list).to have_no_topic_checkbox(other_topic)
+    end
+  end
+
+  context "when dismissing new topics" do
+    fab!(:topic) { Fabricate(:topic, user:) }
+    fab!(:post1) { create_post(user:, topic:) }
+
+    let(:topic_list_controls) { PageObjects::Components::TopicListControls.new }
+
+    context "with the bulk actions dropdown" do
+      it "removes the topics from the list" do
+        sign_in(admin)
+        visit("/new")
+
+        topic_list_header.click_bulk_select_button
+        expect(topic_list).to have_topic_checkbox(topic)
+
+        topic_list.click_topic_checkbox(topic)
+
+        topic_list_header.click_bulk_select_topics_dropdown
+        topic_list_header.click_bulk_button("dismiss-new")
+
+        expect(page).to have_text(I18n.t("js.topics.none.education.new"))
+      end
+
+      it "turns off bulk select after dismissing" do
+        other_topic = Fabricate(:topic, user:)
+        create_post(user:, topic: other_topic)
+
+        sign_in(admin)
+        visit("/new")
+
+        topic_list_header.click_bulk_select_button
+        topic_list.click_topic_checkbox(topic)
+
+        topic_list_header.click_bulk_select_topics_dropdown
+        topic_list_header.click_bulk_button("dismiss-new")
+
+        expect(topic_list).to have_topic(other_topic)
+        expect(topic_list).to have_no_topic_checkbox(other_topic)
+      end
+    end
+
+    context "with the dismiss new button" do
+      it "removes the topics from the list" do
+        sign_in(admin)
+        visit("/new")
+
+        topic_list_header.click_bulk_select_button
+        expect(topic_list).to have_topic_checkbox(topic)
+
+        topic_list.click_topic_checkbox(topic)
+
+        topic_list_controls.dismiss_new
+
+        expect(page).to have_text(I18n.t("js.topics.none.education.new"))
+      end
+
+      it "turns off bulk select after dismissing" do
+        other_topic = Fabricate(:topic, user:)
+        create_post(user:, topic: other_topic)
+
+        sign_in(admin)
+        visit("/new")
+
+        topic_list_header.click_bulk_select_button
+        topic_list.click_topic_checkbox(topic)
+
+        topic_list_controls.dismiss_new
+
+        expect(topic_list).to have_topic(other_topic)
+        expect(topic_list).to have_no_topic_checkbox(other_topic)
+      end
     end
   end
 
@@ -97,9 +168,9 @@ describe "Topic bulk select", type: :system do
 
       topic_bulk_actions_modal.tag_selector.expand
       topic_bulk_actions_modal.tag_selector.search(tag1.name)
-      topic_bulk_actions_modal.tag_selector.select_row_by_value(tag1.name)
+      topic_bulk_actions_modal.tag_selector.select_row_by_name(tag1.name)
       topic_bulk_actions_modal.tag_selector.search(tag2.name)
-      topic_bulk_actions_modal.tag_selector.select_row_by_value(tag2.name)
+      topic_bulk_actions_modal.tag_selector.select_row_by_name(tag2.name)
 
       topic_bulk_actions_modal.click_bulk_topics_confirm
 
@@ -149,9 +220,9 @@ describe "Topic bulk select", type: :system do
 
         topic_bulk_actions_modal.tag_selector.expand
         topic_bulk_actions_modal.tag_selector.search(restricted_tag.name)
-        topic_bulk_actions_modal.tag_selector.select_row_by_value(restricted_tag.name)
+        topic_bulk_actions_modal.tag_selector.select_row_by_name(restricted_tag.name)
         topic_bulk_actions_modal.tag_selector.search(tag1.name)
-        topic_bulk_actions_modal.tag_selector.select_row_by_value(tag1.name)
+        topic_bulk_actions_modal.tag_selector.select_row_by_name(tag1.name)
 
         topic_bulk_actions_modal.click_bulk_topics_confirm
 
@@ -400,6 +471,22 @@ describe "Topic bulk select", type: :system do
 
       expect(topic_list).to have_checkbox_selected_on_row(1)
     end
+
+    it "opens topic in new window when pressing meta+Enter" do
+      sign_in(admin)
+      visit("/latest")
+
+      topic_list_header.click_bulk_select_button
+
+      new_window =
+        window_opened_by do
+          find(".topic-list-item[data-topic-id='#{topics.last.id}'] a.raw-topic-link").send_keys(
+            %i[meta return],
+          )
+        end
+
+      within_window(new_window) { expect(topic_page).to have_topic_title(topics.last.title) }
+    end
   end
 
   context "when changing topic notification levels" do
@@ -430,6 +517,33 @@ describe "Topic bulk select", type: :system do
 
       expect(topic_list).to have_no_topic(topics.first)
       expect(topic_list).to have_no_topic(topics.second)
+    end
+  end
+
+  context "when changing category" do
+    fab!(:destination_category, :category)
+    fab!(:restricted_tag, :tag)
+
+    before do
+      SiteSetting.tagging_enabled = true
+      topics.first.update!(tags: [restricted_tag])
+      topics.first.category.update!(tags: [restricted_tag])
+    end
+
+    it "shows errors in the modal when some topics cannot be moved due to tag restrictions" do
+      original_category = topics.first.category
+      sign_in(admin)
+      visit("/latest")
+
+      open_bulk_actions_modal([topics.first], "update-category")
+
+      topic_bulk_actions_modal.category_selector.expand
+      topic_bulk_actions_modal.category_selector.select_row_by_value(destination_category.id)
+      topic_bulk_actions_modal.click_bulk_topics_confirm
+
+      expect(topic_bulk_actions_modal).to have_errors("could not be updated")
+
+      expect(topics.first.reload.category).to eq(original_category)
     end
   end
 end

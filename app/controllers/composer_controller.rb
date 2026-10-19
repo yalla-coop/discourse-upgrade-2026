@@ -15,7 +15,9 @@ class ComposerController < ApplicationController
     # allowed_names is necessary just for new private messages.
     @allowed_names =
       if params[:allowed_names].present?
-        raise Discourse.InvalidParameters(:allowed_names) if !params[:allowed_names].is_a?(Array)
+        if !params[:allowed_names].is_a?(Array)
+          raise Discourse::InvalidParameters.new(:allowed_names)
+        end
         params[:allowed_names] << current_user.username
       else
         []
@@ -122,7 +124,19 @@ class ComposerController < ApplicationController
   end
 
   def is_user_allowed?(user, user_ids, group_ids)
-    user_ids.include?(user.id) || user.group_ids.any? { |group_id| group_ids.include?(group_id) }
+    user_ids.include?(user.id) ||
+      user.group_ids.any? do |group_id|
+        group_ids.include?(group_id) && visible_group_ids_for_allowed_check.include?(group_id)
+      end
+  end
+
+  def visible_group_ids_for_allowed_check
+    @visible_group_ids_for_allowed_check ||=
+      if @allowed_names.present?
+        Group.members_visible_groups(current_user).where(name: @allowed_names).pluck(:id).to_set
+      else
+        topic_allowed_group_ids || Set.new
+      end
   end
 
   def users

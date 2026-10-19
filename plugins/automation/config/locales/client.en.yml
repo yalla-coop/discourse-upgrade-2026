@@ -1,4 +1,11 @@
 en:
+  admin_js:
+    admin:
+      api:
+        scopes:
+          descriptions:
+            automation:
+              trigger_automation: "Trigger an automation via the API"
   js:
     admin:
       logs:
@@ -54,8 +61,6 @@ en:
             label: Body
           delay:
             label: Delay (minutes)
-          prefers_encrypt:
-            label: Encrypts PM if available
         group:
           label: Group
         text:
@@ -454,6 +459,9 @@ en:
           runs_today: "%{count} today"
           runs_this_week: "%{count} this week"
           runs_this_month: "%{count} this month"
+          recent_errors:
+            one: "%{count} error recently"
+            other: "%{count} errors recently"
           runs:
             label: Runs
           name:

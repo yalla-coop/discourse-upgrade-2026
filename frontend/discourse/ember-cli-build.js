@@ -3,7 +3,6 @@
 const EmberApp = require("ember-cli/lib/broccoli/ember-app");
 const path = require("path");
 const mergeTrees = require("broccoli-merge-trees");
-const { parsePluginClientSettings } = require("./lib/site-settings-plugin");
 const generateScriptsTree = require("./lib/scripts");
 const funnel = require("broccoli-funnel");
 const DeprecationSilencer = require("deprecation-silencer");
@@ -19,6 +18,7 @@ const {
   CustomizeChunkUrlPlugin,
 } = require("./lib/webpack-customize-chunk-url-plugin");
 const { BroccoliMergeFiles } = require("broccoli-merge-files");
+const { mkdirSync } = require("fs");
 
 process.env.BROCCOLI_ENABLED_MEMOIZE = true;
 
@@ -50,7 +50,9 @@ function compatModulesFor(name) {
 
 module.exports = function (defaults) {
   const discourseRoot = path.resolve("../..");
-  const vendorJs = discourseRoot + "/vendor/assets/javascripts/";
+  mkdirSync(path.join(discourseRoot, "app/assets/generated"), {
+    recursive: true,
+  });
 
   // Silence deprecations which we are aware of - see `lib/deprecation-silencer.js`
   DeprecationSilencer.silence(console, "warn");
@@ -109,7 +111,7 @@ module.exports = function (defaults) {
           compatModulesFor("dialog-holder"),
         ]),
         {
-          watching: ["../discourse-markdown-it"],
+          watching: ["../discourse-markdown-it", "../../app/assets/generated"],
         }
       ),
     },
@@ -138,7 +140,6 @@ module.exports = function (defaults) {
   }
 
   let extraPublicTrees = [
-    parsePluginClientSettings(discourseRoot, vendorJs, app),
     funnel(`${discourseRoot}/public/javascripts`, { destDir: "javascripts" }),
     applyTerser(generateScriptsTree(app)),
     pluginTrees,

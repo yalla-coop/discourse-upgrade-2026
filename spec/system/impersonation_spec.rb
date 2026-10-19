@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-describe "Impersonation", type: :system do
+describe "Impersonation" do
   fab!(:admin)
   fab!(:user)
 
   let(:dialog) { PageObjects::Components::Dialog.new }
 
   before do
-    SiteSetting.experimental_impersonation = true
+    SiteSetting.impersonate_without_logout = true
 
     sign_in(admin)
   end

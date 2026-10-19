@@ -54,6 +54,8 @@
 !/plugins/discourse-graphviz
 !/plugins/discourse-rss-polling
 !/plugins/discourse-math
+/plugins/discourse-math/public/*/katex
+/plugins/discourse-math/public/*/mathjax
 !/plugins/discourse-chat-integration
 !/plugins/discourse-data-explorer
 !/plugins/discourse-post-voting
@@ -91,6 +93,10 @@
 !/.vscode/extensions.json
 !/.vscode/*.sample
 
+# Same for Zed config
+/.zed/*
+!/.zed/*.sample
+
 # Front-end
 dist
 node_modules
@@ -119,6 +125,10 @@ openapi/*
 
 # Types
 frontend/discourse-types/declarations
+frontend/discourse-types/external-types
+frontend/discourse-types/external-types.d.ts
+frontend/discourse-i18n/src/index.d.ts
+frontend/discourse-i18n/src/index.d.ts.map
 *.tsbuildinfo
 
 # discourse-ai evals
@@ -129,6 +139,8 @@ frontend/discourse-types/declarations
 # AI customization
 /.claude
 /.cursor
+.playwright-mcp
+/frontend/discourse-types/dts-generator.js
 
 # Contract check credentials (never commit)
 /contract/.local/

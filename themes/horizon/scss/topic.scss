@@ -13,15 +13,12 @@
 }
 
 .timeline-container .topic-timeline {
-  min-width: unset; // why we have this?
-
   .timeline-scrollarea {
     border-left: 1px solid var(--accent-color);
 
     .timeline-scroller {
       @include viewport.from(lg) {
         margin-left: -4.5px;
-        background: var(--d-content-background);
         height: 40px !important; // height is coming from element style have no other choice
       }
 
@@ -33,6 +30,7 @@
 
     .timeline-handle {
       background-color: var(--accent-color);
+      outline: 3px solid var(--d-content-background);
 
       @include viewport.from(lg) {
         width: 8px;
@@ -60,7 +58,7 @@ body:not(.d-toc-installed) {
     grid-template-columns: auto 8em;
 
     @media screen and (width <= 924px) {
-      grid-template-columns: auto auto;
+      grid-template-columns: auto;
     }
   }
 

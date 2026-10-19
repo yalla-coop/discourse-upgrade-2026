@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-describe "Composer Form Templates", type: :system do
+describe "Composer Form Templates" do
   fab!(:user) { Fabricate(:user, refresh_auto_groups: true) }
   fab!(:form_template_1) do
     Fabricate(
@@ -126,6 +126,11 @@ describe "Composer Form Templates", type: :system do
           attributes:
             none_label: "Select an item"
             label: "multi-select"
+        - type: composer
+          id: 7
+          attributes:
+            label: "composer"
+            placeholder: "Enter rich text here"
           ),
     )
   end
@@ -213,7 +218,7 @@ describe "Composer Form Templates", type: :system do
   let(:cdp) { PageObjects::CDP.new }
 
   before do
-    SiteSetting.experimental_form_templates = true
+    SiteSetting.enable_form_templates = true
     SiteSetting.authorized_extensions = "*"
     sign_in user
   end
@@ -538,12 +543,17 @@ describe "Composer Form Templates", type: :system do
     expect(page).to have_css(".d-editor-preview", text: "Option 4")
 
     message = "This is a test message!"
-    find("textarea").fill_in(with: message)
+    composer.fill_form_template_field("textarea", message)
 
     expect(page).to have_css(".d-editor-preview", text: message)
 
     attach_file("5-uploader", "#{Rails.root}/spec/fixtures/images/logo.png", make_visible: true)
     expect(page).to have_css(".d-editor-preview img")
+
+    composer_message = "This is **bold** composer content"
+    composer.fill_form_template_field("composer", composer_message)
+
+    expect(page).to have_css(".d-editor-preview", text: "This is bold composer content")
   end
 
   context "when using tagchooser" do
@@ -621,6 +631,28 @@ describe "Composer Form Templates", type: :system do
       mini_tag_chooser.unselect_by_name(tag1.name)
 
       expect(mini_tag_chooser).to have_no_selection
+    end
+  end
+
+  context "when a category has a topic title placeholder" do
+    fab!(:category_with_title_placeholder) do
+      Fabricate(:category, topic_title_placeholder: "Describe your issue briefly")
+    end
+
+    it "shows custom topic title placeholder in the composer" do
+      category_page.visit(category_with_title_placeholder)
+      category_page.new_topic_button.click
+
+      expect(page).to have_field("reply-title", placeholder: "Describe your issue briefly")
+    end
+
+    it "falls back to default placeholder if category topic title placeholder is nil" do
+      SiteSetting.topic_featured_link_enabled = false
+      category_with_title_placeholder.update!(topic_title_placeholder: nil)
+      category_page.visit(category_with_title_placeholder)
+      category_page.new_topic_button.click
+
+      expect(find("#reply-title")[:placeholder]).to eq(I18n.t("js.composer.title_placeholder"))
     end
   end
 end

@@ -792,6 +792,15 @@ RSpec.describe PostAlerter do
             ).by(1).and change(post3.user.notifications, :count).by(1)
     end
 
+    it "notifies users who posted with staff colour" do
+      post2 = Fabricate(:post, topic: topic, post_type: Post.types[:moderator_action])
+
+      expect { post }.to change(other_post.user.notifications, :count).by(1).and change(
+              post2.user.notifications,
+              :count,
+            ).by(1)
+    end
+
     it "notifies only last max_here_mentioned users" do
       SiteSetting.max_here_mentioned = 2
       3.times { Fabricate(:post, topic: topic) }
@@ -1685,6 +1694,7 @@ RSpec.describe PostAlerter do
     end
 
     it "notifies staff user about whispered reply" do
+      SiteSetting.whispers_allowed_groups = "#{Group::AUTO_GROUPS[:staff]}"
       admin1 = Fabricate(:admin)
       admin2 = Fabricate(:admin)
 
@@ -2211,6 +2221,22 @@ RSpec.describe PostAlerter do
         ).to eq(1)
       end
 
+      it "triggers a watching_first_post notification even when tag edit notifications are disabled" do
+        SiteSetting.disable_tags_edit_notifications = true
+
+        expect {
+          PostRevisor.new(post).revise!(
+            Fabricate(:user, refresh_auto_groups: true),
+            tags: [other_tag.name, watched_tag.name],
+          )
+        }.to change {
+          user
+            .notifications
+            .where(notification_type: Notification.types[:watching_first_post])
+            .count
+        }.by(1)
+      end
+
       it "doesn't trigger a notification if topic is unlisted" do
         post.topic.update_column(:visible, false)
 
@@ -2457,13 +2483,9 @@ RSpec.describe PostAlerter do
         smtp_server: "smtp.gmail.com",
         smtp_port: 587,
         smtp_ssl_mode: Group.smtp_ssl_modes[:starttls],
-        imap_server: "imap.gmail.com",
-        imap_port: 993,
-        imap_ssl: true,
         email_username: "discourse@example.com",
         email_password: "password",
         smtp_enabled: true,
-        imap_enabled: true,
       )
     end
 
@@ -2633,6 +2655,29 @@ RSpec.describe PostAlerter do
       expect(email.to).to contain_exactly(group_user1.user.email)
       expect(email.cc).to eq(nil)
       expect(email.subject).to eq("[Discourse] [PM] #{topic.title}")
+    end
+
+    it "excludes users with email_messages_level set to never from group SMTP emails" do
+      NotificationEmailer.enable
+
+      incoming_email_post = create_post_with_incoming
+      topic = incoming_email_post.topic
+
+      # Get one of the topic allowed users and set their email preference to never
+      topic_allowed_user = topic.topic_allowed_users.first
+      topic_allowed_user.user.user_option.update!(
+        email_messages_level: UserOption.email_level_types[:never],
+      )
+
+      post = Fabricate(:post, topic: topic.reload)
+
+      PostAlerter.new.after_save_post(post, true)
+
+      # The group SMTP email should not include the user who has email disabled
+      email = ActionMailer::Base.deliveries.last
+      expect(email.from).to eq([group.email_username])
+      expect(email.to).not_to include(topic_allowed_user.user.email)
+      expect(email.cc).not_to include(topic_allowed_user.user.email)
     end
 
     it "skips sending a notification email to the cc address that was added on the same post with an incoming email" do

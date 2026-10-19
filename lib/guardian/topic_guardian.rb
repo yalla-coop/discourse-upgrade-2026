@@ -10,6 +10,7 @@ module TopicGuardian
   def can_review_topic?(topic)
     return false if anonymous? || topic.nil?
     return true if is_staff?
+    return false if !can_see_topic?(topic)
 
     is_category_group_moderator?(topic.category)
   end
@@ -143,6 +144,7 @@ module TopicGuardian
 
   def can_recover_topic?(topic)
     return false if topic.blank?
+    return false if !is_staff? && !can_see_topic?(topic, false)
 
     if is_category_group_moderator?(topic.category) ||
          user&.in_any_groups?(SiteSetting.delete_all_posts_and_topics_allowed_groups_map)
@@ -156,7 +158,7 @@ module TopicGuardian
     return false if topic.trashed?
     return false if topic.is_category_topic?
     return false if Discourse.static_doc_topic_ids.include?(topic.id)
-    return true if is_category_group_moderator?(topic.category)
+    return true if is_category_group_moderator?(topic.category) && can_see_topic?(topic)
     return true if user&.in_any_groups?(SiteSetting.delete_all_posts_and_topics_allowed_groups_map)
 
     is_my_own?(topic) && can_delete_own_topic?(topic)
@@ -286,10 +288,6 @@ module TopicGuardian
     is_staff? || @user.has_trust_level?(TrustLevel[4])
   end
 
-  def can_get_access_to_topic?(topic)
-    topic&.access_topic_via_group.present? && authenticated?
-  end
-
   def filter_allowed_categories(records, category_id_column: "topics.category_id")
     return records if is_admin? && !SiteSetting.suppress_secured_categories_from_admin
 
@@ -320,7 +318,8 @@ module TopicGuardian
   end
 
   def can_banner_topic?(topic)
-    topic && authenticated? && !topic.private_message? && is_staff?
+    topic && authenticated? && !topic.private_message? && !topic.category&.read_restricted? &&
+      is_staff?
   end
 
   def can_change_archetype?(topic, new_archetype)

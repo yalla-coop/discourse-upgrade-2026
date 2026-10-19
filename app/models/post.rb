@@ -263,6 +263,8 @@ class Post < ActiveRecord::Base
     recover_public_post_actions
     TopicLink.extract_from(self)
     QuotedPost.extract_from(self)
+    extract_quoted_post_numbers
+    save_reply_relationships
     topic.category.update_latest if topic && topic.category_id && topic.category
   end
 
@@ -397,7 +399,7 @@ class Post < ActiveRecord::Base
     hosts = linked_hosts.clone
     allowlisted = allowed_spam_hosts
 
-    hosts.reject! { |h| allowlisted.any? { |w| h.end_with?(w) } }
+    hosts.reject! { |h| allowlisted.any? { |w| h == w || h.end_with?(".#{w}") } }
 
     return hosts if hosts.length == 0
 
@@ -1183,10 +1185,6 @@ class Post < ActiveRecord::Base
 
   def mentions
     PrettyText.extract_mentions(Nokogiri::HTML5.fragment(cooked))
-  end
-
-  def has_localization?(locale = I18n.locale)
-    get_localization(locale).present?
   end
 
   private

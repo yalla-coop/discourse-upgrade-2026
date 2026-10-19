@@ -549,7 +549,9 @@ et:
         poster: Postitaja
     visits:
       title: "Kasutajakülastused"
-      xaxis: "Päev"
+      xaxis:
+        desktop: "Töölaud"
+        mobile: "Mobiil"
       yaxis: "Külastajate arv"
     signups:
       xaxis: "Päev"
@@ -775,8 +777,6 @@ et:
     suppress_overlapping_tags_in_list: "Ära näita silti, kui see ühtib täpselt sõnaga teema päses"
     errors:
       invalid_integer: "Väärtuseks peab olema täisarv."
-      min_username_length_range: "Minimaalne ei tohi olla maksimaalsest suurem."
-      max_username_length_range: "Sa ei tohi maksimaalset seada minimaalsest väiksemaks."
   search:
     within_post: "postituse nr%{post_number} tegi %{username}"
     types:
@@ -803,8 +803,10 @@ et:
     queued_by_staff:
       title: "Postitus vajab kinnitust"
     welcome_user:
+      preview: "Tere tulemast saidile %{site_name}!"
       subject_template: "Tere tulemast %{site_name}!"
     welcome_invite:
+      preview: "Tere tulemast saidile %{site_name}!"
       subject_template: "Tere tulemast %{site_name}!"
     backup_failed:
       subject_template: "Varundamine ebaõnnestus"
@@ -1067,28 +1069,39 @@ et:
         complete: "Postitus kustutatud."
       delete_and_agree:
         complete: "Postitus kustutatud."
-      disagree:
+      disagree_bundle:
         title: "Ei"
       ignore:
         title: "Ignoreeri"
       ignore_and_do_nothing:
         title: "Ära tee midagi"
       approve:
-        title: "Kinnita"
+        title: "Jah"
+      approve_post:
+        title: "Jah"
+      approve_post_closed:
+        title: "Jah"
+      reject_post_bundle:
+        title: "Ei"
       approve_user:
-        title: "Kiida kasutaja heaks"
+        title: "Jah"
       reject_user:
+        title: "Ei"
         delete:
           title: "Kustuta kasutaja"
           complete: "Kasutaja kustutatud."
+      confirm_spam:
+        title: "Jah"
+      not_spam:
+        title: "Ei"
       reject:
         title: "Lükka tagasi"
-      no_action_post:
-        title: "Tegevust pole"
+      approve_and_restore:
+        title: "Jah"
+      approve_and_unhide:
+        title: "Jah"
       delete_post:
         complete: "Postitus kustutatud"
-      no_action_user:
-        title: "Tegevust pole"
       delete_user:
         complete: "Kasutaja kustutatud"
   fallback_username: "kasutaja"

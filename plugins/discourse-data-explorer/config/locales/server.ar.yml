@@ -6,7 +6,7 @@
 
 ar:
   site_settings:
-    data_explorer_enabled: "تفعيل مستكشف البيانات في /admin/plugins/explorer"
+    data_explorer_enabled: "تفعيل مستكشف البيانات"
   discourse_automation:
     scriptables:
       recurring_data_explorer_result_pm:
@@ -29,7 +29,7 @@ ar:
           إليك النتائج:
           %{table}
 
-          <a href='%{base_url}/admin/plugins/explorer/queries/%{query_id}'>عرض الاستعلام في مستكشف البياناتr</a>
+          <a href='%{base_url}/admin/plugins/discourse-data-explorer/queries/%{query_id}'>عرض الاستعلام في مستكشف البيانات</a>
 
           تم إنشاء التقرير في %{created_at} (%{timezone})
       post:
@@ -39,7 +39,7 @@ ar:
           إليك النتائج:
           %{table}
 
-          <a href='%{base_url}/admin/plugins/explorer/queries/%{query_id}'>عرض الاستعلام في مستكشف البيانات</a>
+          <a href='%{base_url}/admin/plugins/discourse-data-explorer/queries/%{query_id}'>عرض الاستعلام في مستكشف البيانات</a>
 
           تم إنشاء التقرير في %{created_at} (%{timezone})
       upload_appendix: "الملحق: [%{filename}|مرفق](%{short_url})"

@@ -53,6 +53,7 @@ class ApplicationController < ActionController::Base
   after_action :add_readonly_header
   after_action :perform_refresh_session
   after_action :conditionally_allow_site_embedding
+
   after_action :ensure_vary_header
   after_action :add_noindex_header,
                if: -> { is_feed_request? || !SiteSetting.allow_index_in_robots_txt }
@@ -63,6 +64,8 @@ class ApplicationController < ActionController::Base
 
   HONEYPOT_KEY = "HONEYPOT_KEY"
   CHALLENGE_KEY = "CHALLENGE_KEY"
+  MINI_PROFILER_AUTH_COOKIE_EXPIRES_IN = 1.hour
+  MINI_PROFILER_CLASS = defined?(Rack::MiniProfiler) ? Rack::MiniProfiler : nil
 
   layout :set_layout
 
@@ -98,8 +101,12 @@ class ApplicationController < ActionController::Base
 
   def dont_cache_page
     if !response.headers["Cache-Control"] && response.cache_control.blank?
-      response.cache_control[:no_cache] = true
-      response.cache_control[:extras] = ["no-store"]
+      if SiteSetting.cache_control_bfcache_compatibility
+        response.cache_control[:no_cache] = true
+      else
+        response.cache_control[:no_cache] = true
+        response.cache_control[:extras] = ["no-store"]
+      end
     end
     response.headers["Discourse-No-Onebox"] = "1" if SiteSetting.login_required
   end
@@ -684,12 +691,25 @@ class ApplicationController < ActionController::Base
   end
 
   def mini_profiler_enabled?
-    defined?(Rack::MiniProfiler) && (guardian.is_developer? || Rails.env.development?)
+    return false unless MINI_PROFILER_CLASS
+    return true if Rails.env.development?
+    return true if guardian.is_developer?
+
+    if auth = cookies.encrypted[:_mp_auth]
+      user_id = auth[:user_id]
+      issued_at = auth[:issued_at]
+
+      if issued_at && issued_at > MINI_PROFILER_AUTH_COOKIE_EXPIRES_IN.ago.to_i
+        user = User.find_by(id: user_id)
+        return true if user && Guardian.new(user).is_developer?
+      end
+    end
+
+    false
   end
 
   def authorize_mini_profiler
-    return unless mini_profiler_enabled?
-    Rack::MiniProfiler.authorize_request
+    MINI_PROFILER_CLASS.authorize_request if mini_profiler_enabled?
   end
 
   def check_xhr
@@ -744,7 +764,7 @@ class ApplicationController < ActionController::Base
   NO_DESTINATION_COOKIE = %w[/login /signup /session/ /auth/ /uploads/].freeze
 
   def is_valid_destination_url?(url)
-    url.present? && url != path("/") && NO_DESTINATION_COOKIE.none? { url.start_with? path(_1) }
+    url.present? && url != path("/") && NO_DESTINATION_COOKIE.none? { url.start_with? path(it) }
   end
 
   def destination_url
@@ -784,6 +804,11 @@ class ApplicationController < ActionController::Base
         OpenSSL::PKey::RSA.new(params[:user_api_public_key])
       rescue OpenSSL::PKey::RSAError
         return render plain: I18n.t("user_api_key.invalid_public_key")
+      end
+
+      client = UserApiKeyClient.find_by(public_key: params[:user_api_public_key])
+      if client&.auth_redirect.present? && params[:auth_redirect] != client.auth_redirect
+        return render plain: I18n.t("user_api_key.invalid_auth_redirect")
       end
 
       if UserApiKeyClient.invalid_auth_redirect?(params[:auth_redirect])

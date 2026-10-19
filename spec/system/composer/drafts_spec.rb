@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-describe "Composer - Drafts", type: :system do
+describe "Composer - Drafts" do
   fab!(:topic, :topic_with_op)
   fab!(:current_user, :admin)
 
@@ -317,6 +317,35 @@ describe "Composer - Drafts", type: :system do
           )
         end
       end
+    end
+  end
+
+  context "when replying as a linked topic" do
+    fab!(:category)
+
+    it "does not leave a stale reply draft after posting a linked topic" do
+      topic_page.visit_topic(topic)
+      topic_page.click_reply_button
+
+      expect(composer).to be_opened
+      composer.fill_content("this is a reply draft")
+
+      try_until_success(reason: "wait for draft to be saved") do
+        expect(Draft.where(user: current_user).count).to eq(1)
+      end
+
+      composer.open_composer_actions
+      composer.select_action(I18n.t("js.composer.composer_actions.reply_as_new_topic.label"))
+
+      expect(composer).to be_opened
+      composer.fill_title("This is a linked topic title for testing")
+      composer.fill_content("this is a linked topic body content for testing")
+      composer.switch_category(category.name)
+      composer.create
+
+      expect(composer).to be_closed
+      expect(Topic.last.title).to eq("This is a linked topic title for testing")
+      expect(Draft.where(user: current_user).count).to eq(0)
     end
   end
 end

@@ -10,6 +10,7 @@ import getURL from "discourse/lib/get-url";
 import Badge from "discourse/models/badge";
 import Category from "discourse/models/category";
 import I18n, { i18n } from "discourse-i18n";
+import { QUERY_RESULT_MAX_LIMIT } from "discourse/plugins/discourse-data-explorer/discourse/lib/constants";
 import DataExplorerBarChart from "./data-explorer-bar-chart";
 import QueryRowContent from "./query-row-content";
 import BadgeViewComponent from "./result-types/badge";
@@ -253,7 +254,7 @@ export default class QueryResult extends Component {
   _download_url() {
     return this.args.group
       ? `/g/${this.args.group.name}/reports/`
-      : "/admin/plugins/explorer/queries/";
+      : "/admin/plugins/discourse-data-explorer/queries/";
   }
 
   _downloadResult(format) {
@@ -291,7 +292,7 @@ export default class QueryResult extends Component {
 
     addInput("params", JSON.stringify(this.params));
     addInput("explain", this.explainText);
-    addInput("limit", "1000000");
+    addInput("limit", String(QUERY_RESULT_MAX_LIMIT));
 
     ajax("/session/csrf.json").then((csrf) => {
       addInput("authenticity_token", csrf.csrf);
@@ -361,7 +362,7 @@ export default class QueryResult extends Component {
             @datasetName={{this.chartDatasetName}}
           />
         {{else}}
-          <table>
+          <table class="query-results-table">
             <thead>
               <tr class="headers">
                 {{#each this.columnNames as |col|}}

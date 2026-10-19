@@ -5,6 +5,7 @@ import "discourse/static/markdown-it";
 /* eslint-enable simple-import-sort/imports */
 
 import { getOwner } from "@ember/owner";
+import { run } from "@ember/runloop";
 import {
   getSettledState,
   isSettled,
@@ -35,7 +36,6 @@ import { setupDeprecationCounter } from "discourse/tests/helpers/deprecation-cou
 import { clearState as clearPresenceState } from "discourse/tests/helpers/presence-pretender";
 import {
   applyPretender,
-  exists,
   resetSite,
   testCleanup,
   testsInitialized,
@@ -44,7 +44,6 @@ import {
 import { configureRaiseOnDeprecation } from "discourse/tests/helpers/raise-on-deprecation";
 import { resetSettings } from "discourse/tests/helpers/site-settings";
 import { disableCloaking } from "discourse/modifiers/post-stream-viewport-tracker";
-import deprecated from "discourse/lib/deprecated";
 import { setDefaultOwner } from "discourse/lib/get-owner";
 import { setupS3CDN, setupURL } from "discourse/lib/get-url";
 import { buildResolver } from "discourse/resolver";
@@ -116,13 +115,6 @@ function setupToolbar() {
       ].includes(c.id)
   );
 
-  const pluginNames = new Set();
-
-  document
-    .querySelector("#dynamic-test-js")
-    ?.content.querySelectorAll("script[data-discourse-plugin]")
-    .forEach((script) => pluginNames.add(script.dataset.discoursePlugin));
-
   QUnit.config.urlConfig.push({
     id: "loop",
     label: "Loop until failure",
@@ -138,7 +130,7 @@ function setupToolbar() {
       "all",
       "theme-qunit",
       "-----",
-      ...Array.from(pluginNames),
+      ...(window._discourseQunitPluginNames || []),
     ],
   });
 
@@ -251,20 +243,6 @@ export default function setupTests(config) {
     window.Logster = { enabled: false };
   }
 
-  Object.defineProperty(window, "exists", {
-    get() {
-      deprecated(
-        "Accessing the global function `exists` is deprecated. Import it instead.",
-        {
-          since: "2.6.0.beta.4",
-          dropFrom: "2.6.0",
-          id: "discourse.qunit.global-exists",
-        }
-      );
-      return exists;
-    },
-  });
-
   let setupData;
   const setupDataElement = document.getElementById("data-discourse-setup");
   if (setupDataElement) {
@@ -289,7 +267,7 @@ export default function setupTests(config) {
       setupS3CDN(null, null, { snapshot: true });
     }
 
-    applyDefaultHandlers(pretender);
+    applyDefaultHandlers();
 
     pretender.prepareBody = function (body) {
       if (typeof body === "object") {
@@ -344,6 +322,14 @@ export default function setupTests(config) {
     testCleanup(getOwner(app), app);
 
     sinon.restore();
+
+    // Destroy the previous Application so its entire dependency graph
+    // (ApplicationInstance, container, registry, services, etc.) can be GC'd.
+    // Without this, every test leaks an Application which is never torn down.
+    run(() => {
+      app.destroy();
+    });
+
     resetPretender();
     clearPresenceState();
 
@@ -364,6 +350,10 @@ export default function setupTests(config) {
     MessageBus.unsubscribe("*");
     localStorage.clear();
     enableLoadMoreObserver();
+
+    // Release the app reference so the destroyed app isn't retained
+    // by this closure until the next test creates a new one.
+    app = null;
   });
 
   if (getUrlParameter("qunit_disable_auto_start") === "1") {
@@ -380,12 +370,12 @@ export default function setupTests(config) {
 
   handleLegacyParameters();
 
-  if (target === "theme-qunit") {
-    window.location.href = window.location.origin + "/theme-qunit";
-  }
-
-  const hasPluginJs = !!document.querySelector("script[data-discourse-plugin]");
-  const hasThemeJs = !!document.querySelector("script[data-theme-id]");
+  const hasPluginJs = !!document.querySelector(
+    "link[rel=modulepreload][data-plugin-name], script[data-plugin-name]"
+  );
+  const hasThemeJs = !!document.querySelector(
+    "link[rel=modulepreload][data-theme-id], script[data-theme-id]"
+  );
 
   // forces 0 as duration for all jquery animations
   $.fx.off = true;
@@ -406,8 +396,14 @@ export default function setupTests(config) {
 
   // core tests run without loading plugins or themes
   const isCoreTest = !hasPluginJs && !hasThemeJs;
-  const isPreinstalledPluginTest = !!document.querySelector(
-    `script[data-discourse-plugin="${CSS.escape(target)}"][data-preinstalled="true"]`
+  const isPreinstalledPluginTest = !!(
+    document.querySelector(
+      // TODO (ROLLUP_PLUGIN_COMPILER): drop this legacy script tag check
+      `script[data-plugin-name="${CSS.escape(target)}"][data-preinstalled="true"]`
+    ) ||
+    document.querySelector(
+      `link[rel=modulepreload][data-plugin-name="${CSS.escape(target)}"][data-preinstalled="true"]`
+    )
   );
 
   if (

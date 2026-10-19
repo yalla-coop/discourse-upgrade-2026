@@ -1,6 +1,6 @@
 import { action, computed } from "@ember/object";
 import { readOnly } from "@ember/object/computed";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import { classNameBindings, classNames } from "@ember-decorators/component";
 import { categoryBadgeHTML } from "discourse/helpers/category-link";
 import { setting } from "discourse/lib/computed";
@@ -30,8 +30,8 @@ const MORE_COLLECTION = "MORE_COLLECTION";
 @classNameBindings("noSubcategories:has-selection")
 @selectKitOptions({
   none: "category.all",
-  caretDownIcon: "caret-right",
-  caretUpIcon: "caret-down",
+  caretDownIcon: "angle-right",
+  caretUpIcon: "angle-down",
   fullWidthOnMobile: true,
   noSubcategories: false,
   subCategory: false,
@@ -156,7 +156,7 @@ export default class CategoryDrop extends ComboBoxComponent {
     if (this.value) {
       const category = Category.findById(this.value);
       content.title = category.title;
-      content.label = htmlSafe(
+      content.label = trustHTML(
         categoryBadgeHTML(category, {
           link: false,
           allowUncategorized: true,
@@ -253,7 +253,7 @@ export default class CategoryDrop extends ComboBoxComponent {
       route = getCategoryAndTagUrl(
         category,
         categoryId !== NO_CATEGORIES_ID,
-        this.tag?.name
+        this.tag
       );
     }
 

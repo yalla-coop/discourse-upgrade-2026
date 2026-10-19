@@ -25,6 +25,10 @@ class WebHook < ActiveRecord::Base
     DiscourseTagging.add_or_create_tags_by_name(self, tag_names_arg, unlimited: true)
   end
 
+  def tag_ids=(ids)
+    self.tags = Tag.where(id: ids).to_a
+  end
+
   def self.content_types
     @content_types ||= Enum.new("application/json" => 1, "application/x-www-form-urlencoded" => 2)
   end
@@ -113,14 +117,17 @@ class WebHook < ActiveRecord::Base
 
   def self.enqueue_post_hooks(event, post, payload = nil)
     if active_web_hooks(event).exists? && post.present?
+      topic = post.topic || Topic.with_deleted.find_by(id: post.topic_id)
+      return if topic.nil?
+
       payload ||= WebHook.generate_payload(:post, post)
 
       WebHook.enqueue_hooks(
         :post,
         event,
         id: post.id,
-        category_id: post.topic&.category_id,
-        tag_ids: post.topic&.tags&.pluck(:id),
+        category_id: topic.category_id,
+        tag_ids: topic.tags.pluck(:id),
         payload: payload,
       )
     end

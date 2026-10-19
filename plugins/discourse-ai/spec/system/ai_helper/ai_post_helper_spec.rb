@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe "AI Post helper", type: :system do
+RSpec.describe "AI Post helper" do
   fab!(:user, :admin)
   fab!(:non_member_group, :group)
   fab!(:topic)
@@ -37,6 +37,7 @@ RSpec.describe "AI Post helper", type: :system do
 
   def select_post_text(selected_post)
     topic_page.visit_topic(topic)
+    expect(page).to have_css("#site-logo")
     page.execute_script(
       "var element = document.querySelector('#{topic_page.post_by_number_selector(selected_post.post_number)} .cooked p'); " +
         "var range = document.createRange(); " + "range.selectNodeContents(element); " +

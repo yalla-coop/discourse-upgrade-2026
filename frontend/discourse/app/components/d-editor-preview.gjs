@@ -1,7 +1,7 @@
 import Component from "@glimmer/component";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import DecoratedHtml from "discourse/components/decorated-html";
 import PluginOutlet from "discourse/components/plugin-outlet";
 import { wantsNewWindow } from "discourse/lib/intercept-click";
@@ -44,10 +44,11 @@ export default class DEditorPreview extends Component {
     <div
       class="d-editor-preview-wrapper {{if @forcePreview 'force-preview'}}"
       {{on "click" this.handlePreviewClick}}
+      ...attributes
     >
       <DecoratedHtml
         @className="d-editor-preview"
-        @html={{htmlSafe @preview}}
+        @html={{trustHTML @preview}}
         @decorate={{@onPreviewUpdated}}
       />
       <span class="d-editor-plugin">

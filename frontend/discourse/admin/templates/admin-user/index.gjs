@@ -1,13 +1,15 @@
 import { fn, hash } from "@ember/helper";
 import { LinkTo } from "@ember/routing";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import AdminEditableField from "discourse/admin/components/admin-editable-field";
 import AdminUserExportsTable from "discourse/admin/components/admin-user-exports-table";
+import AdminUserUpcomingChanges from "discourse/admin/components/admin-user-upcoming-changes";
 import IpLookup from "discourse/admin/components/ip-lookup";
 import ConditionalLoadingSpinner from "discourse/components/conditional-loading-spinner";
 import DButton from "discourse/components/d-button";
 import PluginOutlet from "discourse/components/plugin-outlet";
 import avatar from "discourse/helpers/avatar";
+import basePath from "discourse/helpers/base-path";
 import icon from "discourse/helpers/d-icon";
 import formatDate from "discourse/helpers/format-date";
 import formatDuration from "discourse/helpers/format-duration";
@@ -105,7 +107,7 @@ export default <template>
           {{#if @controller.siteSettings.auth_overrides_email}}
             {{i18n "user.email.auth_override_instructions"}}
           {{else if @controller.model.email}}
-            {{htmlSafe
+            {{trustHTML
               (i18n "admin.user.visit_profile" url=@controller.preferencesPath)
             }}
           {{/if}}
@@ -143,7 +145,7 @@ export default <template>
               {{#if @controller.siteSettings.auth_overrides_email}}
                 {{i18n "user.email.auth_override_instructions"}}
               {{else}}
-                {{htmlSafe
+                {{trustHTML
                   (i18n
                     "admin.user.visit_profile" url=@controller.preferencesPath
                   )
@@ -207,7 +209,7 @@ export default <template>
       <div class="field">{{i18n "user.avatar.title"}}</div>
       <div class="value">{{avatar @controller.model imageSize="large"}}</div>
       <div class="controls">
-        {{htmlSafe
+        {{trustHTML
           (i18n "admin.user.visit_profile" url=@controller.preferencesPath)
         }}
       </div>
@@ -573,7 +575,7 @@ export default <template>
         </div>
         <div class="controls">
           <strong>{{i18n "admin.user.suspend_reason"}}</strong>:
-          <div class="full-reason">{{htmlSafe
+          <div class="full-reason">{{trustHTML
               @controller.model.full_suspend_reason
             }}</div>
         </div>
@@ -636,7 +638,7 @@ export default <template>
         </div>
         <div class="controls">
           <b>{{i18n "admin.user.silence_reason"}}</b>:
-          <div class="full-reason">{{htmlSafe
+          <div class="full-reason">{{trustHTML
               @controller.model.silence_reason
             }}</div>
         </div>
@@ -670,9 +672,9 @@ export default <template>
       <h1>{{i18n "admin.groups.title"}}</h1>
       <div class="display-row admin-user__automatic-groups">
         <div class="field">{{i18n "admin.groups.automatic"}}</div>
-        <div class="value">{{htmlSafe @controller.automaticGroups}}</div>
+        <div class="value">{{trustHTML @controller.automaticGroups}}</div>
       </div>
-      <div class="display-row">
+      <div class="display-row admin-user__custom-groups">
         <div class="field">{{i18n "admin.groups.custom"}}</div>
         <div class="value">
           <GroupChooser
@@ -821,7 +823,7 @@ export default <template>
     </div>
     <div class="display-row">
       <div class="field">{{i18n "user.invited.days_visited"}}</div>
-      <div class="value">{{htmlSafe @controller.model.days_visited}}</div>
+      <div class="value">{{trustHTML @controller.model.days_visited}}</div>
     </div>
     <div class="display-row post-edits-count">
       <div class="field">{{i18n "admin.user.post_edits_count"}}</div>
@@ -928,6 +930,18 @@ export default <template>
           </div>
         {{/if}}
       {{/let}}
+    </section>
+  {{/if}}
+
+  {{#if
+    (and @controller.currentUser.staff @controller.model.upcoming_changes_stats)
+  }}
+    <section class="details">
+      <h1>{{i18n "admin.user.upcoming_changes.title"}}</h1>
+      <p>{{trustHTML
+          (i18n "admin.user.upcoming_changes.description" basePath=basePath)
+        }}</p>
+      <AdminUserUpcomingChanges @user={{@controller.model}} />
     </section>
   {{/if}}
 

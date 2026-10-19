@@ -159,6 +159,44 @@ module Email
       )
       style(".onebox-avatar-inline", ONEBOX_INLINE_AVATAR_STYLE)
 
+      # User onebox: convert to table layout for email clients
+      @fragment
+        .css(".user-onebox")
+        .each do |onebox|
+          img = onebox.at_css(".aspect-image img")
+          next unless img
+
+          img["width"] = "80"
+          img["height"] = "80"
+          img["style"] = "width: 80px; height: 80px; display: block;"
+
+          h3 = onebox.at_css("h3")
+          h3["style"] = "font-size: 1.17em; margin: 0;" if h3
+
+          info_div = h3&.next_element
+          if info_div
+            info_div.css(".full-name, .location").each { |el| add_styles(el, "margin-right: 10px") }
+          end
+
+          joined = onebox.at_css(".user-onebox--joined")
+          joined["style"] = "color: #919191;" if joined
+
+          top_content = [h3, info_div, onebox.at_css("p")].compact.map(&:to_html).join
+          joined_html = joined ? joined.to_html : ""
+
+          onebox.inner_html = <<~HTML
+            <table cellspacing="0" cellpadding="0" border="0">
+              <tr>
+                <td rowspan="2" valign="top" style="width: 90px;">#{img.to_html}</td>
+                <td valign="top">#{top_content}</td>
+              </tr>
+              <tr>
+                <td valign="bottom">#{joined_html}</td>
+              </tr>
+            </table>
+          HTML
+        end
+
       @fragment.css(".github-body-container .excerpt").remove
 
       @fragment.css("aside.quote blockquote > p").each { |p| p["style"] = "padding: 0;" }
@@ -263,6 +301,7 @@ module Email
         "-moz-box-sizing:border-box;-ms-text-size-adjust:100%;-webkit-box-sizing:border-box;-webkit-text-size-adjust:100%;box-sizing:border-box;color:#0a0a0a;font-family:Arial,sans-serif;font-size:14px;font-weight:400;line-height:1.3;margin:0;min-width:100%;padding:0;width:100%",
       )
 
+      style(".email-preview", "display: none;")
       style(".previous-discussion", "font-size: 17px; color: #444; margin-bottom:10px;")
       style(
         ".notification-date",
@@ -380,7 +419,7 @@ module Email
       style
         .split(";")
         .select(&:present?)
-        .map { _1.split(":", 2).map(&:strip) }
+        .map { it.split(":", 2).map(&:strip) }
         .each do |k, v|
           next if k.blank? || v.blank?
           next if styles[k]&.end_with?("!important") && !v.end_with?("!important")

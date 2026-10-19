@@ -281,9 +281,11 @@ module ExternalUploadHelpers
   private
 
   def complete_external_upload_via_manager(external_upload_stub)
+    for_site_setting = params[:for_site_setting]&.to_s == "true"
     opts = {
       for_private_message: params[:for_private_message]&.to_s == "true",
-      for_site_setting: params[:for_site_setting]&.to_s == "true",
+      for_site_setting:,
+      site_setting_name: for_site_setting ? params[:site_setting_name] : nil,
       pasted: params[:pasted]&.to_s == "true",
     }
 
@@ -332,9 +334,8 @@ module ExternalUploadHelpers
           status: 422,
         )
       rescue => err
-        Discourse.warn_exception(
-          err,
-          message: "Complete external upload failed unexpectedly for user #{current_user.id}",
+        Rails.logger.error(
+          "Complete external upload failed unexpectedly for user #{current_user.id}: #{err.class} #{err.message}\n#{err.backtrace.join("\n")}",
         )
 
         render_json_error(I18n.t("upload.failed"), status: 422)

@@ -10,9 +10,9 @@ module DiscourseAi
 
       def show_debug_info_by_id
         log = AiApiAuditLog.find(params[:id])
-        raise Discourse::NotFound if !log.topic
+        raise Discourse::NotFound if !log.topic || log.feature_name != "ai_bot"
 
-        guardian.ensure_can_debug_ai_bot_conversation!(log.topic)
+        guardian.ensure_can_debug_ai_bot_conversation!(log.post || log.topic)
         render json: AiApiAuditLogSerializer.new(log, root: false), status: :ok
       end
 
@@ -22,16 +22,23 @@ module DiscourseAi
 
         posts =
           Post
+            .secured(guardian)
             .where("post_number <= ?", post.post_number)
             .where(topic_id: post.topic_id)
             .order("post_number DESC")
 
-        debug_info = AiApiAuditLog.where(post: posts).order(created_at: :desc).first
+        debug_info =
+          AiApiAuditLog.where(post: posts, feature_name: "ai_bot").order(created_at: :desc).first
 
         render json: AiApiAuditLogSerializer.new(debug_info, root: false), status: :ok
       end
 
       def stop_streaming_response
+        raise Discourse::InvalidAccess unless SiteSetting.ai_bot_enabled
+        unless current_user.in_any_groups?(SiteSetting.ai_bot_allowed_groups_map)
+          raise Discourse::InvalidAccess
+        end
+
         post = Post.find(params[:post_id])
         guardian.ensure_can_see!(post)
 
@@ -41,6 +48,11 @@ module DiscourseAi
       end
 
       def retry_response
+        raise Discourse::InvalidAccess unless SiteSetting.ai_bot_enabled
+        unless current_user.in_any_groups?(SiteSetting.ai_bot_allowed_groups_map)
+          raise Discourse::InvalidAccess
+        end
+
         post = Post.find(params[:post_id])
         guardian.ensure_can_see!(post)
 
@@ -53,13 +65,13 @@ module DiscourseAi
 
         guardian.ensure_can_see!(prompt_post)
 
-        persona_id = retry_persona_id(post, prompt_post)
+        agent_id = retry_agent_id(post, prompt_post)
         llm_model_id = post.custom_fields[DiscourseAi::AiBot::POST_AI_LLM_MODEL_ID_FIELD]
 
         args = {
           post_id: prompt_post.id,
           bot_user_id: post.user_id,
-          persona_id: persona_id,
+          agent_id: agent_id,
           reply_post_id: post.id,
         }
 
@@ -91,19 +103,18 @@ module DiscourseAi
           .first
       end
 
-      def retry_persona_id(bot_reply_post, prompt_post)
-        persona_id =
-          bot_reply_post.custom_fields[DiscourseAi::AiBot::POST_AI_PERSONA_ID_FIELD].presence
+      def retry_agent_id(bot_reply_post, prompt_post)
+        agent_id = bot_reply_post.custom_fields[DiscourseAi::AiBot::POST_AI_AGENT_ID_FIELD].presence
 
-        persona_id ||= prompt_post.topic.custom_fields["ai_persona_id"].presence
+        agent_id ||= prompt_post.topic.custom_fields["ai_agent_id"].presence
 
-        if persona_id.blank?
-          persona_name = prompt_post.topic.custom_fields["ai_persona"].presence
-          persona_id = AiPersona.find_by(name: persona_name)&.id if persona_name.present?
+        if agent_id.blank?
+          agent_name = prompt_post.topic.custom_fields["ai_agent"].presence
+          agent_id = AiAgent.find_by(name: agent_name)&.id if agent_name.present?
         end
 
-        persona_id ||= DiscourseAi::Personas::General.id
-        persona_id.to_i
+        agent_id ||= DiscourseAi::Agents::General.id
+        agent_id.to_i
       end
     end
   end

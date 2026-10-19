@@ -1,4 +1,4 @@
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import { i18n } from "discourse-i18n";
 
 const TITLE_SUBS = {
@@ -17,7 +17,7 @@ export default function periodTitle(
   const title = i18n("filters.top." + (TITLE_SUBS[period] || "this_week"));
 
   if (!showDateRange) {
-    return htmlSafe(title);
+    return trustHTML(title);
   }
 
   let dateString = "";
@@ -33,9 +33,9 @@ export default function periodTitle(
     case "custom":
       if (startDate && endDate) {
         dateString =
-          moment(startDate).format(i18n("dates.long_with_year_no_time")) +
+          moment.utc(startDate).format(i18n("dates.long_with_year_no_time")) +
           " – " +
-          moment(endDate).format(i18n("dates.long_with_year_no_time"));
+          moment.utc(endDate).format(i18n("dates.long_with_year_no_time"));
       }
       break;
     case "yearly":
@@ -83,7 +83,7 @@ export default function periodTitle(
       break;
   }
 
-  return htmlSafe(
+  return trustHTML(
     `<span class="date-section">${title}</span><span class='top-date-string'>${dateString}</span>`
   );
 }

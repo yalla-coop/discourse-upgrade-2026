@@ -11,9 +11,8 @@ import GroupSelector from "discourse/components/group-selector";
 import PluginOutlet from "discourse/components/plugin-outlet";
 import lazyHash from "discourse/helpers/lazy-hash";
 import { popupAjaxError } from "discourse/lib/ajax-error";
-import { trackedArray } from "discourse/lib/tracked-tools";
+import { autoTrackedArray } from "discourse/lib/tracked-tools";
 import CategorySelector from "discourse/select-kit/components/category-selector";
-import TagChooser from "discourse/select-kit/components/tag-chooser";
 import { eq } from "discourse/truth-helpers";
 import { i18n } from "discourse-i18n";
 
@@ -22,20 +21,21 @@ export default class AdminConfigAreasWebhookForm extends Component {
   @service siteSettings;
   @service store;
 
-  @tracked webhook = this.args.webhook;
-
   @tracked loadingExtras = true;
-
   @tracked defaultEventTypes = {};
   @tracked groupedEventTypes = {};
   @tracked contentTypes = [];
   @tracked deliveryStatuses = [];
-  @trackedArray webhookEventTypes = [];
+  @autoTrackedArray webhookEventTypes = [];
 
   constructor() {
     super(...arguments);
 
     this.#loadExtras();
+  }
+
+  get webhook() {
+    return this.args.webhook;
   }
 
   @cached
@@ -46,7 +46,7 @@ export default class AdminConfigAreasWebhookForm extends Component {
       secret: this.webhook.secret,
       categories: this.webhook.categories,
       group_names: this.webhook.group_names,
-      tag_names: this.webhook.tag_names,
+      tags: this.webhook.tags,
       wildcard: this.webhook.wildcard,
       web_hook_event_types: this.webhook.web_hook_event_types,
       verify_certificate: this.webhook.verify_certificate,
@@ -126,9 +126,10 @@ export default class AdminConfigAreasWebhookForm extends Component {
                   @title={{i18n "admin.web_hooks.payload_url"}}
                   @format="large"
                   @validation="required|url"
+                  @type="input"
                   as |field|
                 >
-                  <field.Input
+                  <field.Control
                     placeholder={{i18n
                       "admin.web_hooks.payload_url_placeholder"
                     }}
@@ -140,15 +141,16 @@ export default class AdminConfigAreasWebhookForm extends Component {
                   @title={{i18n "admin.web_hooks.content_type"}}
                   @format="large"
                   @validation="required"
+                  @type="select"
                   as |field|
                 >
-                  <field.Select as |select|>
+                  <field.Control as |select|>
                     {{#each this.contentTypes as |contentType|}}
                       <select.Option
                         @value={{contentType.id}}
                       >{{contentType.name}}</select.Option>
                     {{/each}}
-                  </field.Select>
+                  </field.Control>
                 </form.Field>
 
                 <form.Field
@@ -157,9 +159,10 @@ export default class AdminConfigAreasWebhookForm extends Component {
                   @description={{i18n "admin.web_hooks.secret_placeholder"}}
                   @format="large"
                   @validation="length:12"
+                  @type="input"
                   as |field|
                 >
-                  <field.Input />
+                  <field.Control />
                 </form.Field>
 
                 <form.Field
@@ -168,9 +171,10 @@ export default class AdminConfigAreasWebhookForm extends Component {
                   @validation="required"
                   @onSet={{this.setRequirement}}
                   @format="full"
+                  @type="radio-group"
                   as |field|
                 >
-                  <field.RadioGroup as |radioGroup|>
+                  <field.Control as |radioGroup|>
                     <radioGroup.Radio @value="individual">
                       {{i18n "admin.web_hooks.individual_event"}}
                     </radioGroup.Radio>
@@ -200,7 +204,7 @@ export default class AdminConfigAreasWebhookForm extends Component {
                     <radioGroup.Radio @value="wildcard">
                       {{i18n "admin.web_hooks.wildcard_event"}}
                     </radioGroup.Radio>
-                  </field.RadioGroup>
+                  </field.Control>
                 </form.Field>
 
                 <form.Field
@@ -210,34 +214,32 @@ export default class AdminConfigAreasWebhookForm extends Component {
                     "admin.web_hooks.categories_filter_instructions"
                   }}
                   @format="large"
+                  @type="custom"
                   as |field|
                 >
-                  <field.Custom>
+                  <field.Control>
                     <CategorySelector
                       @categories={{field.value}}
                       @onChange={{field.set}}
                     />
-                  </field.Custom>
+                  </field.Control>
                 </form.Field>
 
                 {{#if this.showTagsFilter}}
                   <form.Field
-                    @name="tag_names"
+                    @name="tags"
                     @title={{i18n "admin.web_hooks.tags_filter"}}
                     @description={{i18n
                       "admin.web_hooks.tags_filter_instructions"
                     }}
                     @format="large"
+                    @type="tag-chooser"
                     as |field|
                   >
-                    <field.Custom>
-                      <TagChooser
-                        @tags={{field.value}}
-                        @everyTag={{true}}
-                        @excludeSynonyms={{true}}
-                        @onChange={{field.set}}
-                      />
-                    </field.Custom>
+                    <field.Control
+                      @showAllTags={{true}}
+                      @excludeSynonyms={{true}}
+                    />
                   </form.Field>
                 {{/if}}
 
@@ -248,15 +250,16 @@ export default class AdminConfigAreasWebhookForm extends Component {
                     "admin.web_hooks.groups_filter_instructions"
                   }}
                   @format="large"
+                  @type="custom"
                   as |field|
                 >
-                  <field.Custom>
+                  <field.Control>
                     <GroupSelector
                       @groupNames={{field.value}}
                       @groupFinder={{this.webhook.groupFinder}}
                       @onChange={{field.set}}
                     />
-                  </field.Custom>
+                  </field.Control>
                 </form.Field>
 
                 <PluginOutlet
@@ -270,9 +273,10 @@ export default class AdminConfigAreasWebhookForm extends Component {
                   @title={{i18n "admin.web_hooks.verify_certificate"}}
                   @showTitle={{false}}
                   @format="large"
+                  @type="checkbox"
                   as |field|
                 >
-                  <field.Checkbox />
+                  <field.Control />
                 </form.Field>
 
                 <form.Field
@@ -280,9 +284,10 @@ export default class AdminConfigAreasWebhookForm extends Component {
                   @title={{i18n "admin.web_hooks.active"}}
                   @showTitle={{false}}
                   @format="large"
+                  @type="checkbox"
                   as |field|
                 >
-                  <field.Checkbox />
+                  <field.Control />
                 </form.Field>
 
                 <form.Actions>

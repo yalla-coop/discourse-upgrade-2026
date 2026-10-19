@@ -36,8 +36,9 @@ gl:
             canned_reply:
               label: "Responder"
     discourse_ai:
+      llm_selector:
+        none: "Ningunha"
       features:
-        back: "Volver"
         disabled: "(desactivado)"
         groups: "Grupos:"
         no_groups: "Ningunha"
@@ -82,8 +83,7 @@ gl:
         total: "Total"
         periods:
           custom: "Personalizar..."
-      ai_persona:
-        back: "Volver"
+      ai_agent:
         name: "Nome"
         edit: "Editar"
         export: "Exportar"
@@ -105,7 +105,6 @@ gl:
           title: "Cargas"
           uploading: "Cargando..."
       tools:
-        back: "Volver"
         export: "Exportar"
         import: "Importar"
         name: "Nome"
@@ -115,13 +114,34 @@ gl:
         remove_parameter: "Retirar"
         parameter_required: "Obrigatorio"
         edit: "Editar"
+        test: "Proba"
         delete: "Eliminar"
+      secrets:
+        short_title: "Acreditacións"
+        name: "Nome"
+        secret: "Valor"
+        save: "Gardar"
+        edit: "Editar"
+        delete: "Eliminar"
+        embedding: "Incorporando"
+      mcp_servers:
+        name: "Nome"
+        description: "Descrición"
+        url: "URL"
+        oauth_statuses:
+          connected: "Conectadas"
+        oauth_connect: "Conectar"
+        enabled: "Activado"
+        save: "Gardar"
+        edit: "Editar"
+        delete: "Eliminar"
+        tools_modal:
+          required: "Obrigatorio"
       llms:
         display_name: "Nome"
         provider: "Fornecedor"
         save: "Gardar"
         edit: "Editar"
-        back: "Volver"
         delete: Eliminar
         quotas:
           group: "Grupo"
@@ -156,7 +176,6 @@ gl:
         image_caption:
           save_caption: "Gardar"
       embeddings:
-        back: "Volver"
         save: "Gardar"
         delete: "Eliminar"
         edit: "Editar"

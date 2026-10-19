@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe "Admin Chat CSV exports", type: :system do
+RSpec.describe "Admin Chat CSV exports" do
   let(:dialog) { PageObjects::Components::Dialog.new }
   let(:csv_export_pm_page) { PageObjects::Pages::CSVExportPM.new }
   fab!(:current_user, :admin)
@@ -12,7 +12,7 @@ RSpec.describe "Admin Chat CSV exports", type: :system do
   end
 
   it "exports chat messages" do
-    orignal_save_path = Capybara.save_path
+    original_save_path = Capybara.save_path
     Capybara.save_path = Downloads::FOLDER
 
     Jobs.run_immediately!
@@ -56,7 +56,7 @@ RSpec.describe "Admin Chat CSV exports", type: :system do
     assert_message(exported_data.fourth, message_3)
     assert_message(exported_data.fifth, message_4)
   ensure
-    Capybara.save_path = orignal_save_path
+    Capybara.save_path = original_save_path
     csv_export_pm_page.clear_downloads
   end
 

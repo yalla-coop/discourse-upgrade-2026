@@ -1,6 +1,18 @@
 # frozen_string_literal: true
 
 RSpec.describe ExportCsvController do
+  context "when not logged in" do
+    it "denies anonymous access to export_entity with a 403" do
+      post "/export_csv/export_entity.json", params: { entity: "user_archive" }
+      expect(response.status).to eq(403)
+    end
+
+    it "denies anonymous access to latest_user_archive with a 403" do
+      get "/export_csv/latest_user_archive/1.json"
+      expect(response.status).to eq(403)
+    end
+  end
+
   context "while logged in as normal user" do
     fab!(:user)
     fab!(:user2, :user)
@@ -195,6 +207,34 @@ RSpec.describe ExportCsvController do
         job_data = Jobs::ExportCsvFile.jobs.first["args"].first
         expect(job_data["entity"]).to eq("staff_action")
         expect(job_data["user_id"]).to eq(moderator.id)
+      end
+
+      it "does not allow moderators to export admin-only reports" do
+        post "/export_csv/export_entity.json",
+             params: {
+               entity: "report",
+               args: {
+                 name: "top_uploads",
+                 start_date: "2026-01-01",
+                 end_date: "2026-02-15",
+               },
+             }
+        expect(response.status).to eq(422)
+        expect(Jobs::ExportCsvFile.jobs.size).to eq(0)
+      end
+
+      it "allows moderators to export non-hidden reports" do
+        post "/export_csv/export_entity.json",
+             params: {
+               entity: "report",
+               args: {
+                 name: "likes",
+                 start_date: "2026-01-01",
+                 end_date: "2026-02-15",
+               },
+             }
+        expect(response.status).to eq(200)
+        expect(Jobs::ExportCsvFile.jobs.size).to eq(1)
       end
     end
 

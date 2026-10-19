@@ -202,7 +202,10 @@ describe Jobs::LocalizePosts do
     fab!(:group_pm_topic) { Fabricate(:group_private_message_topic, recipient_group: group) }
     fab!(:group_pm_post) { Fabricate(:post, topic: group_pm_topic, locale: "es") }
 
-    before { SiteSetting.content_localization_supported_locales = "ja" }
+    before do
+      SiteSetting.default_locale = "ja"
+      SiteSetting.content_localization_supported_locales = "ja"
+    end
 
     context "when ai_translation_backfill_limit_to_public_content is true" do
       before { SiteSetting.ai_translation_backfill_limit_to_public_content = true }
@@ -264,6 +267,7 @@ describe Jobs::LocalizePosts do
     fab!(:new_post) { Fabricate(:post, locale: "es", created_at: 2.days.ago) }
 
     before do
+      SiteSetting.default_locale = "ja"
       SiteSetting.ai_translation_backfill_max_age_days = 5
       SiteSetting.content_localization_supported_locales = "ja"
     end
@@ -322,7 +326,7 @@ describe Jobs::LocalizePosts do
 
       # Should call LlmModel.find_by only twice for the entire batch:
       # 1. Once in credits_available_for_post_localization? check
-      # 2. Once in the job's find_llm_model_for_persona for caching
+      # 2. Once in the job's find_llm_model_for_agent for caching
       # Without caching, it would be called 2 + (number of posts) times
       expect(find_by_call_count).to eq(2)
     end

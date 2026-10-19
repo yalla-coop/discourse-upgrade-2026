@@ -69,6 +69,18 @@ RSpec.describe PostVoting::CommentsController do
       expect(response.status).to eq(403)
     end
 
+    it "returns 403 when user cannot see the post (e.g. whisper)" do
+      whisper_post = Fabricate(:post, topic: topic, post_type: Post.types[:whisper], user: admin)
+
+      post "/post_voting/comments.json",
+           params: {
+             post_id: whisper_post.id,
+             raw: "this is some content",
+           }
+
+      expect(response.status).to eq(403)
+    end
+
     it "returns the right response when post_id is invalid" do
       post "/post_voting/comments.json", params: { post_id: -999_999, raw: "this is some content" }
 
@@ -275,6 +287,19 @@ RSpec.describe PostVoting::CommentsController do
     end
   end
 
+  describe "#flag" do
+    it "should return 403 with not_logged_in error for an anon user" do
+      put "/post_voting/comments/flag.json",
+          params: {
+            comment_id: comment.id,
+            flag_type_id: ReviewableScore.types[:off_topic],
+          }
+
+      expect(response.status).to eq(403)
+      expect(response.parsed_body["error_type"]).to eq("not_logged_in")
+    end
+  end
+
   describe "#destroy" do
     it "should return 403 for an anon user" do
       delete "/post_voting/comments.json", params: { comment_id: comment.id }
@@ -359,6 +384,25 @@ RSpec.describe PostVoting::CommentsController do
           .where("deleted_at IS NOT NULL AND id = ?", comment.id)
           .exists?,
       ).to eq(true)
+    end
+  end
+
+  describe "#flag" do
+    fab!(:flagger) { Fabricate(:user, group_ids: [Group::AUTO_GROUPS[:trust_level_1]]) }
+
+    before { sign_in(flagger) }
+
+    it "should return 403 when trying to flag a comment on a post the user cannot see" do
+      category.set_permissions(group => :full)
+      category.save!
+
+      put "/post_voting/comments/flag.json",
+          params: {
+            comment_id: comment.id,
+            flag_type_id: ReviewableScore.types[:off_topic],
+          }
+
+      expect(response.status).to eq(403)
     end
   end
 end

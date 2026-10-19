@@ -505,6 +505,14 @@ RSpec.describe Guardian do
         expect(Guardian.new(admin).can_banner_topic?(topic)).to be_truthy
       end
 
+      it "does not allow staff to banner topics in read-restricted categories" do
+        group = Fabricate(:group)
+        private_category = Fabricate(:private_category, group: group)
+        topic = Fabricate(:topic, category: private_category)
+
+        expect(Guardian.new(admin).can_banner_topic?(topic)).to be_falsey
+      end
+
       describe "#can_change_archetype?" do
         fab!(:topic)
 
@@ -1379,6 +1387,24 @@ RSpec.describe Guardian do
       GroupUser.create!(group_id: group.id, user_id: user.id)
       Fabricate(:category_moderation_group, category: topic.category, group:)
       expect(Guardian.new(user).can_review_topic?(topic)).to eq(true)
+    end
+
+    it "returns false for a category group moderator who cannot see the topic" do
+      SiteSetting.enable_category_group_moderation = true
+      private_category = Fabricate(:private_category, group: Fabricate(:group))
+      private_topic = Fabricate(:topic, category: private_category)
+      GroupUser.create!(group_id: group.id, user_id: user.id)
+      Fabricate(:category_moderation_group, category: private_category, group:)
+      expect(Guardian.new(user).can_review_topic?(private_topic)).to eq(false)
+    end
+
+    it "returns true for a category group moderator who can see the topic" do
+      SiteSetting.enable_category_group_moderation = true
+      private_category = Fabricate(:private_category, group:)
+      private_topic = Fabricate(:topic, category: private_category)
+      GroupUser.create!(group_id: group.id, user_id: user.id)
+      Fabricate(:category_moderation_group, category: private_category, group:)
+      expect(Guardian.new(user).can_review_topic?(private_topic)).to eq(true)
     end
   end
 
@@ -2501,6 +2527,23 @@ RSpec.describe Guardian do
       expect(admin_guardian.can_export_entity?("staff_action")).to be_truthy
     end
 
+    it "respects moderators_view_ips for screened_ip export" do
+      SiteSetting.moderators_view_ips = false
+      expect(moderator_guardian.can_export_entity?("screened_ip")).to be_falsey
+      expect(admin_guardian.can_export_entity?("screened_ip")).to be_truthy
+
+      SiteSetting.moderators_view_ips = true
+      expect(moderator_guardian.can_export_entity?("screened_ip")).to be_truthy
+    end
+
+    it "only allows admins to export admin-only reports" do
+      expect(user_guardian.can_export_entity?("report", nil, { name: "top_uploads" })).to be_falsey
+      expect(
+        moderator_guardian.can_export_entity?("report", nil, { name: "top_uploads" }),
+      ).to be_falsey
+      expect(admin_guardian.can_export_entity?("report", nil, { name: "top_uploads" })).to be_truthy
+    end
+
     it "does not allow anonymous to export" do
       expect(anonymous_guardian.can_export_entity?("user_archive")).to be_falsey
     end
@@ -2544,7 +2587,7 @@ RSpec.describe Guardian do
       end
     end
 
-    context "when ignorer is not in requred trust level group" do
+    context "when ignorer is not in required trust level group" do
       let(:guardian) { Guardian.new(trust_level_0) }
       it "does not allow ignoring user" do
         expect(guardian.can_ignore_user?(another_user)).to eq(false)
@@ -2736,10 +2779,9 @@ RSpec.describe Guardian do
 
   describe "#can_see_group?" do
     it "Correctly handles owner visible groups" do
-      group = Group.new(name: "group", visibility_level: Group.visibility_levels[:owners])
+      group = Fabricate(:group, visibility_level: Group.visibility_levels[:owners])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2753,10 +2795,9 @@ RSpec.describe Guardian do
     end
 
     it "Correctly handles staff visible groups" do
-      group = Group.new(name: "group", visibility_level: Group.visibility_levels[:staff])
+      group = Fabricate(:group, visibility_level: Group.visibility_levels[:staff])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2770,10 +2811,9 @@ RSpec.describe Guardian do
     end
 
     it "Correctly handles member visible groups" do
-      group = Group.new(name: "group", visibility_level: Group.visibility_levels[:members])
+      group = Fabricate(:group, visibility_level: Group.visibility_levels[:members])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2787,9 +2827,8 @@ RSpec.describe Guardian do
     end
 
     it "Correctly handles logged-on-user visible groups" do
-      group = Group.new(name: "group", visibility_level: Group.visibility_levels[:logged_on_users])
+      group = Fabricate(:group, visibility_level: Group.visibility_levels[:logged_on_users])
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2811,10 +2850,9 @@ RSpec.describe Guardian do
 
   describe "#can_see_group_members?" do
     it "Correctly handles group members visibility for owner" do
-      group = Group.new(name: "group", members_visibility_level: Group.visibility_levels[:owners])
+      group = Fabricate(:group, members_visibility_level: Group.visibility_levels[:owners])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2828,10 +2866,9 @@ RSpec.describe Guardian do
     end
 
     it "Correctly handles group members visibility for staff" do
-      group = Group.new(name: "group", members_visibility_level: Group.visibility_levels[:staff])
+      group = Fabricate(:group, members_visibility_level: Group.visibility_levels[:staff])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2845,10 +2882,9 @@ RSpec.describe Guardian do
     end
 
     it "Correctly handles group members visibility for member" do
-      group = Group.new(name: "group", members_visibility_level: Group.visibility_levels[:members])
+      group = Fabricate(:group, members_visibility_level: Group.visibility_levels[:members])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2862,13 +2898,8 @@ RSpec.describe Guardian do
     end
 
     it "Correctly handles group members visibility for logged-on-user" do
-      group =
-        Group.new(
-          name: "group",
-          members_visibility_level: Group.visibility_levels[:logged_on_users],
-        )
+      group = Fabricate(:group, members_visibility_level: Group.visibility_levels[:logged_on_users])
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2890,10 +2921,9 @@ RSpec.describe Guardian do
 
   describe "#can_see_groups?" do
     it "correctly handles owner visible groups" do
-      group = Group.new(name: "group", visibility_level: Group.visibility_levels[:owners])
+      group = Fabricate(:group, visibility_level: Group.visibility_levels[:owners])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2907,12 +2937,10 @@ RSpec.describe Guardian do
     end
 
     it "correctly handles the case where the user does not own every group" do
-      group = Group.new(name: "group", visibility_level: Group.visibility_levels[:owners])
-      group2 = Group.new(name: "group2", visibility_level: Group.visibility_levels[:owners])
-      group2.save!
+      group = Fabricate(:group, visibility_level: Group.visibility_levels[:owners])
+      group2 = Fabricate(:group, visibility_level: Group.visibility_levels[:owners])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2926,10 +2954,9 @@ RSpec.describe Guardian do
     end
 
     it "correctly handles staff visible groups" do
-      group = Group.new(name: "group", visibility_level: Group.visibility_levels[:staff])
+      group = Fabricate(:group, visibility_level: Group.visibility_levels[:staff])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2943,10 +2970,9 @@ RSpec.describe Guardian do
     end
 
     it "correctly handles member visible groups" do
-      group = Group.new(name: "group", visibility_level: Group.visibility_levels[:members])
+      group = Fabricate(:group, visibility_level: Group.visibility_levels[:members])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2960,10 +2986,9 @@ RSpec.describe Guardian do
     end
 
     it "correctly handles logged-on-user visible groups" do
-      group = Group.new(name: "group", visibility_level: Group.visibility_levels[:logged_on_users])
+      group = Fabricate(:group, visibility_level: Group.visibility_levels[:logged_on_users])
 
       group.add(member)
-      group.save!
 
       group.add_owner(owner)
       group.reload
@@ -2977,12 +3002,10 @@ RSpec.describe Guardian do
     end
 
     it "correctly handles the case where the user is not a member of every group" do
-      group1 = Group.new(name: "group", visibility_level: Group.visibility_levels[:members])
-      group2 = Group.new(name: "group2", visibility_level: Group.visibility_levels[:members])
-      group2.save!
+      group1 = Fabricate(:group, visibility_level: Group.visibility_levels[:members])
+      group2 = Fabricate(:group, visibility_level: Group.visibility_levels[:members])
 
       group1.add(member)
-      group1.save!
 
       group1.add_owner(owner)
       group1.reload
@@ -3083,6 +3106,32 @@ RSpec.describe Guardian do
 
       it "staff can see silencings" do
         expect(Guardian.new(moderator).can_see_silencing_reason?(user)).to eq(true)
+      end
+    end
+  end
+
+  describe "#can_see_user_status?" do
+    it "returns true for non-silenced users" do
+      expect(Guardian.new.can_see_user_status?(user)).to eq(true)
+    end
+
+    context "with a silenced user" do
+      before { user.update!(silenced_till: 1.year.from_now) }
+
+      it "returns false to anonymous users" do
+        expect(Guardian.new.can_see_user_status?(user)).to eq(false)
+      end
+
+      it "returns false to other users" do
+        expect(Guardian.new(another_user).can_see_user_status?(user)).to eq(false)
+      end
+
+      it "returns true to the silenced user themselves" do
+        expect(Guardian.new(user).can_see_user_status?(user)).to eq(true)
+      end
+
+      it "returns true to staff" do
+        expect(Guardian.new(moderator).can_see_user_status?(user)).to eq(true)
       end
     end
   end

@@ -40,6 +40,7 @@ class Upload < ActiveRecord::Base
   attr_accessor :for_export
   attr_accessor :for_site_setting
   attr_accessor :for_gravatar
+  attr_accessor :site_setting_name
   attr_accessor :validate_file_size
   attr_accessor :skip_video_conversion
 
@@ -172,16 +173,12 @@ class Upload < ActiveRecord::Base
 
   def content
     original_path = Discourse.store.path_for(self)
-    external_copy = nil
 
     if original_path.blank?
-      external_copy = Discourse.store.download!(self)
-      original_path = external_copy.path
+      File.read(Discourse.store.download!(self))
+    else
+      File.read(original_path)
     end
-
-    File.read(original_path)
-  ensure
-    File.unlink(external_copy.path) if external_copy
   end
 
   def fix_image_extension
@@ -190,14 +187,13 @@ class Upload < ActiveRecord::Base
     begin
       # this is relatively cheap once cached
       original_path = Discourse.store.path_for(self)
-      if original_path.blank?
-        external_copy = Discourse.store.download_safe(self)
-        original_path = external_copy&.path
-      end
+      original_path = Discourse.store.download(self) if original_path.blank?
 
       image_info =
         begin
-          FastImage.new(original_path)
+          image = FastImage.new(original_path)
+          image.type # eager load to rescue errors early
+          image
         rescue StandardError
           nil
         end
@@ -260,11 +256,11 @@ class Upload < ActiveRecord::Base
     false
   end
 
-  def self.signed_url_from_secure_uploads_url(url)
+  def self.signed_url_from_secure_uploads_url(url, include_content_disposition:)
     route = UrlHelper.rails_route_from_url(url)
     url = Rails.application.routes.url_for(route.merge(only_path: true))
     secure_upload_s3_path = url[url.index(route[:path])..-1]
-    Discourse.store.signed_url_for_path(secure_upload_s3_path)
+    Discourse.store.signed_url_for_path(secure_upload_s3_path, include_content_disposition:)
   end
 
   def self.secure_uploads_url_from_upload_url(url)
@@ -304,7 +300,7 @@ class Upload < ActiveRecord::Base
         if local?
           Discourse.store.path_for(self)
         else
-          Discourse.store.download!(self).path
+          Discourse.store.download!(self)
         end
 
       if extension == "svg"
@@ -388,7 +384,7 @@ class Upload < ActiveRecord::Base
         if local?
           Discourse.store.path_for(self)
         else
-          Discourse.store.download_safe(self)&.path
+          Discourse.store.download(self)
         end
 
       if local_path.nil?

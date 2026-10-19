@@ -2,7 +2,6 @@
 
 require "socket"
 require "ipaddr"
-require "excon"
 require "rate_limiter"
 require "url_helper"
 
@@ -228,6 +227,11 @@ class FinalDestination
     unless validate_uri
       @status = :invalid_address
       log(:warn, "FinalDestination could not resolve URL (invalid URI): #{@uri}")
+      return
+    end
+
+    if @stop_at_blocked_pages && blocked_domain?(@uri)
+      @status = :blocked_page
       return
     end
 

@@ -28,11 +28,7 @@ module PostGuardian
     return false if !(can_see_post.nil? && can_see_post?(post)) && !can_see_post
 
     # no warnings except for staff
-    if action_key == :notify_user &&
-         (
-           post.user.blank? ||
-             (!is_staff? && opts[:is_warning].present? && opts[:is_warning] == "true")
-         )
+    if action_key == :notify_user && (post.user.blank? || (!is_staff? && opts[:is_warning]))
       return false
     end
 
@@ -59,6 +55,9 @@ module PostGuardian
 
         # Silenced users can't flag
         return false if is_flag && @user.silenced?
+
+        # Silenced users can't like
+        return false if action_key == :like && @user.silenced?
 
         # Hidden posts can't be flagged
         return false if is_flag && post.hidden?
@@ -130,7 +129,7 @@ module PostGuardian
   end
 
   def can_delete_all_posts?(user)
-    is_staff? && user && !user.admin? &&
+    is_staff? && user && !user.admin? && (!user.moderator? || is_admin?) &&
       (
         is_admin? ||
           (
@@ -159,10 +158,14 @@ module PostGuardian
     # Must be staff to edit a locked post
     return false if post.locked? && !is_staff?
 
-    if is_in_edit_post_groups? || is_category_group_moderator?(post.topic&.category)
-      return can_create_post?(post.topic)
+    # Staff in edit groups skip visibility (e.g. deleted topics); non-staff must pass it
+    if is_in_edit_post_groups?
+      return can_create_post?(post.topic) if is_staff?
+      return can_create_post?(post.topic) if can_see_post_topic?(post)
+      return false
     end
     return false if !can_see_post_topic?(post)
+    return can_create_post?(post.topic) if is_category_group_moderator?(post.topic&.category)
 
     return false if post.topic&.archived? || post.user_deleted || post.deleted_at
 
@@ -357,8 +360,9 @@ module PostGuardian
 
   def can_change_post_owner?
     return true if is_admin?
-
-    SiteSetting.moderators_change_post_ownership && is_staff?
+    return true if SiteSetting.moderators_change_post_ownership && is_staff?
+    return true if @user.in_any_groups?(SiteSetting.change_post_ownership_allowed_groups_map)
+    false
   end
 
   def can_change_post_timestamps?
@@ -385,17 +389,21 @@ module PostGuardian
     is_staff? || @user.has_trust_level?(TrustLevel[4])
   end
 
-  def can_see_flagged_posts?
-    is_staff?
-  end
-
   def can_see_deleted_posts?(category = nil)
     is_category_group_moderator?(category) ||
       @user.in_any_groups?(SiteSetting.delete_all_posts_and_topics_allowed_groups_map)
   end
 
+  def can_see_deleted_posts_for_user?
+    is_staff?
+  end
+
+  def can_view_raw_emails?
+    @user.in_any_groups?(SiteSetting.view_raw_email_allowed_groups_map)
+  end
+
   def can_view_raw_email?(post)
-    post && @user.in_any_groups?(SiteSetting.view_raw_email_allowed_groups_map)
+    post && can_view_raw_emails?
   end
 
   def can_unhide?(post)

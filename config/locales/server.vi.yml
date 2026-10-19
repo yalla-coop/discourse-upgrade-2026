@@ -189,7 +189,6 @@ vi:
       cors_origins_should_not_have_trailing_slash: "Bạn không nên thêm dấu gạch chéo (/) vào nguồn gốc CORS."
       slow_down_crawler_user_agent_cannot_be_popular_browsers: "Bạn không thể thêm bất kỳ giá trị nào sau đây vào cài đặt: %{values}."
       strip_image_metadata_cannot_be_disabled_if_composer_media_optimization_image_enabled: "Bạn không thể tắt siêu dữ liệu hình ảnh dải nếu bật 'hình ảnh tối ưu hóa phương tiện tổng hợp' được bật. Tắt 'đã bật hình ảnh tối ưu hóa phương tiện tổng hợp' trước khi tắt siêu dữ liệu hình ảnh dải."
-      x_summary_large_image_no_svg: "Hình ảnh tóm tắt trên Twitter được sử dụng cho twitter: siêu dữ liệu hình ảnh không được là hình ảnh .svg."
     conflicting_google_user_id: 'ID Tài khoản Google cho tài khoản này đã thay đổi; cần có sự can thiệp của nhân viên vì lý do an ninh. Vui lòng liên hệ với nhân viên và chỉ họ đến <br><a href="https://meta.discourse.org/t/76575">https://meta.discourse.org/t/76575</a>'
     onebox:
       invalid_address: "Xin lỗi, chúng tôi không thể tạo bản xem trước cho trang web này vì không thể tìm thấy máy chủ %{hostname}. Thay vì xem trước, chỉ một liên kết sẽ xuất hiện trong tút của bạn :cry:"
@@ -654,7 +653,6 @@ vi:
       short_description: "Thích tút này"
   email_settings:
     pop3_authentication_error: "Đã xảy ra sự cố với thông tin đăng nhập POP3 được cung cấp, hãy kiểm tra tên người dùng và mật khẩu rồi thử lại."
-    imap_authentication_error: "Đã xảy ra sự cố với thông tin đăng nhập IMAP được cung cấp, hãy kiểm tra tên người dùng và mật khẩu rồi thử lại."
   webauthn:
     validation:
       challenge_mismatch_error: "Thử thách được cung cấp không khớp với thử thách do máy chủ xác thực tạo ra."
@@ -769,7 +767,9 @@ vi:
       description: "Danh sách các trạng thái của cờ bao gồm loại cờ, người đăng, người gắn cờ và thời gian giải quyết."
     visits:
       title: "Các thành viên truy cập"
-      xaxis: "Ngày"
+      xaxis:
+        desktop: "Máy tính để bàn"
+        mobile: "Điện thoại"
       yaxis: "Số lần truy cập"
     signups:
       xaxis: "Ngày"
@@ -1242,7 +1242,6 @@ vi:
     max_age_unmatched_ips: "Xóa các IP hiển thị không khớp sau (N) ngày."
     num_flaggers_to_close_topic: "Số lượng tối thiểu đánh dấu độc nhất để tự động tạm dừng một chủ đề để can thiệp."
     auto_respond_to_flag_actions: "Kích hoạt tính năng trả lời tự động khi xử lý một đánh dấu."
-    min_first_post_typing_time: "Số lượng thời gian tối thiểu theo phần ngàn giây mà thành viên phải nhập trong bài viết đầu tiên, nếu ngưỡng không được đáp ứng sẽ tự động nhập vào hàng chờ duyệt. Đặt là 0 để tắt (không khuyến nghị)"
     reply_by_email_address: "Mẫu để trả lời cho các địa chỉ email đến, ví dụ: %%{reply_key}@reply.example.com hoặc replies+%%{reply_key}@example.com"
     strip_images_from_short_emails: "Tất cả các ảnh từ email phải có kích cỡ nhỏ hơn 2800 Bytes"
     display_name_on_email_from: "Hiển thị tên đầy đủ trên email từ trường"
@@ -1257,11 +1256,6 @@ vi:
     pop3_polling_password: "Mật khẩu của tài khoản POP3 để poll email."
     pop3_polling_delete_from_server: "Xóa email khỏi máy chủ. LƯU Ý: Nếu bạn tắt tính năng này, bạn nên dọn dẹp hộp thư đến của mình theo cách thủ công"
     email_in_authserv_id: "Mã định danh của dịch vụ đang thực hiện kiểm tra xác thực đối với các email đến. Xem <a href='https://meta.discourse.org/t/134358'>https://meta.discourse.org/t/134358</a> để biết hướng dẫn về cách định cấu hình."
-    enable_imap_idle: "Sử dụng cơ chế IMAP IDLE để chờ email mới."
-    imap_polling_period_mins: "Khoảng thời gian tính bằng phút giữa việc kiểm tra tài khoản IMAP cho email."
-    imap_polling_old_emails: "Số lượng email cũ tối đa (đã xử lý) được cập nhật mỗi khi hộp IMAP được thăm dò (0 cho tất cả)."
-    imap_polling_new_emails: "Số lượng email mới (chưa xử lý) tối đa được cập nhật mỗi khi hộp IMAP được thăm dò ý kiến."
-    imap_batch_import_email: "Số lượng email mới tối thiểu kích hoạt chế độ nhập (tắt thông báo cho các bài đăng đã nhập)."
     email_prefix: "Nhãn [label] sử dụng trong tiêu đề email, mặc định được đặt là 'title'."
     email_site_title: "Tên website được sử dụng là tên người gửi email, mặc định là 'title' nếu không thiết lập. Nếu 'title' có chứa ký tự không được phép trong chuỗi người gửi email, sử dụng thiết lập này."
     minimum_topics_similar: "Có bao nhiêu chủ đề cần phải có trước các chủ đề tương tự được giới thiệu khi soạn thảo chủ đề mới."
@@ -1278,7 +1272,6 @@ vi:
     max_daily_gravatar_crawls: "Giới hạn số lần Discourse sẽ kiểm tra Gravatar mới trong một ngày"
     enable_user_directory: "Cung cấp một chỉ mục thành viên để duyệt xem"
     anonymous_account_duration_minutes: "Để bảo vệ danh tính tạo ra một tài khoản ẩn danh mới mỗi N phút cho mỗi người dùng. Ví dụ: nếu đặt là 600, ngay sau khi 600 phút trôi qua kể từ bài viết cuối cùng VÀ lập tức tạo ra một tài khoản ẩn danh mới cho thành viên."
-    hide_user_profiles_from_public: "Vô hiệu hóa thẻ thành viên, hồ sơ và chỉ mục người dùng với các thành viên ẩn danh."
     log_personal_messages_views: "Ghi nhật ký lượt xem tin nhắn cá nhân của Admin cho người dùng / nhóm khác."
     ignored_users_count_message_threshold: "Thông báo cho người kiểm duyệt nếu một người dùng cụ thể bị bỏ qua bởi nhiều người dùng khác này."
     ignored_users_message_gap_days: "Phải đợi bao lâu trước khi thông báo lại cho người kiểm duyệt về một người dùng đã bị nhiều người khác bỏ qua."
@@ -1361,8 +1354,6 @@ vi:
       pop3_polling_authentication_failed: "Chứng thực POP3 thất bại, xin hãy kiểm tra lại thông tin."
       reply_by_email_address_is_empty: "Bạn phải thiết lập 'reply by email address' trước khi kích hoạt trả lời bằng email."
       user_locale_not_enabled: "Bạn phải bật 'allow user locale' trước khi kích hoạt thiết lập này."
-      min_username_length_range: "Bạn không thiết lập giá trị nhỏ nhất lớn hơn giá trị lớn nhất"
-      max_username_length_range: "Bạn không thể thiết lập số tối đa nhỏ hơn số tối thiểu"
   search:
     within_post: "#%{post_number} bởi %{username}"
     types:
@@ -1386,7 +1377,6 @@ vi:
       exclude_tag: "Loại trừ chủ đề chứa thẻ cụ thể"
       exclude_tags_any: "Loại trừ chủ đề chứa bất kỳ thẻ cụ thể (phân cách bằng dấu phẩy)"
       exclude_tags_all: "Loại trừ chủ đề có chứa tất cả thẻ cụ thể (phân cách bằng dấu cộng)"
-      tags_alias: "Tên gọi khác cho bộ lọc 'tag:'"
       tag_group: "Hiển thị chủ đề chứa thẻ từ một nhóm thẻ cụ thể"
       exclude_tag_group: "Loại trừ chủ đề chứa thẻ từ một nhóm thẻ cụ thể"
       activity_before: "Hiển thị chủ đề có hoạt động cuối cùng trước một ngày cụ thể (YYYY-MM-DD hoặc số ngày trước)"
@@ -1689,6 +1679,7 @@ vi:
       title: "Trả lời bị xóa khỏi tút bị báo cáo bởi BQT"
       subject_template: "Trả lời bị xóa khỏi tút bị báo cáo bởi BQT"
     welcome_user:
+      preview: "Chào mừng đến với %{site_name}!"
       subject_template: "Chào mừng đến với %{site_name}!"
       text_body_template: |
         Cảm ơn bạn đã tham gia %{site_name}, và chào mừng bạn!
@@ -1707,6 +1698,7 @@ vi:
 
         Với quyền lực lớn đi kèm với trách nhiệm lớn. Nếu bạn chưa quen với việc kiểm duyệt, vui lòng tham khảo [Hướng dẫn kiểm duyệt](https://meta.discourse.org/t/discourse-moderation-guide/63116).
     welcome_invite:
+      preview: "Chào mừng đến với %{site_name}!"
       subject_template: "Chào mừng đến với %{site_name}!"
     tl2_promotion_message:
       subject_template: "Chúc mừng bạn đã tăng độ tin cậy!"
@@ -1836,7 +1828,6 @@ vi:
     Để hủy đăng ký nhận các email này, [bấm vào đây] (%{unsubscribe_url}).
   subject_re: "Re:"
   subject_pm: "[PM]"
-  email_from_without_site: "%{group_name}"
   user_notifications:
     previous_discussion: "Các trả lời trước"
     reached_limit:
@@ -1927,6 +1918,7 @@ vi:
         %{respond_instructions}
     user_posted:
       title: "Người dùng đã đăng"
+      preview: "Ai đó đã trả lời một chủ đề mà bạn đang giám sát."
     user_watching_category_or_tag:
       title: "Chuyên mục hoặc Thẻ mà bạn giám sát"
       subject_template: "[%{email_prefix}] %{topic_title}"
@@ -2423,8 +2415,6 @@ vi:
     webhook_deactivation_reason: "Webhook của bạn đã tự động bị vô hiệu hóa. Chúng tôi đã nhận được nhiều phản hồi lỗi trạng thái HTTP '%{status}'."
     api_key:
       revoked: Đã thu hồi
-    imap_email_deleted: "Email đã bị xóa trên máy chủ IMAP."
-    imap_email_marked_as_spam: "Email đã được chuyển vào thư mục spam trên máy chủ IMAP."
   reviewables:
     priorities:
       low: "Thấp"
@@ -2453,29 +2443,36 @@ vi:
         complete: "Tút đã bị xóa."
       delete_and_agree_replies:
         confirm: "Bạn có chắc muốn xóa các câu trả lời của tút?"
-      disagree:
+      disagree_bundle:
         title: "Không"
       ignore:
         title: "Bỏ qua"
       ignore_and_do_nothing:
         title: "Không làm gì cả"
       approve:
-        title: "Duyệt"
+        title: "Đồng ý"
       approve_post:
-        title: "Phê duyệt tút"
+        title: "Đồng ý"
       approve_post_closed:
-        title: "Phê duyệt tút"
+        title: "Đồng ý"
+      reject_post_bundle:
+        title: "Không"
       reject_post:
         title: "Từ chối tút"
       approve_user:
-        title: "Phê duyệt người dùng"
+        title: "Đồng ý"
       reject_user:
+        title: "Không"
         delete:
           title: "Xóa tài khoản"
           complete: "Người dùng đã bị xóa."
         block:
           title: "Xóa và Chặn Người Dùng"
           description: "Người dùng sẽ bị xóa và chúng tôi sẽ chặn IP và địa chỉ email của họ."
+      confirm_spam:
+        title: "Đồng ý"
+      not_spam:
+        title: "Không"
       reject:
         title: "Từ chối"
       reject_and_delete:
@@ -2483,13 +2480,11 @@ vi:
       reject_and_keep_deleted:
         title: "Giữ tút bị xóa"
       approve_and_restore:
-        title: "Phê duyệt và khôi phục tút"
-      no_action_post:
-        title: "Không có hành động"
+        title: "Đồng ý"
+      approve_and_unhide:
+        title: "Đồng ý"
       delete_post:
         complete: "Tút đã bị xóa"
-      no_action_user:
-        title: "Không có hành động"
       delete_user:
         complete: "Người dùng đã bị xóa"
   discord:

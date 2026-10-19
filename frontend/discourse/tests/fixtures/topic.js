@@ -1,4 +1,4 @@
-export default {
+const topicFixtures = {
   "/t/130.json": {
     post_stream: {
       posts: [
@@ -2188,6 +2188,7 @@ export default {
       can_invite_via_email: true,
       can_toggle_topic_visibility: true,
       can_pin_unpin_topic: true,
+      can_banner_topic: true,
       auto_close_at: null,
       auto_close_hours: null,
       auto_close_based_on_last_post: false,
@@ -4009,7 +4010,7 @@ export default {
     chunk_size: 20,
     bookmarked: null,
     bookmarks: [],
-    tags: ["foo"],
+    tags: [{ id: 1, name: "foo", slug: "foo" }],
   },
   "/t/9/1.json": {
     post_stream: {
@@ -5765,6 +5766,7 @@ export default {
       can_split_merge_topic: true,
       can_edit_staff_notes: true,
       can_pin_unpin_topic: true,
+      can_banner_topic: true,
       can_moderate_category: true,
       participants: [
         {
@@ -5805,7 +5807,10 @@ export default {
         avatar_template: "/images/avatar.png",
       },
     },
-    tags: ["foo", "baz"],
+    tags: [
+      { id: 1, name: "foo", slug: "foo" },
+      { id: 2, name: "baz", slug: "baz" },
+    ],
   },
   "/t/2481/1.json": {
     post_stream: {
@@ -6110,6 +6115,7 @@ export default {
       can_split_merge_topic: true,
       can_edit_staff_notes: true,
       can_pin_unpin_topic: true,
+      can_banner_topic: true,
       can_moderate_category: true,
       participants: [
         {
@@ -6294,6 +6300,7 @@ export default {
       can_invite_via_email: true,
       can_toggle_topic_visibility: true,
       can_pin_unpin_topic: true,
+      can_banner_topic: true,
       auto_close_at: null,
       auto_close_hours: null,
       auto_close_based_on_last_post: false,
@@ -6640,6 +6647,7 @@ export default {
       can_invite_via_email: true,
       can_toggle_topic_visibility: true,
       can_pin_unpin_topic: true,
+      can_banner_topic: true,
       auto_close_at: null,
       auto_close_hours: null,
       auto_close_based_on_last_post: false,
@@ -6977,6 +6985,7 @@ export default {
       can_invite_via_email: true,
       can_toggle_topic_visibility: true,
       can_pin_unpin_topic: true,
+      can_banner_topic: true,
       auto_close_at: null,
       auto_close_hours: null,
       auto_close_based_on_last_post: false,
@@ -7079,3 +7088,5 @@ export default {
     tags: null,
   },
 };
+
+export default topicFixtures;

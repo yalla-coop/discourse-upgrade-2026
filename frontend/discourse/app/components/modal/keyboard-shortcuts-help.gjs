@@ -3,7 +3,7 @@ import { tracked } from "@glimmer/tracking";
 import { concat } from "@ember/helper";
 import { action } from "@ember/object";
 import { service } from "@ember/service";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import DModal from "discourse/components/d-modal";
 import FilterInput from "discourse/components/filter-input";
 import { translateModKey } from "discourse/lib/utilities";
@@ -195,6 +195,9 @@ export default class KeyboardShortcutsHelp extends Component {
           open: buildShortcut("navigation.open", {
             keys1: ["o"],
             keys2: [ENTER],
+          }),
+          open_new_window: buildShortcut("navigation.open_new_window", {
+            keys1: [META, ENTER],
           }),
           next_prev: buildShortcut("navigation.next_prev", {
             keys1: [SHIFT, "j"],
@@ -430,6 +433,7 @@ export default class KeyboardShortcutsHelp extends Component {
       latest: buildShortcut("jump_to.latest", { keys1: ["g", "l"] }),
       new: buildShortcut("jump_to.new", { keys1: ["g", "n"] }),
       unread: buildShortcut("jump_to.unread", { keys1: ["g", "u"] }),
+      unseen: buildShortcut("jump_to.unseen", { keys1: ["g", "y"] }),
       categories: buildShortcut("jump_to.categories", { keys1: ["g", "c"] }),
       top: buildShortcut("jump_to.top", { keys1: ["g", "t"] }),
       bookmarks: buildShortcut("jump_to.bookmarks", { keys1: ["g", "b"] }),
@@ -477,7 +481,7 @@ export default class KeyboardShortcutsHelp extends Component {
                   }}</h2>
                 <ul>
                   {{#each-in shortcutCategory.shortcuts as |name shortcut|}}
-                    <li>{{htmlSafe shortcut}}</li>
+                    <li>{{trustHTML shortcut}}</li>
                   {{/each-in}}
                 </ul>
               </section>

@@ -1,11 +1,12 @@
 import Component from "@glimmer/component";
-import { tracked } from "@glimmer/tracking";
+import { cached, tracked } from "@glimmer/tracking";
 import { concat, hash } from "@ember/helper";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
 import { getOwner } from "@ember/owner";
 import didInsert from "@ember/render-modifiers/modifiers/did-insert";
 import didUpdate from "@ember/render-modifiers/modifiers/did-update";
+import { next } from "@ember/runloop";
 import { service } from "@ember/service";
 import {
   computePosition,
@@ -24,7 +25,8 @@ import ChatMessageReaction from "discourse/plugins/chat/discourse/components/cha
 import chatMessageContainer from "discourse/plugins/chat/discourse/lib/chat-message-container";
 import ChatMessageInteractor from "discourse/plugins/chat/discourse/lib/chat-message-interactor";
 
-const MSG_ACTIONS_VERTICAL_PADDING = -10;
+const MSG_ACTIONS_USER_INFO_VERTICAL_OFFSET = -24;
+const MSG_ACTIONS_VERTICAL_OFFSET = -6;
 const FULL = "full";
 const REDUCED = "reduced";
 const REDUCED_WIDTH_THRESHOLD = 500;
@@ -43,6 +45,7 @@ export default class ChatMessageActionsDesktop extends Component {
     return this.chat.activeMessage.context;
   }
 
+  @cached
   get messageInteractor() {
     return new ChatMessageInteractor(
       getOwner(this),
@@ -52,7 +55,7 @@ export default class ChatMessageActionsDesktop extends Component {
   }
 
   get shouldRenderFavoriteReactions() {
-    return this.size === FULL;
+    return this.size === FULL && this.message.channel?.isFollowing;
   }
 
   get messageContainer() {
@@ -67,47 +70,58 @@ export default class ChatMessageActionsDesktop extends Component {
 
   @action
   setup(element) {
-    if (!this.messageContainer) {
+    const container = this.messageContainer;
+
+    if (!container) {
       return;
     }
 
-    const boundary = this.messageContainer.closest(".chat-messages-scroller");
+    const boundary = container.closest(".chat-messages-scroller");
+
+    if (!boundary) {
+      return;
+    }
+
     this.size = boundary.clientWidth < REDUCED_WIDTH_THRESHOLD ? REDUCED : FULL;
 
-    computePosition(this.messageContainer, element, {
-      placement: "top-end",
-      strategy: "fixed",
-      middleware: [
-        offset({
-          mainAxis: MSG_ACTIONS_VERTICAL_PADDING,
-          crossAxis: -2,
-        }),
-        flip({
-          boundary,
-          fallbackPlacements: ["bottom-end"],
-        }),
-        shift({ limiter: limitShift() }),
-        hide({ strategy: "referenceHidden" }),
-        hide({ strategy: "escaped" }),
-      ],
-    }).then(({ x, y, middlewareData }) => {
-      const style = {
-        left: `${x}px`,
-        top: `${y}px`,
-      };
+    next(() => {
+      computePosition(container, element, {
+        placement: "top-end",
+        strategy: "fixed",
+        middleware: [
+          offset({
+            mainAxis: this.chat.activeMessage?.hideUserInfo
+              ? MSG_ACTIONS_VERTICAL_OFFSET
+              : MSG_ACTIONS_USER_INFO_VERTICAL_OFFSET,
+            crossAxis: -2,
+          }),
+          flip({
+            boundary,
+            fallbackPlacements: ["bottom-end"],
+          }),
+          shift({ limiter: limitShift() }),
+          hide({ strategy: "referenceHidden" }),
+          hide({ strategy: "escaped" }),
+        ],
+      }).then(({ x, y, middlewareData }) => {
+        const style = {
+          left: `${x}px`,
+          top: `${y}px`,
+        };
 
-      if (
-        middlewareData.hide?.referenceHidden ||
-        middlewareData.hide?.escaped
-      ) {
-        style.visibility = "hidden";
-        style.pointerEvents = "none";
-      } else {
-        style.visibility = "visible";
-        style.pointerEvents = "auto";
-      }
+        if (
+          middlewareData.hide?.referenceHidden ||
+          middlewareData.hide?.escaped
+        ) {
+          style.visibility = "hidden";
+          style.pointerEvents = "none";
+        } else {
+          style.visibility = "visible";
+          style.pointerEvents = "auto";
+        }
 
-      Object.assign(element.style, style);
+        Object.assign(element.style, style);
+      });
     });
   }
 

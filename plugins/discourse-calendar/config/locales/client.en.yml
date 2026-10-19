@@ -6,6 +6,12 @@ en:
         categories:
           discourse_post_event: "Discourse Event"
           discourse_calendar: "Calendar and Events"
+      web_hooks:
+        calendar_event:
+          group_name: "Calendar Event"
+          calendar_event_created: "Calendar event is created"
+          calendar_event_updated: "Calendar event is updated"
+          calendar_event_destroyed: "Calendar event is destroyed"
   js:
     notifications:
       titles:
@@ -22,6 +28,11 @@ en:
               label: Topic ID
     discourse_calendar:
       invite_user_notification: "%{username} invited you to: %{description}"
+      preferences:
+        all_events: "Discourse Calendar - All Events"
+        all_events_description: "All forum events"
+        my_events: "Discourse Calendar - My Events"
+        my_events_description: "Events you are going to or interested in"
       on_holiday: "On Holiday"
       disable_holiday: "Disable"
       enable_holiday: "Enable"
@@ -345,6 +356,7 @@ en:
       bulk_invite: "Bulk Invite"
       close_event: "Close event"
       open_event: "Open event"
+      destroy_event: "Destroy event"
       invitees_modal:
         title_invited: "Event Participation"
         title_participated: "List of users who participated"
@@ -421,6 +433,13 @@ en:
             private:
               title: "Private"
               description: "A private event can only be joined by invited users."
+      composer:
+        name_placeholder: "Event"
+        end_date_placeholder: "Set end date"
+        location_placeholder: "Add location or URL"
+        max_attendees_placeholder: "Set max attendees"
+        description_placeholder: "Add event description"
+
       builder_modal:
         custom_fields:
           label: "Custom Fields"
@@ -441,6 +460,9 @@ en:
         timezone:
           label: Timezone
           remove_timezone: No timezone (UTC)
+        all_day:
+          label: "All day event"
+          description: "An all-day event will not have specific times, just a date. The event will run from the start of the day to the end of the day."
         reminders:
           label: "Reminders"
           types:
@@ -490,6 +512,7 @@ en:
           label: "Invited groups"
         status:
           label: "Status"
+        delete_confirmation_message: "Delete this event?"
       invite_user_or_group:
         title: "Notify user(s) or group(s)"
         invite: "Send"

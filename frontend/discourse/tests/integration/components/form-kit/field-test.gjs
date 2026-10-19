@@ -1,4 +1,5 @@
 import { fn, hash } from "@ember/helper";
+import { trustHTML } from "@ember/template";
 import {
   click,
   fillIn,
@@ -11,6 +12,7 @@ import { module, test } from "qunit";
 import sinon from "sinon";
 import Form from "discourse/components/form";
 import DTooltip from "discourse/float-kit/components/d-tooltip";
+import { withSilencedDeprecationsAsync } from "discourse/lib/deprecated";
 import { setupRenderingTest } from "discourse/tests/helpers/component-test";
 import formKit from "discourse/tests/helpers/form-kit-helper";
 
@@ -29,7 +31,7 @@ module("Integration | Component | FormKit | Field", function (hooks) {
     await render(
       <template>
         <Form as |form|>
-          <form.Field @name="foo" @title="Foo" @size={{8}}>
+          <form.Field @type="input" @name="foo" @title="Foo" @size={{8}}>
             Test
           </form.Field>
         </Form>
@@ -44,12 +46,13 @@ module("Integration | Component | FormKit | Field", function (hooks) {
       <template>
         <Form @data={{hash disabled=true}} as |form data|>
           <form.Field
+            @type="input"
             @name="foo"
             @title="Foo"
             @disabled={{data.disabled}}
             as |field|
           >
-            <field.Input />
+            <field.Control />
           </form.Field>
 
           <form.Button class="test" @action={{fn form.set "disabled" false}} />
@@ -73,12 +76,13 @@ module("Integration | Component | FormKit | Field", function (hooks) {
       <template>
         <Form as |form|>
           <form.Field
+            @type="input"
             @name="foo"
             @title="Foo"
             @description="foo foo"
             as |field|
           >
-            <field.Input />
+            <field.Control />
           </form.Field>
         </Form>
       </template>
@@ -95,8 +99,14 @@ module("Integration | Component | FormKit | Field", function (hooks) {
     await render(
       <template>
         <Form as |form|>
-          <form.Field @name="foo.bar" @title="Foo" @size={{8}} as |field|>
-            <field.Input />
+          <form.Field
+            @type="input"
+            @name="foo.bar"
+            @title="Foo"
+            @size={{8}}
+            as |field|
+          >
+            <field.Control />
           </form.Field>
         </Form>
       </template>
@@ -116,8 +126,8 @@ module("Integration | Component | FormKit | Field", function (hooks) {
     await render(
       <template>
         <Form as |form|>
-          <form.Field @name="foo" @size={{8}} as |field|>
-            <field.Input />
+          <form.Field @type="input" @name="foo" @size={{8}} as |field|>
+            <field.Control />
           </form.Field>
         </Form>
       </template>
@@ -126,25 +136,51 @@ module("Integration | Component | FormKit | Field", function (hooks) {
     resetOnerror();
   });
 
-  test("@validation", async function (assert) {
+  test("@title with htmlSafe", async function (assert) {
+    const htmlTitle = trustHTML('Title with <a href="#">link</a>');
+
     await render(
       <template>
         <Form as |form|>
           <form.Field
             @name="foo"
+            @type="checkbox"
+            @title={{htmlTitle}}
+            as |field|
+          >
+            <field.Control />
+          </form.Field>
+        </Form>
+      </template>
+    );
+
+    assert
+      .dom(".form-kit__control-checkbox-title a")
+      .exists("it renders HTML in the title");
+    assert.dom(".form-kit__control-checkbox-title a").hasAttribute("href", "#");
+  });
+
+  test("@validation", async function (assert) {
+    await render(
+      <template>
+        <Form as |form|>
+          <form.Field
+            @type="input"
+            @name="foo"
             @title="Foo"
             @validation="required"
             as |field|
           >
-            <field.Input />
+            <field.Control />
           </form.Field>
           <form.Field
+            @type="input"
             @name="bar"
             @title="Bar"
             @validation="required"
             as |field|
           >
-            <field.Input />
+            <field.Control />
           </form.Field>
         </Form>
       </template>
@@ -174,12 +210,13 @@ module("Integration | Component | FormKit | Field", function (hooks) {
       <template>
         <Form @data={{hash foo="bar"}} as |form|>
           <form.Field
+            @type="input"
             @name="foo"
             @title="Foo"
             @validate={{validate}}
             as |field|
           >
-            <field.Input />
+            <field.Control />
           </form.Field>
 
           <form.Submit />
@@ -200,11 +237,12 @@ module("Integration | Component | FormKit | Field", function (hooks) {
       <template>
         <Form as |form|>
           <form.Field
+            @type="input"
             @name="foo"
             @title="Foo"
             @showTitle={{false}}
             as |field|
-          ><field.Input /></form.Field>
+          ><field.Control /></form.Field>
         </Form>
       </template>
     );
@@ -217,12 +255,13 @@ module("Integration | Component | FormKit | Field", function (hooks) {
       <template>
         <Form as |form|>
           <form.Field
+            @type="input"
             @name="foo"
             @title="Foo"
             @description="foo description"
             @format="full"
             as |field|
-          ><field.Input /></form.Field>
+          ><field.Control /></form.Field>
         </Form>
       </template>
     );
@@ -243,13 +282,14 @@ module("Integration | Component | FormKit | Field", function (hooks) {
       <template>
         <Form as |form|>
           <form.Field
+            @type="input"
             @name="foo"
             @title="Foo"
             @description="foo description"
             @format="full"
             @descriptionFormat="large"
             as |field|
-          ><field.Input /></form.Field>
+          ><field.Control /></form.Field>
         </Form>
       </template>
     );
@@ -267,12 +307,13 @@ module("Integration | Component | FormKit | Field", function (hooks) {
       <template>
         <Form as |form|>
           <form.Field
+            @type="input"
             @name="foo"
             @title="Foo"
             @format="full"
             @titleFormat="large"
             as |field|
-          ><field.Input /></form.Field>
+          ><field.Control /></form.Field>
         </Form>
       </template>
     );
@@ -305,8 +346,14 @@ module("Integration | Component | FormKit | Field", function (hooks) {
       <template>
         <Form @data={{hash something=(hash foo=1)}} as |form|>
           <form.Object @name="something" as |object|>
-            <object.Field @name="foo" @title="Foo" @onSet={{onSet}} as |field|>
-              <field.Input />
+            <object.Field
+              @type="input"
+              @name="foo"
+              @title="Foo"
+              @onSet={{onSet}}
+              as |field|
+            >
+              <field.Control />
             </object.Field>
           </form.Object>
         </Form>
@@ -320,8 +367,14 @@ module("Integration | Component | FormKit | Field", function (hooks) {
     await render(
       <template>
         <Form as |form|>
-          <form.Field @name="foo" @title="Foo" @tooltip="text" as |field|>
-            <field.Input />
+          <form.Field
+            @type="input"
+            @name="foo"
+            @title="Foo"
+            @tooltip="text"
+            as |field|
+          >
+            <field.Control />
           </form.Field>
         </Form>
       </template>
@@ -335,12 +388,13 @@ module("Integration | Component | FormKit | Field", function (hooks) {
       <template>
         <Form as |form|>
           <form.Field
+            @type="input"
             @name="foo"
             @title="Foo"
             @tooltip={{component DTooltip content="component"}}
             as |field|
           >
-            <field.Input />
+            <field.Control />
           </form.Field>
         </Form>
       </template>
@@ -349,5 +403,39 @@ module("Integration | Component | FormKit | Field", function (hooks) {
     await click(".fk-d-tooltip__trigger");
 
     assert.dom(".fk-d-tooltip__inner-content").hasText("component");
+  });
+
+  test("legacy yield does not rerender input on keystroke", async function (assert) {
+    let data = { foo: "" };
+    const mutateData = (x) => (data = x);
+
+    await withSilencedDeprecationsAsync(
+      "discourse.form-kit.legacy-field-yield",
+      async () => {
+        await render(
+          <template>
+            <Form @data={{data}} @onSubmit={{mutateData}} as |form|>
+              <form.Field @name="foo" @title="Foo" as |field|>
+                <field.Input />
+              </form.Field>
+            </Form>
+          </template>
+        );
+
+        const input = document.querySelector(".form-kit__control-input");
+        await fillIn(input, "bar");
+
+        assert.strictEqual(
+          document.querySelector(".form-kit__control-input"),
+          input,
+          "the input element is the same DOM node after typing"
+        );
+        assert.form().field("foo").hasValue("bar");
+
+        await formKit().submit();
+
+        assert.deepEqual(data.foo, "bar");
+      }
+    );
   });
 });
