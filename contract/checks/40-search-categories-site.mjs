@@ -137,7 +137,9 @@ export default {
       // pm_count is only sent to staff (see notes), so it is optional here.
       expect: {
         results: "array",
-        "results[].id": "string",
+        // A number from Discourse 2025.12 (it was the tag name). Prose hands the
+        // app the name instead (fix/tag-search-ids), so `text` must stay a string.
+        "results[].id": "string|number",
         "results[].text": "string",
         "results[].count": "number",
         "?results[].pm_count": "number",

@@ -1,0 +1,22 @@
+{
+  "hop": "2025.12",
+  "discourse_version": "2025.12.0",
+  "branch": "hop/2025.12",
+  "commit": "f2b8842316",
+  "ran_at": "2026-10-19T17:30:37.533Z",
+  "verdict": "pass",
+  "layer_a": {
+    "examples": 48,
+    "failures": 0,
+    "failed": []
+  },
+  "layer_b": {
+    "passed": 106,
+    "failed": 0,
+    "unverified": 0,
+    "skipped": 0,
+    "changed_vs_baseline": [],
+    "failed_checks": []
+  },
+  "layer_c": null
+}

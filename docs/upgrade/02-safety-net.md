@@ -32,6 +32,21 @@ docker exec -u discourse:discourse -w /src -e LOAD_PLUGINS=1 -e CI=1 ft-baseline
 
 For each hop, start a new container from the `discourse_dev` image dated nearest to that version's release (tags look like `YYYYMMDD-HHMM-arm64`), with its own data folder, for example `~/yalla/discourse-upgrade-data/hop-3.4.7`.
 
+## Checklist for every hop
+
+1. Merge the new Discourse version into a `hop/<version>` branch. Check that core matches the official tag exactly, with only Yalla files different. If the version is on its own release line (for example 2025.12), set core to the tag file by file (see `docs/upgrade/08-hop-2025.12.md`). Keep `.github/dependabot.yml` deleted (#52).
+2. Start a container from the `discourse_dev` image dated nearest the release. Install, and build the dev and test databases.
+3. Run Layer A and Layer B: `CONTAINER=ft-hop-<v> HOP=<v> script/safety-net.sh`.
+4. For every change Layer B reports, check what the **app** reads through Prose before deciding. Fix Prose when the app would break (as for the CSRF login fix and the tag search fix). Accept the change in the check only when the app is unaffected, and say why in a comment.
+5. Run the full suite on the staging backup: `STAGING_BACKUP=<file> CONTAINER=ft-hop-<v> HOP=<v> script/safety-net.sh full`. Run the emulator headless.
+6. If a Prose fix was needed, run Prose's own tests in the app repo:
+   - `cd api && npx jest`. The 2 failures in `apiKeys` and `resolvers/utils` are old ones that also fail on `main`.
+   - `node --test .maestro/scripts/__tests__/`
+7. Write the hop notes (`docs/upgrade/NN-hop-<v>.md`), update the tracker, and open the PR.
+8. Any Prose fix goes to staging first, then production, before the Discourse switch.
+
+Layer C reference: `contract/reports/layer-c-baseline-staging.json`. Re-record it when the app's flows change, for example when a flow moves from `.maestro/pending/` into `.maestro/flows/`.
+
 ## What is covered
 
 | Area | File | Tests |
