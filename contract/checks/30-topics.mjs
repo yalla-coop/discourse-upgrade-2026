@@ -264,8 +264,10 @@ export default {
       status: 200,
       // Every topic here has the tag, so this is the one list where checking
       // each tag is a string is safe (empty arrays elsewhere would be "not verified").
-      // Prose declares Topic.tags as [String].
-      expect: { ...topicList, "topic_list.topics[].tags[]": "string" },
+      // Prose declares Topic.tags as [String]. From Discourse 2026.3 each tag is
+      // an object ({ id, name, slug }); Prose hands the app the name
+      // (fix/tag-objects), so both shapes are accepted here.
+      expect: { ...topicList, "topic_list.topics[].tags[]": "string|object" },
     },
     {
       id: 34,
