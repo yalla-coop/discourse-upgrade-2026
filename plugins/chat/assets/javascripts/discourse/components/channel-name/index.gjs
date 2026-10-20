@@ -1,7 +1,7 @@
 import Component from "@glimmer/component";
 import { get } from "@ember/helper";
 import { service } from "@ember/service";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import PluginOutlet from "discourse/components/plugin-outlet";
 import UserStatusMessage from "discourse/components/user-status-message";
 import lazyHash from "discourse/helpers/lazy-hash";
@@ -40,7 +40,7 @@ export default class ChatChannelName extends Component {
   }
 
   get channelColorStyle() {
-    return htmlSafe(`color: #${this.args.channel.chatable.color}`);
+    return trustHTML(`color: #${this.args.channel.chatable.color}`);
   }
 
   get showUserStatus() {
@@ -52,10 +52,10 @@ export default class ChatChannelName extends Component {
 
   get channelTitle() {
     if (this.args.channel.isDirectMessageChannel) {
-      return this.args.channel.title ?? this.directMessageTitle;
+      return this.args.channel.displayTitle ?? this.directMessageTitle;
     }
 
-    return this.args.channel.title;
+    return this.args.channel.displayTitle;
   }
 
   get showPluginOutlet() {
@@ -81,8 +81,6 @@ export default class ChatChannelName extends Component {
         <PluginOutlet
           @name="after-chat-channel-username"
           @outletArgs={{if this.showPluginOutlet (lazyHash user=@user)}}
-          @tagName=""
-          @connectorTagName=""
         />
 
         {{#if (has-block)}}

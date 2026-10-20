@@ -85,6 +85,69 @@ RSpec.describe StaticController do
         File.delete(file_path)
       end
     end
+
+    it "does not serve files outside the assets directory via path traversal" do
+      begin
+        secret_dir = Rails.public_path.join("assets-secret")
+        FileUtils.mkdir_p(secret_dir)
+        secret_file = secret_dir.join("leak.txt")
+        File.write(secret_file, "secret content")
+
+        get "/cdn_asset/#{site}/../assets-secret/leak.txt"
+
+        expect(response.status).to eq(404)
+      ensure
+        File.delete(secret_file) if secret_file && File.exist?(secret_file)
+        FileUtils.rm_rf(secret_dir) if secret_dir && Dir.exist?(secret_dir)
+      end
+    end
+
+    context "with fallback_assets_path" do
+      it "serves files from the fallback assets directory" do
+        Dir.mktmpdir do |tmpdir|
+          fallback_dir = File.join(tmpdir, "fallback_assets")
+          FileUtils.mkdir_p(fallback_dir)
+
+          File.write(File.join(fallback_dir, "test-asset.js"), "fallback js content")
+
+          GlobalSetting.stubs(:fallback_assets_path).returns(fallback_dir)
+
+          get "/cdn_asset/#{site}/test-asset.js"
+
+          expect(response.status).to eq(200)
+          expect(response.headers["Cache-Control"]).to match(/public/)
+          expect(response.body).to eq("fallback js content")
+        end
+      end
+
+      it "returns 404 for files not in primary or fallback" do
+        Dir.mktmpdir do |tmpdir|
+          fallback_dir = File.join(tmpdir, "fallback_assets")
+          FileUtils.mkdir_p(fallback_dir)
+
+          GlobalSetting.stubs(:fallback_assets_path).returns(fallback_dir)
+
+          get "/cdn_asset/#{site}/nonexistent.js"
+
+          expect(response.status).to eq(404)
+        end
+      end
+      it "rejects fallback paths that traverse outside the fallback directory" do
+        Dir.mktmpdir do |tmpdir|
+          fallback_dir = File.join(tmpdir, "fallback_assets")
+          FileUtils.mkdir_p(fallback_dir)
+
+          File.write(File.join(fallback_dir, "test-asset.js"), "fallback js content")
+
+          GlobalSetting.stubs(:fallback_assets_path).returns(fallback_dir)
+
+          get "/cdn_asset/#{site}/../test-asset.js"
+
+          expect(response.status).to eq(404)
+          expect(response.body).not_to eq("fallback js content")
+        end
+      end
+    end
   end
 
   describe "#show" do
@@ -421,6 +484,76 @@ RSpec.describe StaticController do
         end
       end
     end
+
+    context "with sso_destination_url cookie" do
+      before { SiteSetting.enable_discourse_connect_provider = true }
+
+      it "redirects to valid SSO destination URL when provider is configured" do
+        SiteSetting.discourse_connect_provider_secrets = "allowed-site.com|secret123"
+        cookies[:sso_destination_url] = "https://allowed-site.com/sso?token=abc"
+
+        post "/login.json"
+
+        expect(response).to redirect_to("https://allowed-site.com/sso?token=abc")
+        expect(response.cookies["sso_destination_url"]).to be_nil
+      end
+
+      it "redirects to valid SSO destination URL with wildcard domain" do
+        SiteSetting.discourse_connect_provider_secrets = "*.allowed-domain.com|secret123"
+        cookies[:sso_destination_url] = "https://sub.allowed-domain.com/sso?token=abc"
+
+        post "/login.json"
+
+        expect(response).to redirect_to("https://sub.allowed-domain.com/sso?token=abc")
+      end
+
+      it "ignores SSO destination URL when domain is not in provider secrets" do
+        SiteSetting.discourse_connect_provider_secrets = "allowed-site.com|secret123"
+        cookies[:sso_destination_url] = "https://evil-site.com/phishing"
+
+        post "/login.json"
+
+        expect(response).to redirect_to("/")
+        expect(response.cookies["sso_destination_url"]).to be_nil
+      end
+
+      it "ignores SSO destination URL when provider secrets is empty" do
+        SiteSetting.discourse_connect_provider_secrets = ""
+        cookies[:sso_destination_url] = "https://some-site.com/sso"
+
+        post "/login.json"
+
+        expect(response).to redirect_to("/")
+      end
+
+      it "ignores malformed SSO destination URL" do
+        SiteSetting.discourse_connect_provider_secrets = "allowed-site.com|secret123"
+        cookies[:sso_destination_url] = "not a valid url"
+
+        post "/login.json"
+
+        expect(response).to redirect_to("/")
+      end
+
+      it "ignores SSO destination URL when discourse_connect_provider is disabled" do
+        SiteSetting.enable_discourse_connect_provider = false
+        SiteSetting.discourse_connect_provider_secrets = "allowed-site.com|secret123"
+        cookies[:sso_destination_url] = "https://allowed-site.com/sso"
+
+        post "/login.json"
+
+        expect(response).to redirect_to("/")
+      end
+
+      it "deletes sso_destination_url cookie regardless of validity" do
+        SiteSetting.discourse_connect_provider_secrets = "allowed-site.com|secret123"
+        cookies[:sso_destination_url] = "https://evil-site.com/phishing"
+
+        post "/login.json"
+
+        expect(response.cookies["sso_destination_url"]).to be_nil
+      end
+    end
   end
 
   describe "#service_worker_asset" do
@@ -429,6 +562,35 @@ RSpec.describe StaticController do
       expect(response.status).to eq(200)
       expect(response.content_type).to start_with("text/javascript")
       expect(response.body).to include("addEventListener")
+    end
+  end
+
+  describe "#llms_txt" do
+    it "returns 404 when no upload is set" do
+      get "/llms.txt"
+      expect(response.status).to eq(404)
+    end
+
+    context "with local store" do
+      it "returns content as plain text" do
+        SiteSetting.authorized_extensions = "txt"
+
+        file = Tempfile.new(%w[llms .txt])
+        file.write("# Test LLMs Content")
+        file.rewind
+
+        upload = UploadCreator.new(file, "llms.txt").create_for(Discourse.system_user.id)
+        SiteSetting.llms_txt = upload
+
+        get "/llms.txt"
+
+        expect(response.status).to eq(200)
+        expect(response.content_type).to start_with("text/plain")
+        expect(response.body).to eq("# Test LLMs Content")
+      ensure
+        file.close
+        file.unlink
+      end
     end
   end
 end

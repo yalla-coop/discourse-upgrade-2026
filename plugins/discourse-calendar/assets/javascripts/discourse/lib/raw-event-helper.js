@@ -3,7 +3,9 @@ export function buildParams(startsAt, endsAt, event, siteSettings) {
 
   const eventTz = event.timezone || "UTC";
 
-  params.start = moment(startsAt).tz(eventTz).format("YYYY-MM-DD HH:mm");
+  params.start = event.allDay
+    ? moment(startsAt).format("YYYY-MM-DD")
+    : moment(startsAt).tz(eventTz).format("YYYY-MM-DD HH:mm");
 
   if (event.isClosed) {
     params.closed = "true";
@@ -13,19 +15,19 @@ export function buildParams(startsAt, endsAt, event, siteSettings) {
     params.status = event.status;
   }
 
-  if (event.name) {
+  if (event.name && event.name.trim()) {
     params.name = event.name;
   }
 
-  if (event.location) {
+  if (event.location && event.location.trim()) {
     params.location = event.location;
   }
 
-  if (event.description) {
+  if (event.description && event.description.trim()) {
     params.description = event.description;
   }
 
-  if (event.url) {
+  if (event.url && event.url.trim()) {
     params.url = event.url;
   }
 
@@ -59,8 +61,14 @@ export function buildParams(startsAt, endsAt, event, siteSettings) {
     params.maxAttendees = `${event.maxAttendees}`;
   }
 
+  if (event.allDay) {
+    params.allDay = "true";
+  }
+
   if (endsAt) {
-    params.end = moment(endsAt).tz(eventTz).format("YYYY-MM-DD HH:mm");
+    params.end = event.allDay
+      ? moment(endsAt).format("YYYY-MM-DD")
+      : moment(endsAt).tz(eventTz).format("YYYY-MM-DD HH:mm");
   }
 
   if (event.status === "private") {
@@ -112,7 +120,7 @@ export function replaceRaw(params, raw) {
 
     Object.keys(params).forEach((param) => {
       const value = params[param];
-      if (value && value.length) {
+      if (value != null && value !== "" && String(value).trim() !== "") {
         markdownParams.push(`${param}="${value.replace(/"/g, "")}"`);
       }
     });
@@ -126,11 +134,15 @@ export function replaceRaw(params, raw) {
   return false;
 }
 
-function camelCase(input) {
+export function camelCase(input) {
   return input
     .toLowerCase()
     .replace(/-/g, "_")
     .replace(/_(.)/g, function (match, group1) {
       return group1.toUpperCase();
     });
+}
+
+export function removeEvent(raw) {
+  return raw.replace(/\[event (.*?)\](.*?)\[\/event\]/s, "");
 }

@@ -517,11 +517,43 @@ RSpec.describe Search do
     expect(search.term).to eq('"a b c d"')
   end
 
-  it "searches for short terms if one hits the length" do
+  it "strips short terms but keeps valid ones" do
     search = Search.new("a b c okaylength", min_search_term_length: 5)
     search.execute
     expect(search.valid?).to eq(true)
-    expect(search.term).to eq("a b c okaylength")
+    expect(search.term).to eq("okaylength")
+  end
+
+  describe "min_search_term_length with filters" do
+    it "strips short terms even when filters are present" do
+      search = Search.new("status:open ab", min_search_term_length: 3)
+      search.execute
+      expect(search.valid?).to eq(true)
+      expect(search.term).to eq("")
+    end
+
+    it "keeps valid terms when filters are present" do
+      search = Search.new("status:open valid", min_search_term_length: 3)
+      search.execute
+      expect(search.valid?).to eq(true)
+      expect(search.term).to eq("valid")
+    end
+
+    it "strips short terms with order present" do
+      search = Search.new("order:latest ab", min_search_term_length: 3)
+      search.execute
+      expect(search.valid?).to eq(true)
+      expect(search.term).to eq("")
+    end
+
+    it "allows short terms for in-topic search" do
+      topic = Fabricate(:topic)
+      Fabricate(:post, topic: topic, raw: "hello world")
+      search = Search.new("a", min_search_term_length: 3, search_context: topic)
+      search.execute
+      expect(search.valid?).to eq(true)
+      expect(search.term).to eq("a")
+    end
   end
 
   describe "query sanitization" do
@@ -665,9 +697,8 @@ RSpec.describe Search do
 
       # can search group PMs as well as non admin
       user = Fabricate(:user)
-      group = Fabricate.build(:group)
+      group = Fabricate(:group)
       group.add(user)
-      group.save!
 
       TopicAllowedGroup.create!(group_id: group.id, topic_id: topic.id)
 
@@ -1380,6 +1411,32 @@ RSpec.describe Search do
         results = Search.execute("discourse", search_context: topic)
         expect(results.posts.length).to eq(1)
       end
+
+      it "finds content only present in cooked HTML" do
+        post = new_post("check out this link")
+        post.post_search_data.update!(raw_data: "check out this link Example Site Title")
+
+        results = Search.execute("Example Site Title", search_context: post.topic)
+        expect(results.posts.map(&:id)).to eq([post.id])
+      end
+
+      describe "searching for author's real name" do
+        before { topic.user.update!(name: "Jane Searcher") }
+
+        it "does not find posts when the enable_names site setting is disabled" do
+          SiteSetting.enable_names = false
+
+          results = Search.execute("Jane Searcher", search_context: topic)
+          expect(results.posts).to be_empty
+        end
+
+        it "finds posts when the enable_names site setting is enabled" do
+          SiteSetting.enable_names = true
+
+          results = Search.execute("Jane Searcher", search_context: topic)
+          expect(results.posts.map(&:id)).to include(post.id)
+        end
+      end
     end
 
     context "when searching the OP" do
@@ -1469,6 +1526,46 @@ RSpec.describe Search do
             )
           expect(result.posts.length).to eq(1)
         end
+      end
+    end
+
+    context "with order-only searches" do
+      it "returns results when searching with order and category filters" do
+        result =
+          Search.execute("order:latest category:#{topic.category.slug}", type_filter: "topic")
+
+        expect(result.posts).to be_present
+        expect(result.posts.map(&:topic_id)).to include(topic.id)
+      end
+
+      it "returns results when searching with only order filter" do
+        post # ensure post is created
+
+        result = Search.execute("order:latest", type_filter: "topic")
+
+        expect(result.posts).to be_present
+      end
+
+      it "returns results when using 'l' shortcut for order:latest" do
+        post # ensure post is created
+
+        result = Search.execute("l", type_filter: "topic")
+
+        expect(result.posts).to be_present
+      end
+
+      it "marks search as invalid when no term, filters, or order provided" do
+        search = Search.new("", type_filter: "topic")
+        search.execute
+
+        expect(search.valid?).to eq(false)
+      end
+
+      it "marks 't' alone as an invalid search" do
+        search = Search.new("t", type_filter: "topic")
+        search.execute
+
+        expect(search.valid?).to eq(false)
       end
     end
 
@@ -1573,6 +1670,16 @@ RSpec.describe Search do
       search = Search.execute("monkey #test")
 
       expect(search.posts).to eq([ignored_category.topic.first_post])
+    end
+
+    it "matches categories with accented names using category: filter" do
+      accented_category =
+        Fabricate(:category_with_definition, name: "Éditions", slug: "publications")
+      topic_in_accented = Fabricate(:topic, category: accented_category)
+      post_in_accented = Fabricate(:post, topic: topic_in_accented, raw: "snow monkey")
+
+      search = Search.execute("monkey category:Editions")
+      expect(search.posts.map(&:id)).to include(post_in_accented.id)
     end
 
     describe "with child categories" do
@@ -2752,6 +2859,46 @@ RSpec.describe Search do
           [post7.id, post8.id],
         )
       end
+
+      context "with tag synonyms" do
+        fab!(:synonym_tag) { Fabricate(:tag, name: "brunch", target_tag: tag1) }
+        fab!(:topic_with_synonym_target_tag) do
+          Fabricate(:topic, tags: [synonym_tag.target_tag, tag2])
+        end
+        fab!(:post_in_topic_with_synonym_target_tag) do
+          indexed_post(topic: topic_with_synonym_target_tag)
+        end
+
+        it "can find posts by tag synonym using comma syntax" do
+          results = Search.execute("tags:brunch")
+          expect(results.posts.map(&:id)).to include(post_in_topic_with_synonym_target_tag.id)
+        end
+
+        it "can find posts with mixed synonym and regular tag using comma syntax" do
+          results = Search.execute("tags:brunch,sandwiches")
+          expect(results.posts.map(&:id)).to include(post_in_topic_with_synonym_target_tag.id)
+        end
+
+        it "can exclude posts by tag synonym using negation with comma syntax" do
+          results = Search.execute("tags:eggs -tags:brunch")
+          expect(results.posts.map(&:id)).not_to include(post_in_topic_with_synonym_target_tag.id)
+        end
+
+        it "can find posts by tag synonym using plus syntax" do
+          results = Search.execute("tags:brunch+eggs")
+          expect(results.posts.map(&:id)).to include(post_in_topic_with_synonym_target_tag.id)
+        end
+
+        it "can exclude posts by tag synonym using negation with plus syntax" do
+          results = Search.execute("tags:eggs -tags:brunch+sandwiches")
+          expect(results.posts.map(&:id)).not_to include(post4.id)
+        end
+
+        it "can find posts by tag synonym using hashtag syntax" do
+          results = Search.execute("#brunch")
+          expect(results.posts.map(&:id)).to include(post_in_topic_with_synonym_target_tag.id)
+        end
+      end
     end
 
     it "can find posts which contains filetypes" do
@@ -3161,7 +3308,7 @@ RSpec.describe Search do
 
       before do
         described_class.advanced_order(:chars, enabled: method(:enabled?)) do
-          _1.reorder("MAX(LENGTH(posts.raw)) DESC")
+          it.reorder("MAX(LENGTH(posts.raw)) DESC")
         end
       end
 

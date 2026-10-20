@@ -37,7 +37,8 @@ class AdminDetailedUserSerializer < AdminUserSerializer
              :api_key_count,
              :external_ids,
              :similar_users_count,
-             :latest_export
+             :latest_export,
+             :upcoming_changes_stats
 
   has_one :approved_by, serializer: BasicUserSerializer, embed: :objects
   has_one :suspended_by, serializer: BasicUserSerializer, embed: :objects
@@ -186,5 +187,13 @@ class AdminDetailedUserSerializer < AdminUserSerializer
 
   def include_latest_export?
     scope.can_export_entity?("user_archive", object.id)
+  end
+
+  def upcoming_changes_stats
+    object.upcoming_change_stats(scope)
+  end
+
+  def include_upcoming_changes_stats?
+    scope.is_staff?
   end
 end

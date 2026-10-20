@@ -1,9 +1,10 @@
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import DButton from "discourse/components/d-button";
 import { i18n } from "discourse-i18n";
+import { i18nForOwner } from "discourse/plugins/discourse-rewind/discourse/lib/rewind-i18n";
 
 export default class TimeOfDayActivity extends Component {
   @tracked isPlaying = false;
@@ -137,7 +138,7 @@ export default class TimeOfDayActivity extends Component {
   get gridLines() {
     return Array.from({ length: 5 }, (_, i) => ({
       y: this.SVG_PADDING + (i * (this.SVG_HEIGHT - 2 * this.SVG_PADDING)) / 4,
-      style: htmlSafe(`opacity: ${i === 0 || i === 4 ? 0.3 : 0.15}`),
+      style: trustHTML(`opacity: ${i === 0 || i === 4 ? 0.3 : 0.15}`),
     }));
   }
 
@@ -169,6 +170,14 @@ export default class TimeOfDayActivity extends Component {
     const displayHour =
       hourNum === 0 ? 12 : hourNum > 12 ? hourNum - 12 : hourNum;
     return `${displayHour}${period}`;
+  }
+
+  get playButtonText() {
+    return i18nForOwner(
+      "discourse_rewind.reports.time_of_day_activity.play_button",
+      this.args.isOwnRewind,
+      { username: this.args.user?.username }
+    );
   }
 
   @action
@@ -374,10 +383,10 @@ export default class TimeOfDayActivity extends Component {
             @action={{this.playWaveform}}
             @icon={{if this.isPlaying "volume-xmark" "volume-high"}}
             class="oscilloscope__play-btn {{if this.isPlaying '--playing'}}"
-            @title={{if
+            title={{if
               this.isPlaying
-              "discourse_rewind.reports.time_of_day_activity.stop_button"
-              "discourse_rewind.reports.time_of_day_activity.play_button"
+              (i18n "discourse_rewind.reports.time_of_day_activity.stop_button")
+              this.playButtonText
             }}
           />
           <svg viewBox="0 0 1200 200" class="oscilloscope__svg">

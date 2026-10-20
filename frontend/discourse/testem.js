@@ -227,6 +227,7 @@ module.exports = {
     maxHttpBufferSize: 1e8, // 100MB
   },
   browser_start_timeout: 120,
+  browser_disconnect_timeout: 30,
   browser_args: {
     Chromium: [
       // --no-sandbox is needed when running Chromium inside a container or when explicitly requested
@@ -312,7 +313,13 @@ if (themeTestPages) {
 } else {
   // Running with ember cli, but we want to pass through plugin request to Rails
   module.exports.proxies = {
-    "/assets/plugins/*_extra.js": {
+    "/assets/plugins/": {
+      target,
+    },
+    "/assets/js/plugins/": {
+      target,
+    },
+    "/assets/map/plugins/": {
       target,
     },
     "/plugins/": {

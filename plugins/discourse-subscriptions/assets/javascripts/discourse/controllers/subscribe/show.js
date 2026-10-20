@@ -1,9 +1,8 @@
 /* global Stripe */
 import Controller from "@ember/controller";
-import { action } from "@ember/object";
+import { action, computed } from "@ember/object";
 import { not } from "@ember/object/computed";
 import { service } from "@ember/service";
-import discourseComputed from "discourse/lib/decorators";
 import { i18n } from "discourse-i18n";
 import Subscription from "discourse/plugins/discourse-subscriptions/discourse/models/subscription";
 import Transaction from "discourse/plugins/discourse-subscriptions/discourse/models/transaction";
@@ -46,9 +45,12 @@ export default class SubscribeShowController extends Controller {
     this.dialog.alert(i18n(`discourse_subscriptions.${path}`));
   }
 
-  @discourseComputed("model.product.repurchaseable", "model.product.subscribed")
-  canPurchase(repurchaseable, subscribed) {
-    if (!repurchaseable && subscribed) {
+  @computed("model.product.repurchaseable", "model.product.subscribed")
+  get canPurchase() {
+    if (
+      !this.model?.product?.repurchaseable &&
+      this.model?.product?.subscribed
+    ) {
       return false;
     }
 
@@ -170,12 +172,10 @@ export default class SubscribeShowController extends Controller {
         if (result.error) {
           this.dialog.alert(result.error.message || result.error);
         } else if (result.status === "incomplete" || result.status === "open") {
-          const transactionId = result.id;
-          const planId = this.selectedPlan;
           this.handleAuthentication(plan, result).then(
             (authenticationResult) => {
               if (authenticationResult && !authenticationResult.error) {
-                return Transaction.finalize(transactionId, planId).then(() => {
+                return Transaction.finalize().then(() => {
                   this._advanceSuccessfulTransaction(plan);
                 });
               }

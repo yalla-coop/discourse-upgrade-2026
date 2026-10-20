@@ -2,6 +2,7 @@ import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { service } from "@ember/service";
 import bodyClass from "discourse/helpers/body-class";
+import concatClass from "discourse/helpers/concat-class";
 import icon from "discourse/helpers/d-icon";
 import { i18n } from "discourse-i18n";
 import AiSearchDiscoveries from "../../components/ai-search-discoveries";
@@ -11,8 +12,8 @@ export default class AiFullPageDiscobotDiscoveries extends Component {
   static shouldRender(args, { siteSettings, currentUser }) {
     return (
       siteSettings.ai_discover_enabled &&
-      siteSettings.ai_discover_persona &&
-      currentUser?.can_use_ai_discover_persona &&
+      siteSettings.ai_discover_agent &&
+      currentUser?.can_use_ai_discover_agent &&
       currentUser?.user_option?.ai_search_discoveries
     );
   }
@@ -54,7 +55,12 @@ export default class AiFullPageDiscobotDiscoveries extends Component {
   <template>
     {{#if this.shouldShow}}
       {{bodyClass "has-discoveries"}}
-      <div class="ai-search-discoveries__discoveries-wrapper">
+      <div
+        class={{concatClass
+          "ai-search-discoveries__discoveries-wrapper"
+          (if this.discobotDiscoveries.showDiscoveryTitle "--has-content")
+        }}
+      >
         {{#if this.discobotDiscoveries.showDiscoveryTitle}}
           <h3
             class="ai-search-discoveries__discoveries-title full-page-discoveries"

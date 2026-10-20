@@ -16,11 +16,25 @@
 #                         The key should be as the same as possible value of default_locale.
 # mandatory_values      - A list of mandatory values that must be included in the setting, these cannot be changed or removed
 #                         in the UI.
+# disallowed_groups     - A list of group IDs (pipe-separated) that should be hidden from the group selector.
+#                         These groups cannot be selected and will be stripped if set via API.
+#                         Only applies to group_list type settings.
 # requires_confirmation - A string that indicates if the setting requires confirmation before it can be changed.
 #                         Only valid value here is "simple" which will display a confirmation dialog when the setting
 #                         is changed.
 # themeable             - Set to true if themes can override this site setting. Generally, only client side affecting settings
 #                         that change the UI should be themeable, and try limit to simple setting types like bool, list, integer, enum.
+# upcoming_change       - Additional metadata with the following options to show in the /admin/config/upcoming-changes page:
+#                          - status: experimental | alpha | beta | stable
+#                          - impact: two parts separated by comma - feature|other , staff|admins|moderators|all_members|developers
+#                          - learn_more_url: a url for more information
+#                          - disallow_enabled_for_groups: true (optional) - restricts "Enabled for"
+#                            to only "Everyone" and "No One", removing group-based options.
+# depends_on            - One or more boolean settings that must be true for this setting to take effect.
+# depends_behavior      - The behavior of the dependent setting. Only currently supported behaviour is "hidden"
+#                         to hide the setting if the dependent setting is false. If left blank, no special behavior
+#                         is applied and the setting is shown as normal.
+#
 #
 #
 # type: email                 - Must be a valid email address.
@@ -44,13 +58,19 @@
 # type: category_list         - A list of category ids, which shows a special picker in the UI.
 # type: category              - A single category ID, which shows a special picker in the UI.
 # type: uploaded_image_list   - A list of upload IDs that should be images.
-# type: upload                - A single upload ID.
+# type: upload                - A single upload ID. Optional attributes:
+#                               - authorized_extensions: pipe-separated list of allowed extensions
+#                                 without dots (e.g., "txt|json"). If not specified, only images
+#                                 are allowed based on authorized_extensions setting.
+#                               - max_file_size_kb: maximum file size in KB. If not specified,
+#                                 uses max_image_size_kb or max_attachment_size_kb.
 # type: group                 - A single group ID.
 # type: group_list            - A list of group IDs.
 # type: tag_list              - A list of tag names.
 # type: emoji_list            - A list of emoji names (e.g. joy, cold_hands)
 # type: tag_group_list        - A list of tag group names.
 # type: file_size_restriction - A file size restriction in bytes.
+# type: icon                  - A single fontawesome icon name from the Discourse icon set (e.g. heart, star)
 #
 required:
   title:
@@ -75,6 +95,7 @@ required:
   notification_email:
     default: "noreply@unconfigured.discourse.org"
     type: email
+    area: "email"
   site_contact_username:
     default: ""
     type: username
@@ -197,7 +218,7 @@ basic:
     default: false
     area: "localization"
   categories_topics:
-    default: 20
+    default: 0
     validator: "CategoriesTopicsValidator"
     area: "interface"
   suggested_topics:
@@ -432,6 +453,7 @@ basic:
     default: ""
     allow_any: false
     refresh: true
+    disallowed_groups: "0"
     area: "group_permissions"
   hidden_post_visible_groups:
     type: group_list
@@ -568,6 +590,9 @@ basic:
     default: false
     hidden: true
     client: true
+  trigger_browser_pageview_events:
+    default: false
+    hidden: true
   interface_color_selector:
     client: true
     enum: "InterfaceColorSelectorSetting"
@@ -987,6 +1012,11 @@ users:
   delete_all_posts_max:
     client: true
     default: 15
+    min: 1
+    area: "users"
+  delete_all_posts_background_threshold:
+    client: true
+    default: 200
     min: 1
     area: "users"
   delete_user_self_max_post_count:
@@ -1693,10 +1723,23 @@ posting:
     min: 5
     max: 255
     area: "posts_and_topics"
+    depends_on:
+      - "enable_form_templates"
+    depends_behavior: "hidden"
   max_form_template_content_length:
     default: 5000
     max: 150000
     area: "posts_and_topics"
+    depends_on:
+      - "enable_form_templates"
+    depends_behavior: "hidden"
+  show_preview_for_form_templates:
+    client: true
+    default: true
+    area: "posts_and_topics"
+    depends_on:
+      - "enable_form_templates"
+    depends_behavior: "hidden"
   group_pm_user_limit:
     default: 1000
     type: integer
@@ -1888,27 +1931,9 @@ email:
       - X-Spam-Status
       - X-SES-Spam-Verdict
     area: "email"
-  enable_imap:
-    default: false
-    client: true
-    hidden: true
-  enable_imap_write:
-    default: false
-    hidden: true
-  enable_imap_idle:
-    default: false
-    hidden: true
   enable_smtp:
     default: false
     client: true
-  imap_polling_period_mins:
-    default: 5
-  imap_polling_old_emails:
-    default: 1000
-  imap_polling_new_emails:
-    default: 250
-  imap_batch_import_email:
-    default: 100
   email_prefix:
     default: ""
     area: "email"
@@ -2082,6 +2107,11 @@ email:
   require_change_email_confirmation:
     default: false
     area: "email"
+  allow_email_invites:
+    default: true
+    client: true
+    area: "email"
+    hidden: true
   view_raw_email_allowed_groups:
     type: group_list
     list_type: compact
@@ -2342,9 +2372,9 @@ files:
     max: 1
   simultaneous_uploads:
     client: true
-    default: 5
+    default: 15
     min: 0
-    max: 20
+    max: 30
   decompressed_theme_max_file_size_mb:
     default: 1000
     hidden: true
@@ -2651,6 +2681,10 @@ security:
   moderators_change_post_ownership:
     client: true
     default: false
+  change_post_ownership_allowed_groups:
+    type: group_list
+    list_type: compact
+    default: ""
   moderators_view_emails:
     client: true
     default: false
@@ -2676,7 +2710,7 @@ security:
     list_type: compact
   crawler_check_bypass_agents:
     hidden: true
-    default: "cubot"
+    default: "cubot|MetaIAB"
   cors_origins:
     default: ""
     type: list
@@ -2721,13 +2755,15 @@ security:
     list_type: compact
     requires_confirmation: "simple"
   slow_down_crawler_rate: 60
+  llms_txt:
+    default: ""
+    type: upload
+    authorized_extensions: "txt|md"
+    max_file_size_kb: 512
   content_security_policy:
     default: true
   content_security_policy_report_only:
     default: false
-  content_security_policy_collect_reports:
-    default: false
-    hidden: true
   content_security_policy_frame_ancestors:
     default: true
   content_security_policy_script_src:
@@ -2773,6 +2809,9 @@ security:
     refresh: true
     hidden: true
     area: "group_permissions"
+  cache_control_bfcache_compatibility:
+    default: false
+    hidden: true
 
 onebox:
   post_onebox_maxlength:
@@ -2794,6 +2833,9 @@ onebox:
     list_type: compact
   enable_inline_onebox_on_all_domains:
     default: true
+  inline_onebox_user_agent:
+    default: ""
+    hidden: true
   onebox_user_agent:
     default: ""
     hidden: true
@@ -2819,6 +2861,12 @@ onebox:
     type: list
     secret: true
     list_type: secret
+  reddit_onebox_client_id:
+    default: ""
+    secret: true
+  reddit_onebox_client_secret:
+    default: ""
+    secret: true
 spam:
   add_rel_nofollow_to_user_content: true
   hide_post_sensitivity:
@@ -3110,6 +3158,10 @@ developer:
   viewport_based_mobile_mode:
     default: true
     client: true
+  site_setting_verbose_client_logging:
+    default: false
+    client: true
+    hidden: true
 
 navigation:
   navigation_menu:
@@ -3138,6 +3190,9 @@ navigation:
     area: "navigation"
 
 embedding:
+  embed_full_app:
+    default: false
+    hidden: true
   embed_by_username:
     default: ""
     type: username
@@ -3591,17 +3646,6 @@ uncategorized:
     hidden: true
     client: true
 
-  bootstrap_mode_min_users:
-    default: 50
-    client: true
-    max: 5000
-    area: "site_admin"
-
-  bootstrap_mode_enabled:
-    default: false
-    client: true
-    hidden: true
-
   automatically_unpin_topics:
     default: true
     client: true
@@ -3727,6 +3771,26 @@ uncategorized:
     default: true
     area: "interface"
 
+  enable_custom_splash_screen:
+    default: false
+    client: true
+    hidden: true
+    area: "interface"
+    upcoming_change:
+      status: "alpha"
+      impact: "feature,all_members"
+      learn_more_url: "https://meta.discourse.org/t/-/395100"
+
+  splash_screen_image:
+    default: ""
+    type: upload
+    authorized_extensions: "svg"
+    area: "interface"
+    depends_on:
+      - "enable_custom_splash_screen"
+    depends_behavior: "hidden"
+    validator: "UploadSettingValidator"
+
   suggest_weekends_in_date_pickers:
     client: true
     default: true
@@ -3740,6 +3804,14 @@ uncategorized:
     client: true
     default: true
     area: "posts_and_topics"
+
+  enable_site_owner_onboarding:
+    client: true
+    default: false
+    hidden: true
+  site_owner_onboarding_max_days:
+    default: 5
+    hidden: true
 
   enable_welcome_banner:
     client: true
@@ -3767,6 +3839,16 @@ uncategorized:
     enum: "WelcomeBannerPageVisibility"
     default: "top_menu_pages"
     area: "interface"
+
+  modernize_foundation_theme:
+    default: false
+    client: true
+    hidden: true
+    area: "experimental"
+    upcoming_change:
+      impact: "feature,all_members"
+      status: "experimental"
+      learn_more_url: "https://meta.discourse.org/t/modernizing-the-foundation-theme/395331"
 
 user_preferences:
   default_email_digest_frequency:
@@ -4142,35 +4224,66 @@ dashboard:
     client: true
 
 experimental:
-  experimental_auto_grid_images:
+  reporting_improvements:
     default: false
     client: true
+    hidden: true
     area: "experimental"
-  experimental_rename_faq_to_guidelines:
+    upcoming_change:
+      status: "experimental"
+      impact: "feature,staff"
+      learn_more_url: "https://meta.discourse.org/t/-/395768"
+      disallow_enabled_for_groups: true
+  enable_auto_grid_images:
+    default: false
+    client: true
+    hidden: true
+    area: "experimental"
+    upcoming_change:
+      status: "beta"
+      impact: "feature,all_members"
+      learn_more_url: "https://meta.discourse.org/t/-/394784"
+  enable_new_checkbox_style:
+    default: false
+    client: true
+    hidden: true
+    area: "experimental"
+    upcoming_change:
+      status: "experimental"
+      impact: "feature,all_members"
+  rename_faq_to_guidelines:
     default: false
     hidden: true
     client: true
     area: "experimental"
-  experimental_hashtag_search_result_limit:
-    default: 20
+    upcoming_change:
+      impact: "feature,all_members"
+      status: "beta"
+      learn_more_url: "https://meta.discourse.org/t/-/395099"
+  experimental_tag_settings_page:
+    default: false
     client: true
-    hidden: true
     area: "experimental"
-  experimental_form_templates:
+  enable_form_templates:
     client: true
     default: false
+    hidden: true
     area: "experimental"
-  experimental_impersonation:
+    upcoming_change:
+      status: "beta"
+      impact: "feature,all_members"
+      learn_more_url: "https://meta.discourse.org/t/-/278631"
+  impersonate_without_logout:
     default: false
     hidden: true
     area: "experimental"
+    upcoming_change:
+      status: "beta"
+      impact: "feature,staff"
+      learn_more_url: "https://meta.discourse.org/t/-/119683"
   experimental_impersonation_time_limit_minutes:
     default: 15
     hidden: true
-    area: "experimental"
-  show_preview_for_form_templates:
-    client: true
-    default: true
     area: "experimental"
   experimental_new_new_view_groups:
     client: true
@@ -4190,21 +4303,26 @@ experimental:
     list_type: compact
     area: "group_permissions|experimental"
     hidden: true
-  reviewable_ui_refresh:
-    client: true
-    type: group_list
-    default: ""
-    area: "experimental"
-    hidden: true
-  force_old_reviewable_ui:
-    client: true
-    default: false
-    hidden: true
   reviewable_old_moderator_actions:
     default: true
     hidden: true
     client: true
-  enable_upcoming_changes:
+  floating_dismiss_topics_on_mobile:
     default: false
     hidden: true
     client: true
+    upcoming_change:
+      status: "experimental"
+      impact: "feature,all_members"
+      learn_more_url: "https://meta.discourse.org/t/-/387322"
+  enable_simplified_category_creation:
+    default: false
+    hidden: true
+    client: true
+    upcoming_change:
+      status: "beta"
+      impact: "feature,staff"
+      learn_more_url: "https://meta.discourse.org/t/-/394971"
+  experimental_topic_category_change_notification:
+    default: false
+    hidden: true

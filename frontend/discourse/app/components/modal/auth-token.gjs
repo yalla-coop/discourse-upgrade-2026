@@ -3,7 +3,7 @@ import { tracked } from "@glimmer/tracking";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
 import { service } from "@ember/service";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import DButton from "discourse/components/d-button";
 import DModal from "discourse/components/d-modal";
 import DModalCancel from "discourse/components/d-modal-cancel";
@@ -49,7 +49,7 @@ export default class AuthTokenComponent extends Component {
       <:body>
         <div>
           <p>{{i18n "user.auth_tokens.was_this_you_description"}}</p>
-          <p>{{htmlSafe (i18n "user.second_factor.extended_description")}}</p>
+          <p>{{trustHTML (i18n "user.second_factor.extended_description")}}</p>
         </div>
         <div>
           <h3>{{i18n "user.auth_tokens.details"}}</h3>
@@ -72,13 +72,13 @@ export default class AuthTokenComponent extends Component {
               {{! when this.fetchActivity is called, the modal focus is reset }}
               {{! allowing you to tab behind the modal, so we need to refocus }}
               <a href {{on "click" this.toggleExpanded}} {{autoFocus}}>
-                {{icon (if this.expanded "caret-up" "caret-down")}}
+                {{icon (if this.expanded "angle-up" "angle-down")}}
               </a>
             </h3>
             {{#if this.expanded}}
-              <blockquote>{{htmlSafe this.latestPost.cooked}}</blockquote>
+              <blockquote>{{trustHTML this.latestPost.cooked}}</blockquote>
             {{else}}
-              <blockquote>{{htmlSafe this.latestPost.excerpt}}</blockquote>
+              <blockquote>{{trustHTML this.latestPost.excerpt}}</blockquote>
             {{/if}}
           </div>
         {{/if}}

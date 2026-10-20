@@ -9,7 +9,7 @@ de:
     admin:
       site_settings:
         categories:
-          discourse_solved: "Discourse – Gelöst"
+          discourse_solved: "Discourse Gelöst"
   js:
     notifications:
       alt:
@@ -20,6 +20,8 @@ de:
       title: "Gelöst"
       allow_accepted_answers: "Erlaube dem Ersteller des Themas und Team-Mitgliedern, eine Antwort als Lösung zu markieren"
       solved_topics_auto_close_hours: "Thema automatisch (n) Stunden nach der letzten Antwort schließen, sobald das Thema als gelöst markiert wurde."
+      notify_on_staff_accept_solved: "Benachrichtige den Themenersteller, wenn ein Team-Mitglied eine Lösung auswählt"
+      empty_box_on_unsolved: "Zeige eine leere Box neben ungelösten Themen in der Themenliste"
       accept_answer: "Auswählen, wenn diese Antwort das Problem löst"
       accepted_description: "Dies ist die für dieses Thema akzeptierte Lösung"
       has_no_accepted_answer: "Dieses Thema hat keine Lösung"
@@ -40,11 +42,29 @@ de:
       no_solved_topics_title_others: "%{username} hat noch keine Themen gelöst"
       no_solved_topics_body: "Wenn du eine hilfreiche Antwort auf ein Thema gibst, kann es sein, dass deine Antwort vom Themenersteller oder einem Team-Mitglied als Lösung ausgewählt wird."
       marked_solved_by: "Als gelöst markiert von %{user}"
+      confirm_move_solution_title: "Lösungsbeitrag verschieben"
+      confirm_move_solution:
+        one: "Der Beitrag ist als Lösung für dieses Thema ausgewählt. Wenn du ihn verschiebst, wird das Thema wieder als ungelöst markiert."
+        other: "Einer der Beiträge ist als Lösung für dieses Thema ausgewählt. Wenn du ihn verschiebst, wird das Thema wieder als ungelöst markiert."
+      move_post_confirm:
+        one: "Beitrag verschieben"
+        other: "Beiträge verschieben"
+      move_post_cancel: "Abbrechen"
+      dont_show_again: "Verstanden, zeig mir das nicht nochmal"
+      confirm_solved_removal_title: "Die Lösung wird entfernt"
+      confirm_solved_removal: "Durch diese Änderung werden Lösungen für dieses Thema deaktiviert und die akzeptierte Lösung entfernt."
+      confirm_solved_removal_confirm: "Bestätigen"
+      confirm_solved_removal_cancel: "Abbrechen"
       no_answer:
         title: Wurde deine Frage beantwortet?
         description: "Hebe die Antwort hervor und hilf anderen, indem du die Lösungsschaltfläche unter der richtigen Antwort verwendest."
       notification:
         title: "dein Beitrag wurde als Lösung markiert"
+      category_type_support:
+        title: "Support"
+        not_support_type: "Achtung! Du hast die Möglichkeit deaktiviert, Beiträge in dieser Kategorie als Lösungen auszuwählen. Du findest die entsprechenden Einstellungen, um diese Funktion wieder zu aktivieren, im Tab „Einstellungen“."
+        remove_support_type: "Typ „Unterstützung“ entfernen"
+        confirm_remove_support_type: "Bist du sicher, dass du die Möglichkeit, Beiträge in dieser Kategorie als Lösungen auszuwählen, entfernen möchtest? Du kannst sie später auf der Registerkarte Einstellungen wieder aktivieren."
     topic_statuses:
       solved:
         help: "Dieses Thema hat eine Lösung"

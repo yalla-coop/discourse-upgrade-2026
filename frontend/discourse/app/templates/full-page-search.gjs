@@ -1,7 +1,7 @@
 import { Input } from "@ember/component";
 import { fn, hash } from "@ember/helper";
 import { on } from "@ember/modifier";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import ConditionalLoadingSpinner from "discourse/components/conditional-loading-spinner";
 import DButton from "discourse/components/d-button";
 import GoogleSearch from "discourse/components/google-search";
@@ -39,9 +39,7 @@ export default <template>
       <h1 class="search-page-heading">
         {{#if @controller.hasResults}}
           <div class="result-count" id="search-result-count" aria-live="polite">
-            {{#unless @controller.searching}}
-              {{htmlSafe @controller.resultCountLabel}}
-            {{/unless}}
+            {{trustHTML @controller.resultCountLabel}}
           </div>
         {{else}}
           <div class="search-page-heading__page-title">
@@ -112,6 +110,10 @@ export default <template>
               @search={{fn @controller.search (hash collapseFilters=true)}}
               @searchButtonDisabled={{@controller.searchButtonDisabled}}
               @expandFilters={{@controller.expandFilters}}
+              @sortOrder={{@controller.sortOrder}}
+              @searchType={{@controller.search_type}}
+              @addSearchResults={{@controller.addSearchResults}}
+              @model={{@controller.model}}
             />
           </PluginOutlet>
         </div>
@@ -154,12 +156,6 @@ export default <template>
                 @action={{@controller.toggleBulkSelect}}
                 class="btn-default bulk-select"
               />
-              {{#if @controller.bulkSelectHelper.selected}}
-                <SearchBulkSelectDropdown
-                  @bulkSelectHelper={{@controller.bulkSelectHelper}}
-                  @afterBulkActionComplete={{@controller.afterBulkActionComplete}}
-                />
-              {{/if}}
             {{/if}}
 
             {{#if @controller.bulkSelectEnabled}}
@@ -178,6 +174,14 @@ export default <template>
                   @action={{@controller.clearAll}}
                   @label="search.clear_all"
                   class="btn-default bulk-select-clear"
+                />
+              {{/if}}
+            {{/if}}
+            {{#if @controller.canBulkSelect}}
+              {{#if @controller.bulkSelectHelper.selected}}
+                <SearchBulkSelectDropdown
+                  @bulkSelectHelper={{@controller.bulkSelectHelper}}
+                  @afterBulkActionComplete={{@controller.afterBulkActionComplete}}
                 />
               {{/if}}
             {{/if}}
@@ -222,6 +226,14 @@ export default <template>
                 @controller.usingDefaultSearchType @controller.customSearchType
               )
             }}
+              <PluginOutlet
+                @name="full-page-search-before-results"
+                @connectorTagName="div"
+                @outletArgs={{lazyHash
+                  model=@controller.model
+                  searchTerm=@controller.searchTerm
+                }}
+              />
               <SearchResultEntries
                 @posts={{@controller.searchResultPosts}}
                 @bulkSelectEnabled={{@controller.bulkSelectEnabled}}

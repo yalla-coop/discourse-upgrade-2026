@@ -38,6 +38,10 @@ module PageObjects
         page.has_css?("#{topic_list_item_class(topic)} input#bulk-select-#{topic.id}")
       end
 
+      def has_no_topic_checkbox?(topic)
+        page.has_no_css?("#{topic_list_item_class(topic)} input#bulk-select-#{topic.id}")
+      end
+
       def has_closed_status?(topic)
         page.has_css?("#{topic_list_item_closed(topic)}")
       end
@@ -80,6 +84,10 @@ module PageObjects
 
       def visit_topic_first_reply_via_keyboard(topic)
         find("#{topic_list_item_class(topic)} a.badge-posts").send_keys(:return)
+      end
+
+      def send_keys_to_topic(topic, *keys)
+        find("#{topic_list_item_class(topic)} a.raw-topic-link").send_keys(*keys)
       end
 
       def topic_list_item_class(topic)
@@ -127,7 +135,7 @@ module PageObjects
       private
 
       def topic_list_item_closed(topic)
-        "#{topic_list_item_class(topic)} .topic-statuses .topic-status svg[class*='d-icon-topic.closed']"
+        "#{topic_list_item_class(topic)} .topic-statuses .topic-status svg[class*='d-icon-lock']"
       end
 
       def topic_list_item_unread_badge(topic)

@@ -10,6 +10,8 @@ ru:
       sort_options:
         votes: "Голоса"
     topic_voting:
+      notification_label:
+        vote_released: "Голосование вернулось"
       title: "Голосование по теме"
       reached_limit: "У вас закончились голоса. Удалите часть голосов."
       list_votes: "Показать ваши голоса"
@@ -22,6 +24,7 @@ ru:
       voting_closed_title: "Закрытое"
       voting_limit: "Лимит"
       see_votes: "У вас осталось %{count}/%{max} голосов"
+      see_all_votes: "Посмотрите свои голоса"
       locked: "Заблокировано"
       locked_description: "Повысьте уровень доверия, чтобы проголосовать"
       votes:

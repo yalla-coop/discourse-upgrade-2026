@@ -43,8 +43,6 @@ vi:
             title: "Tạm ngưng người dùng"
           agree_and_silence:
             title: "Người dùng im lặng"
-          disagree:
-            title: "Không đồng ý"
       reviewable_score_types:
         notify_user:
           comment_pm_body: "%{link}\n\n%{comment}"

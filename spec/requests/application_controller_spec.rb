@@ -24,6 +24,31 @@ RSpec.describe ApplicationController do
       expect(response.status).to eq(403)
       expect(response.headers["Cache-Control"]).to eq("no-cache, no-store")
     end
+
+    context "when cache_control_bfcache_compatibility is enabled" do
+      before { SiteSetting.cache_control_bfcache_compatibility = true }
+
+      it "sets bfcache-compatible cache control headers" do
+        get "/latest"
+
+        expect(response.status).to eq(200)
+        expect(response.headers["Cache-Control"]).to eq("no-cache")
+      end
+
+      it "sets bfcache-compatible cache control headers on 404" do
+        get "/invalid-urlllllllllll"
+
+        expect(response.status).to eq(404)
+        expect(response.headers["Cache-Control"]).to eq("no-cache")
+      end
+
+      it "sets bfcache-compatible cache control headers on 403" do
+        get "/latest.json", headers: { HTTP_API_KEY: "invalid-api-key" }
+
+        expect(response.status).to eq(403)
+        expect(response.headers["Cache-Control"]).to eq("no-cache")
+      end
+    end
   end
 
   context "when visiting an invalid URL" do
@@ -908,6 +933,55 @@ RSpec.describe ApplicationController do
       expect(response.status).to eq(302)
       expect(response).to redirect_to("#{args[:auth_redirect]}?otp=true")
     end
+
+    it "does not allow auth_redirect that differs from a registered client's redirect" do
+      SiteSetting.allowed_user_api_auth_redirects = "https://*.example.com/callback"
+
+      Fabricate(
+        :user_api_key_client,
+        public_key: public_key,
+        auth_redirect: "https://legitimate.example.com/callback",
+      )
+
+      args[:user_api_public_key] = public_key
+      args[:auth_redirect] = "https://evil.example.com/callback"
+
+      get "/latest", params: args
+
+      expect(response.body).to eq(I18n.t("user_api_key.invalid_auth_redirect"))
+    end
+
+    it "redirects when auth_redirect matches a registered client's redirect and global allowlist" do
+      SiteSetting.allowed_user_api_auth_redirects = "https://legitimate.example.com/callback"
+
+      Fabricate(
+        :user_api_key_client,
+        public_key: public_key,
+        auth_redirect: "https://legitimate.example.com/callback",
+      )
+
+      args[:user_api_public_key] = public_key
+      args[:auth_redirect] = "https://legitimate.example.com/callback"
+
+      get "/latest", params: args
+
+      expect(response.status).to eq(302)
+      expect(response).to redirect_to("#{args[:auth_redirect]}?otp=true")
+    end
+
+    it "falls back to global wildcards when client has no registered auth_redirect" do
+      SiteSetting.allowed_user_api_auth_redirects = "discourse://auth_redirect"
+
+      Fabricate(:user_api_key_client, public_key: public_key, auth_redirect: nil)
+
+      args[:user_api_public_key] = public_key
+      args[:auth_redirect] = "discourse://auth_redirect"
+
+      get "/latest", params: args
+
+      expect(response.status).to eq(302)
+      expect(response).to redirect_to("#{args[:auth_redirect]}?otp=true")
+    end
   end
 
   describe "Content Security Policy" do
@@ -1591,6 +1665,36 @@ RSpec.describe ApplicationController do
         end
       end
     end
+
+    context "with content localization enabled" do
+      def banner_html
+        preloaded = Nokogiri::HTML5.fragment(response.body).css("#data-preloaded").first
+        JSON.parse(JSON.parse(preloaded["data-preloaded"])["banner"])["html"]
+      end
+
+      before do
+        SiteSetting.allow_user_locale = true
+        SiteSetting.set_locale_from_cookie = true
+        SiteSetting.content_localization_enabled = true
+        SiteSetting.login_required = false
+        p1.update!(locale: "en")
+        p1.topic.update!(locale: "en")
+        Fabricate(:post_localization, post: p1, locale: "de", cooked: "<p>German banner</p>")
+        Fabricate(:post_localization, post: p1, locale: "zh_CN", cooked: "<p>Chinese banner</p>")
+        ApplicationLayoutPreloader.banner_json_cache.clear
+      end
+
+      it "caches banner separately per locale to prevent cache poisoning" do
+        get "/login", headers: { Cookie: "locale=de" }
+        expect(banner_html).to eq("<p>German banner</p>")
+
+        get "/login", headers: { Cookie: "locale=zh_CN" }
+        expect(banner_html).to eq("<p>Chinese banner</p>")
+
+        get "/login"
+        expect(banner_html).to eq("<p>A banner topic</p>")
+      end
+    end
   end
 
   describe "Early hint header" do
@@ -1995,6 +2099,84 @@ RSpec.describe ApplicationController do
       expect(response.body).to include(
         '<meta name="google-site-verification" content="verification_token">',
       )
+    end
+  end
+
+  describe "when authorizing mini_profiler" do
+    mini_profiler_stub = Class.new { def self.authorize_request = nil }
+
+    around do |example|
+      stub_const(ApplicationController, :MINI_PROFILER_CLASS, mini_profiler_stub) { example.run }
+    end
+
+    fab!(:developer) { Fabricate(:admin).tap { |u| Developer.create!(user_id: u.id) } }
+    fab!(:user)
+    fab!(:admin)
+
+    before { allow(mini_profiler_stub).to receive(:authorize_request) }
+    after { Developer.rebuild_cache }
+
+    it "authorizes mini_profiler for developer user" do
+      sign_in(developer)
+
+      get "/latest"
+
+      expect(mini_profiler_stub).to have_received(:authorize_request)
+    end
+
+    it "does not authorize mini_profiler for non-developer user" do
+      sign_in(admin)
+
+      get "/latest"
+
+      expect(mini_profiler_stub).not_to have_received(:authorize_request)
+    end
+
+    describe "using the mini_profiler auth cookie" do
+      def set_mini_profiler_auth_cookie(user, issued_at: Time.now.to_i)
+        data = { user_id: user.id, issued_at: issued_at }
+        jar = ActionDispatch::Cookies::CookieJar.build(ActionDispatch::TestRequest.create, {})
+        jar.encrypted[:_mp_auth] = { value: data }
+        cookies[:_mp_auth] = jar[:_mp_auth]
+      end
+
+      it "authorizes mini_profiler for anon user with valid cookie" do
+        set_mini_profiler_auth_cookie(developer)
+
+        get "/latest"
+
+        expect(mini_profiler_stub).to have_received(:authorize_request)
+      end
+
+      it "does not authorize with expired cookie" do
+        set_mini_profiler_auth_cookie(
+          developer,
+          issued_at:
+            (ApplicationController::MINI_PROFILER_AUTH_COOKIE_EXPIRES_IN + 1.hour).ago.to_i,
+        )
+
+        get "/latest"
+
+        expect(mini_profiler_stub).not_to have_received(:authorize_request)
+      end
+
+      it "does not authorize if user no longer exists" do
+        set_mini_profiler_auth_cookie(developer)
+        developer.destroy!
+
+        get "/latest"
+
+        expect(mini_profiler_stub).not_to have_received(:authorize_request)
+      end
+
+      it "does not authorize if user is no longer a developer" do
+        set_mini_profiler_auth_cookie(developer)
+        Developer.find_by(user_id: developer.id).destroy!
+
+        get "/latest"
+
+        expect(mini_profiler_stub).not_to have_received(:authorize_request)
+      end
     end
   end
 end

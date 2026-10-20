@@ -1,17 +1,18 @@
 /* eslint-disable ember/no-classic-components */
 import Component from "@ember/component";
-import { action } from "@ember/object";
+import { action, computed } from "@ember/object";
 import { service } from "@ember/service";
+import { tagName } from "@ember-decorators/component";
 import DButton from "discourse/components/d-button";
 import GroupFlairVisibilityWarning from "discourse/components/group-flair-visibility-warning";
 import GroupDefaultNotificationsModal from "discourse/components/modal/group-default-notifications";
 import { popupAjaxError } from "discourse/lib/ajax-error";
 import { GROUP_VISIBILITY_LEVELS } from "discourse/lib/constants";
-import discourseComputed from "discourse/lib/decorators";
 import { defaultHomepage } from "discourse/lib/utilities";
 import { or } from "discourse/truth-helpers";
 import { i18n } from "discourse-i18n";
 
+@tagName("")
 export default class GroupManageSaveButton extends Component {
   @service currentUser;
   @service dialog;
@@ -21,16 +22,10 @@ export default class GroupManageSaveButton extends Component {
 
   saving = null;
   disabled = false;
-  updateExistingUsers = null;
 
-  @discourseComputed("saving")
-  savingText(saving) {
-    return saving ? i18n("saving") : i18n("save");
-  }
-
-  @action
-  setUpdateExistingUsers(value) {
-    this.updateExistingUsers = value;
+  @computed("saving")
+  get savingText() {
+    return this.saving ? i18n("saving") : i18n("save");
   }
 
   _wouldLoseAccess() {
@@ -51,7 +46,7 @@ export default class GroupManageSaveButton extends Component {
   }
 
   @action
-  async save() {
+  async save(updateExistingUsers = null) {
     if (this.beforeSave) {
       this.beforeSave();
     }
@@ -82,8 +77,8 @@ export default class GroupManageSaveButton extends Component {
     this.set("saving", true);
 
     const opts = {};
-    if (this.updateExistingUsers !== null) {
-      opts.update_existing_users = this.updateExistingUsers;
+    if (updateExistingUsers !== null) {
+      opts.update_existing_users = updateExistingUsers;
     }
 
     try {
@@ -94,10 +89,7 @@ export default class GroupManageSaveButton extends Component {
         return;
       }
 
-      this.setProperties({
-        saved: true,
-        updateExistingUsers: null,
-      });
+      this.set("saved", true);
 
       if (this.afterSave) {
         this.afterSave();
@@ -105,7 +97,7 @@ export default class GroupManageSaveButton extends Component {
     } catch (error) {
       const json = error.jqXHR?.responseJSON;
       if (error.jqXHR?.status === 422 && json?.user_count) {
-        this.editGroupNotifications(json);
+        this.editGroupNotifications(json.user_count);
       } else {
         popupAjaxError(error);
       }
@@ -115,29 +107,29 @@ export default class GroupManageSaveButton extends Component {
   }
 
   @action
-  async editGroupNotifications(json) {
-    await this.modal.show(GroupDefaultNotificationsModal, {
-      model: {
-        count: json.user_count,
-        setUpdateExistingUsers: this.setUpdateExistingUsers,
-      },
-    });
-    this.save();
+  async editGroupNotifications(count) {
+    const updateExistingUsers = await this.modal.show(
+      GroupDefaultNotificationsModal,
+      { model: { count } }
+    );
+    this.save(updateExistingUsers);
   }
 
   <template>
-    <GroupFlairVisibilityWarning @model={{this.model}} />
+    <div ...attributes>
+      <GroupFlairVisibilityWarning @model={{this.model}} />
 
-    <div class="control-group buttons group-manage-save-button">
-      <DButton
-        @action={{this.save}}
-        @disabled={{or this.disabled this.saving}}
-        @translatedLabel={{this.savingText}}
-        class="btn-primary group-manage-save"
-      />
-      {{#if this.saved}}
-        <span>{{i18n "saved"}}</span>
-      {{/if}}
+      <div class="control-group buttons group-manage-save-button">
+        <DButton
+          @action={{this.save}}
+          @disabled={{or this.disabled this.saving}}
+          @translatedLabel={{this.savingText}}
+          class="btn-primary group-manage-save"
+        />
+        {{#if this.saved}}
+          <span>{{i18n "saved"}}</span>
+        {{/if}}
+      </div>
     </div>
   </template>
 }

@@ -30,9 +30,14 @@ export default {
           description: "discourse_ai.llms.preconfigured.description",
         },
         {
-          label: "discourse_ai.ai_persona.short_title",
-          route: "adminPlugins.show.discourse-ai-personas",
-          description: "discourse_ai.ai_persona.persona_description",
+          label: "discourse_ai.secrets.short_title",
+          route: "adminPlugins.show.discourse-ai-secrets",
+          description: "discourse_ai.secrets.description",
+        },
+        {
+          label: "discourse_ai.ai_agent.short_title",
+          route: "adminPlugins.show.discourse-ai-agents",
+          description: "discourse_ai.ai_agent.agent_description",
         },
         {
           label: "discourse_ai.embeddings.short_title",
@@ -43,6 +48,7 @@ export default {
           label: "discourse_ai.tools.short_title",
           route: "adminPlugins.show.discourse-ai-tools",
           description: "discourse_ai.tools.subheader_description",
+          keywords: "discourse_ai.tools.keywords",
         },
         {
           label: "discourse_ai.spam.short_title",

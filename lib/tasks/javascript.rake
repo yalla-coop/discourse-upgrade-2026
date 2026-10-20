@@ -20,14 +20,7 @@ task "javascript:update_constants" => :environment do
 
   auto_groups =
     Group::AUTO_GROUPS.inject({}) do |result, (group_name, group_id)|
-      result.merge(
-        group_name => {
-          id: group_id,
-          automatic: true,
-          name: group_name,
-          display_name: group_name,
-        },
-      )
+      result.merge(group_name => { id: group_id, automatic: true, name: group_name })
     end
 
   MAIN_FONT_KEYS = %w[helvetica inter lato montserrat open_sans poppins roboto merriweather mukta]
@@ -73,6 +66,8 @@ task "javascript:update_constants" => :environment do
 
     export const CATEGORY_TEXT_COLORS = #{Category::DEFAULT_TEXT_COLORS};
 
+    // NOTE: Group names are changed based on the site's locale, see
+    // Group.refresh_automatic_group! for more details
     export const AUTO_GROUPS = #{auto_groups.to_json};
 
     export const GROUP_SMTP_SSL_MODES = #{Group.smtp_ssl_modes.to_json};
@@ -97,6 +92,8 @@ task "javascript:update_constants" => :environment do
 
     export const USER_OPTION_COMPOSITION_MODES = #{UserOption.composition_mode_types.to_json};
 
+    export const UPCOMING_CHANGES_USER_ENABLED_REASONS = #{UpcomingChanges.user_enabled_reasons.to_json};
+
     export const INTERFACE_COLOR_MODES = {
       AUTO: #{UserOption::AUTO_MODE},
       LIGHT: #{UserOption::LIGHT_MODE},
@@ -112,12 +109,15 @@ task "javascript:update_constants" => :environment do
     };
   JS
 
+  require "emoji/regex_generator"
+
   write_template("pretty-text/addon/emoji/data.js", task_name, <<~JS)
     export const emojis = new Set(#{Emoji.standard.map(&:name).flatten.inspect});
     export const tonableEmojis = #{Emoji.tonable_emojis.flatten.inspect};
     export const aliases = #{Emoji.aliases.inspect.gsub("=>", ":")};
     export const translations = #{Emoji.translations.inspect.gsub("=>", ":")};
     export const replacements = #{Emoji.unicode_replacements_json};
+    export const emojiReplacementRegex = "#{Emoji::RegexGenerator.generate}";
   JS
 
   write_template("pretty-text/addon/emoji/version.js", task_name, <<~JS)

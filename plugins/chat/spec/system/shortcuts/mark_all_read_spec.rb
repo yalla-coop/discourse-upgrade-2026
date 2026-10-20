@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-RSpec.describe "Shortcuts | mark all read", type: :system do
+RSpec.describe "Shortcuts | mark all read" do
   fab!(:user_1, :admin)
   fab!(:channel_1, :chat_channel)
   fab!(:channel_2, :chat_channel)
   fab!(:channel_3, :chat_channel)
 
-  let(:chat_sidebar) { PageObjects::Pages::Sidebar.new }
+  let(:chat_sidebar) { PageObjects::Pages::ChatSidebar.new }
   let(:channel_page) { PageObjects::Pages::ChatChannel.new }
   let(:drawer) { PageObjects::Pages::ChatDrawer.new }
 

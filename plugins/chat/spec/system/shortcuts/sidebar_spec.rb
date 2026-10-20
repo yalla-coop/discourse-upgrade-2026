@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-RSpec.describe "Shortcuts | sidebar", type: :system do
+RSpec.describe "Shortcuts | sidebar" do
   fab!(:current_user, :admin)
 
   let(:chat) { PageObjects::Pages::Chat.new }
-  let(:sidebar_page) { PageObjects::Pages::Sidebar.new }
+  let(:sidebar_page) { PageObjects::Pages::ChatSidebar.new }
 
   before do
     SiteSetting.navigation_menu = "sidebar"

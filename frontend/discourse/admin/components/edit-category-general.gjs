@@ -1,11 +1,10 @@
 import Component from "@glimmer/component";
 import { cached } from "@glimmer/tracking";
-import { fn, hash } from "@ember/helper";
+import { hash } from "@ember/helper";
 import { action } from "@ember/object";
 import { service } from "@ember/service";
-import { htmlSafe } from "@ember/template";
-import ColorInput from "discourse/admin/components/color-input";
-import ColorPicker from "discourse/components/color-picker";
+import { trustHTML } from "@ember/template";
+import DecoratedHtml from "discourse/components/decorated-html";
 import PluginOutlet from "discourse/components/plugin-outlet";
 import categoryBadge from "discourse/helpers/category-badge";
 import { categoryBadgeHTML } from "discourse/helpers/category-link";
@@ -126,25 +125,16 @@ export default class EditCategoryGeneral extends Component {
   }
 
   @action
-  updateColor(field, newColor) {
-    const color = newColor.replace("#", "");
+  setBackgroundColor(value, { set }) {
+    const color = value?.replace(/^#/, "") ?? "";
 
-    if (color === field.value) {
-      return;
-    }
+    set("color", color);
 
-    if (field.name === "color") {
-      const whiteDiff = this.colorDifference(color, CATEGORY_TEXT_COLORS[0]);
-      const blackDiff = this.colorDifference(color, CATEGORY_TEXT_COLORS[1]);
-      const colorIndex = whiteDiff > blackDiff ? 0 : 1;
+    const whiteDiff = this.colorDifference(color, CATEGORY_TEXT_COLORS[0]);
+    const blackDiff = this.colorDifference(color, CATEGORY_TEXT_COLORS[1]);
+    const colorIndex = whiteDiff > blackDiff ? 0 : 1;
 
-      this.args.form.setProperties({
-        color,
-        text_color: CATEGORY_TEXT_COLORS[colorIndex],
-      });
-    } else {
-      field.set(color);
-    }
+    set("text_color", CATEGORY_TEXT_COLORS[colorIndex]);
   }
 
   @action
@@ -182,6 +172,7 @@ export default class EditCategoryGeneral extends Component {
         title,
         message: i18n("category.color_validations.cant_be_empty"),
       });
+      return;
     }
 
     if (color.length !== 3 && color.length !== 6) {
@@ -189,6 +180,7 @@ export default class EditCategoryGeneral extends Component {
         title,
         message: i18n("category.color_validations.incorrect_length"),
       });
+      return;
     }
 
     if (!/^[0-9A-Fa-f]+$/.test(color)) {
@@ -201,10 +193,10 @@ export default class EditCategoryGeneral extends Component {
 
   get categoryDescription() {
     if (this.args.category.description) {
-      return htmlSafe(this.args.category.description);
+      return trustHTML(this.args.category.description);
     }
 
-    return i18n("category.no_description");
+    return trustHTML(i18n("category.no_description"));
   }
 
   get canSelectParentCategory() {
@@ -220,7 +212,7 @@ export default class EditCategoryGeneral extends Component {
     <div class={{this.panelClass}}>
       {{#if this.showWarning}}
         <@form.Alert @type="warning" @icon="triangle-exclamation">
-          {{htmlSafe
+          {{trustHTML
             (i18n
               "category.uncategorized_general_warning"
               settingLink=this.uncategorizedSiteSettingLink
@@ -240,9 +232,10 @@ export default class EditCategoryGeneral extends Component {
             @title={{i18n "category.name"}}
             @format="large"
             @validation="required"
+            @type="input"
             as |field|
           >
-            <field.Input
+            <field.Control
               placeholder={{i18n "category.name_placeholder"}}
               @maxlength="50"
               class="category-name"
@@ -254,9 +247,10 @@ export default class EditCategoryGeneral extends Component {
           @name="slug"
           @title={{i18n "category.slug"}}
           @format="large"
+          @type="input"
           as |field|
         >
-          <field.Input
+          <field.Control
             placeholder={{i18n "category.slug_placeholder"}}
             @maxlength="255"
           />
@@ -269,9 +263,10 @@ export default class EditCategoryGeneral extends Component {
           @title={{i18n "category.parent"}}
           @format="large"
           class="parent-category"
+          @type="custom"
           as |field|
         >
-          <field.Custom>
+          <field.Control>
             <CategoryChooser
               @value={{@transientData.parent_category_id}}
               @allowSubCategories={{true}}
@@ -284,7 +279,7 @@ export default class EditCategoryGeneral extends Component {
                 none=true
               }}
             />
-          </field.Custom>
+          </field.Control>
         </@form.Field>
       {{/if}}
 
@@ -298,7 +293,10 @@ export default class EditCategoryGeneral extends Component {
 
       {{#if this.showDescription}}
         <@form.Section @title={{i18n "category.description"}}>
-          <span class="readonly-field">{{this.categoryDescription}}</span>
+          <DecoratedHtml
+            @html={{this.categoryDescription}}
+            @className="readonly-field"
+          />
 
           {{#if @category.topic_url}}
             <@form.Container>
@@ -319,16 +317,17 @@ export default class EditCategoryGeneral extends Component {
           @title={{i18n "category.styles.type"}}
           @format="large"
           @validation="required"
+          @type="select"
           as |field|
         >
-          {{htmlSafe (this.categoryBadgePreview @transientData)}}
-          <field.Select as |select|>
+          {{trustHTML (this.categoryBadgePreview @transientData)}}
+          <field.Control as |select|>
             {{#each this.styleTypes as |styleType|}}
               <select.Option @value={{styleType.id}}>
                 {{styleType.name}}
               </select.Option>
             {{/each}}
-          </field.Select>
+          </field.Control>
         </@form.Field>
 
         {{#if (eq @transientData.style_type "emoji")}}
@@ -337,9 +336,10 @@ export default class EditCategoryGeneral extends Component {
             @title={{i18n "category.styles.emoji"}}
             @format="small"
             @validation="required"
+            @type="emoji"
             as |field|
           >
-            <field.Emoji />
+            <field.Control />
           </@form.Field>
         {{else if (eq @transientData.style_type "icon")}}
           <@form.Field
@@ -347,9 +347,10 @@ export default class EditCategoryGeneral extends Component {
             @title={{i18n "category.styles.icon"}}
             @format="small"
             @validation="required"
+            @type="icon"
             as |field|
           >
-            <field.Icon />
+            <field.Control />
           </@form.Field>
         {{/if}}
 
@@ -359,28 +360,14 @@ export default class EditCategoryGeneral extends Component {
           @format="full"
           @validate={{this.validateColor}}
           @validation="required"
+          @onSet={{this.setBackgroundColor}}
+          @type="color"
           as |field|
         >
-          <field.Custom>
-            <div class="category-color-editor">
-              <div class="colorpicker-wrapper edit-background-color">
-                <ColorInput
-                  @hexValue={{readonly field.value}}
-                  @valid={{@category.colorValid}}
-                  @ariaLabelledby="background-color-label"
-                  @onChangeColor={{fn this.updateColor field}}
-                  @skipNormalize={{true}}
-                />
-                <ColorPicker
-                  @colors={{this.backgroundColors}}
-                  @usedColors={{this.usedBackgroundColors}}
-                  @value={{readonly field.value}}
-                  @ariaLabel={{i18n "category.predefined_colors"}}
-                  @onSelectColor={{fn this.updateColor field}}
-                />
-              </div>
-            </div>
-          </field.Custom>
+          <field.Control
+            @colors={{this.backgroundColors}}
+            @usedColors={{this.usedBackgroundColors}}
+          />
         </@form.Field>
 
         <@form.Field
@@ -389,26 +376,10 @@ export default class EditCategoryGeneral extends Component {
           @format="full"
           @validate={{this.validateColor}}
           @validation="required"
+          @type="color"
           as |field|
         >
-          <field.Custom>
-            <div class="category-color-editor">
-              <div class="colorpicker-wrapper edit-text-color">
-                <ColorInput
-                  @hexValue={{readonly field.value}}
-                  @ariaLabelledby="foreground-color-label"
-                  @onChangeColor={{fn this.updateColor field}}
-                  @skipNormalize={{true}}
-                />
-                <ColorPicker
-                  @colors={{CATEGORY_TEXT_COLORS}}
-                  @value={{readonly field.value}}
-                  @ariaLabel={{i18n "category.predefined_colors"}}
-                  @onSelectColor={{fn this.updateColor field}}
-                />
-              </div>
-            </div>
-          </field.Custom>
+          <field.Control @colors={{CATEGORY_TEXT_COLORS}} />
         </@form.Field>
       </@form.Section>
     </div>

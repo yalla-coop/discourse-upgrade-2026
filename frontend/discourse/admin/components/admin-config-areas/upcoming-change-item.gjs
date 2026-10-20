@@ -1,11 +1,14 @@
+/* eslint-disable ember/no-tracked-properties-from-args */
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
-import { concat } from "@ember/helper";
+import { concat, hash } from "@ember/helper";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
+import { LinkTo } from "@ember/routing";
 import { cancel } from "@ember/runloop";
 import { service } from "@ember/service";
-import { htmlSafe } from "@ember/template";
+import { capitalize } from "@ember/string";
+import { trustHTML } from "@ember/template";
 import { modifier } from "ember-modifier";
 import DButton from "discourse/components/d-button";
 import DSelect from "discourse/components/d-select";
@@ -24,6 +27,7 @@ import { eq } from "discourse/truth-helpers";
 import { i18n } from "discourse-i18n";
 
 export default class UpcomingChangeItem extends Component {
+  @service site;
   @service toasts;
 
   @tracked bufferedGroups = this.args.change.groups;
@@ -56,7 +60,7 @@ export default class UpcomingChangeItem extends Component {
   }
 
   get enabledForOptions() {
-    return [
+    const options = [
       {
         label: i18n("admin.upcoming_changes.enabled_for_options.no_one"),
         value: "no_one",
@@ -65,23 +69,37 @@ export default class UpcomingChangeItem extends Component {
         label: i18n("admin.upcoming_changes.enabled_for_options.everyone"),
         value: "everyone",
       },
-      {
-        label: i18n("admin.upcoming_changes.enabled_for_options.staff"),
-        value: "staff",
-      },
-      {
-        label: i18n(
-          "admin.upcoming_changes.enabled_for_options.specific_groups"
-        ),
-        value: "groups",
-      },
     ];
+
+    if (!this.args.change.upcoming_change.disallow_enabled_for_groups) {
+      options.push(
+        {
+          label: capitalize(this.staffGroupName),
+          value: this.staffGroupName,
+        },
+        {
+          label: i18n(
+            "admin.upcoming_changes.enabled_for_options.specific_groups"
+          ),
+          value: "groups",
+        }
+      );
+    }
+
+    return options;
+  }
+
+  get staffGroupName() {
+    return this.site.groupsById[AUTO_GROUPS.staff.id].name;
   }
 
   get enabledForDisabled() {
+    return this.savingEnabledFor;
+  }
+
+  get showDependentSettingsLink() {
     return (
-      this.args.change.upcoming_change.status === "permanent" ||
-      this.savingEnabledFor
+      this.args.change.dependents.length && this.bufferedEnabledFor !== "no_one"
     );
   }
 
@@ -174,9 +192,10 @@ export default class UpcomingChangeItem extends Component {
       enabledForLabel = i18n(
         "admin.upcoming_changes.enabled_for_options.everyone"
       );
-    } else if (enabledFor === "staff") {
+    } else if (enabledFor === this.staffGroupName) {
       enabledForLabel = i18n(
-        "admin.upcoming_changes.enabled_for_options.staff"
+        "admin.upcoming_changes.enabled_for_options.staff",
+        { staffGroupName: capitalize(this.staffGroupName) }
       );
     } else if (enabledFor === "groups") {
       const groupNames = this.bufferedGroups.split(",");
@@ -230,13 +249,15 @@ export default class UpcomingChangeItem extends Component {
     try {
       await this.toggleChange(isEnabled, newValue);
 
-      if (newValue === "staff") {
-        this.groupsChanged(AUTO_GROUPS.staff.name);
+      if (newValue === this.staffGroupName) {
+        this.groupsChanged(this.staffGroupName);
       } else if (newValue === "everyone" || newValue === "no_one") {
         this.groupsChanged("");
       }
 
       await this.saveGroups({ silenceToast: true });
+
+      this.args.enabledForChanged?.(this.args.change.setting, newValue);
     } catch (error) {
       this.bufferedEnabledFor = oldValue;
       popupAjaxError(error);
@@ -290,9 +311,9 @@ export default class UpcomingChangeItem extends Component {
 
               {{#if @change.upcoming_change.learn_more_url}}
                 <span class="upcoming-change__learn-more">
-                  {{htmlSafe
+                  {{trustHTML
                     (i18n
-                      "learn_more_with_link"
+                      "feedback_with_link"
                       url=@change.upcoming_change.learn_more_url
                     )
                   }}
@@ -302,10 +323,10 @@ export default class UpcomingChangeItem extends Component {
           </div>
         {{/if}}
 
-        {{#if (eq @change.upcoming_change.status "permanent")}}
-          <div class="upcoming-change__permanent-notice">
+        {{#if (eq @change.upcoming_change.status "stable")}}
+          <div class="upcoming-change__status-notice">
             {{icon "triangle-exclamation"}}
-            {{i18n "admin.upcoming_changes.permanent_notice"}}
+            {{i18n "admin.upcoming_changes.permanent_soon_notice"}}
           </div>
         {{/if}}
 
@@ -322,13 +343,7 @@ export default class UpcomingChangeItem extends Component {
               (concat "--status-" @change.upcoming_change.status)
             }}
           >
-            {{icon
-              (if
-                (eq @change.upcoming_change.status "permanent")
-                "lock"
-                "far-circle-dot"
-              )
-            }}
+            {{icon "far-circle-dot"}}
             {{i18n
               (concat
                 "admin.upcoming_changes.statuses."
@@ -374,22 +389,30 @@ export default class UpcomingChangeItem extends Component {
         >
           {{#each this.enabledForOptions as |option|}}
             <select.Option @value={{option.value}}>
-              {{option.label}}</select.Option>
+              {{option.label}}
+            </select.Option>
           {{/each}}
         </DSelect>
 
+        {{#if this.showDependentSettingsLink}}
+          <div class="upcoming-change__dependents">
+            <LinkTo
+              @route="adminSiteSettings"
+              @query={{hash filter="all_results" dependsOn=@change.setting}}
+            >
+              {{i18n "admin.upcoming_changes.show_related_settings"}}
+            </LinkTo>
+          </div>
+        {{/if}}
+
         {{#if (eq this.bufferedEnabledFor "groups")}}
           <div class="upcoming-change__group-selection-wrapper">
-            {{#if (eq @change.upcoming_change.status "permanent")}}
-              {{i18n "admin.upcoming_changes.permanent_no_group_selection"}}
-            {{else}}
-              <GroupSelector
-                @groupFinder={{this.groupFinder}}
-                @groupNames={{this.bufferedGroups}}
-                @onChange={{this.groupsChanged}}
-                @placeholderKey="admin.upcoming_changes.select_groups"
-              />
-            {{/if}}
+            <GroupSelector
+              @groupFinder={{this.groupFinder}}
+              @groupNames={{this.bufferedGroups}}
+              @onChange={{this.groupsChanged}}
+              @placeholderKey="admin.upcoming_changes.select_groups"
+            />
 
             {{#if this.bufferedGroupsDirty}}
               <DButton

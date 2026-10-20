@@ -5,6 +5,13 @@
 # https://translate.discourse.org/
 
 pl_PL:
+  admin_js:
+    admin:
+      api:
+        scopes:
+          descriptions:
+            automation:
+              trigger_automation: "Wyzwalanie automatyzacji za pomocą API"
   js:
     admin:
       logs:
@@ -62,8 +69,6 @@ pl_PL:
             label: Treść
           delay:
             label: Opóźnienie (minuty)
-          prefers_encrypt:
-            label: Szyfruje PW, jeśli jest to dostępne
         group:
           label: Grupa
         text:
@@ -185,13 +190,13 @@ pl_PL:
               description: Opcjonalne, uruchomi się tylko wtedy, gdy temat posta należy dokładnie do kategorii określonych powyżej.
             restricted_archetype:
               label: Typ tematu
-              description: Opcjonalnie, zezwól na wyzwalanie tylko w tematach lub wiadomościach osobistych.
+              description: Opcjonalnie, zezwól na wyzwalanie tylko w tematach lub prywatnych wiadomościach.
             restricted_groups:
               label: Ograniczone grupy
               description: Opcjonalne, uruchomi się tylko wtedy, gdy użytkownik postu należy do jednej z tych grup
             restricted_inbox_groups:
               label: Ograniczone grupy skrzynek odbiorczych
-              description: Opcjonalne, uruchomi się tylko wtedy, gdy tematem posta jest wiadomość prywatna w jednej ze skrzynek odbiorczych grupy
+              description: Opcjonalne, uruchomi się tylko wtedy, gdy tematem wpisu jest prywatna wiadomość w jednej ze skrzynek odbiorczych grupy
             excluded_groups:
               label: Wykluczone grupy
               description: Opcjonalnie, pomiń wyzwalacz, jeśli użytkownik postu należy do którejkolwiek z tych grup
@@ -213,7 +218,7 @@ pl_PL:
           created: Utworzono
           edited: Edytowany
           topics: Wszystkie tematy
-          personal_messages: Wiadomości osobiste
+          personal_messages: Prywatne wiadomości
           public_topics: Tematy publiczne (wyklucz wszystkie bezpieczne kategorie)
           with_images: Obrazy
           with_links: Linki
@@ -461,6 +466,11 @@ pl_PL:
           runs_today: "%{count} dzisiaj"
           runs_this_week: "%{count} w tym tygodniu"
           runs_this_month: "%{count} w tym miesiącu"
+          recent_errors:
+            one: "%{count} błąd ostatnio"
+            few: "%{count} błędy ostatnio"
+            many: "%{count} błędów ostatnio"
+            other: "%{count} błędów ostatnio"
           runs:
             label: Uruchomiona
           name:

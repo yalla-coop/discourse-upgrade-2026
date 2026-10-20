@@ -1,3 +1,4 @@
+/* eslint-disable ember/no-tracked-properties-from-args */
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { fn } from "@ember/helper";
@@ -5,7 +6,7 @@ import { on } from "@ember/modifier";
 import { action } from "@ember/object";
 import didInsert from "@ember/render-modifiers/modifiers/did-insert";
 import { service } from "@ember/service";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import InstallThemeItem from "discourse/admin/components/install-theme-item";
 import { COMPONENTS, THEMES } from "discourse/admin/models/theme";
 import ConditionalLoadingSection from "discourse/components/conditional-loading-section";
@@ -32,7 +33,6 @@ export default class InstallThemeModal extends Component {
 
   @tracked selection = this.args.model.selection || "popular";
   @tracked uploadUrl = this.args.model.uploadUrl;
-  @tracked uploadName = this.args.model.uploadName;
   @tracked selectedType = this.args.model.selectedType;
   @tracked advancedVisible = false;
   @tracked loading = false;
@@ -376,7 +376,7 @@ export default class InstallThemeModal extends Component {
                   {{on "change" this.uploadLocaleFile}}
                   type="file"
                   id="file-input"
-                  accept=".dcstyle.json,application/json,.tar.gz,application/x-gzip,.zip,application/zip"
+                  accept=".tar.gz,application/x-gzip,.zip,application/zip"
                 />
                 <br />
                 <span class="description">
@@ -463,10 +463,10 @@ export default class InstallThemeModal extends Component {
             {{#if this.directRepoInstall}}
               <div class="repo">
                 <div class="label">
-                  {{htmlSafe
+                  {{trustHTML
                     (i18n
                       "admin.customize.theme.direct_install_tip"
-                      name=this.uploadName
+                      name=@model.uploadName
                     )
                   }}
                 </div>

@@ -12,6 +12,9 @@ RSpec.describe UpcomingChanges do
           impact_type: "other",
           impact_role: "developers",
         },
+        conceptual_setting: {
+          status: :conceptual,
+        },
         alpha_setting: {
           status: :alpha,
         },
@@ -48,6 +51,14 @@ RSpec.describe UpcomingChanges do
         "images/upcoming_changes/#{setting_name}.png",
       )
     end
+
+    it "returns the correct path for plugin images" do
+      plugin_setting = :enable_experimental_sample_plugin_feature
+
+      expect(described_class.image_path(plugin_setting)).to eq(
+        "plugins/discourse-sample-plugin/images/upcoming_changes/#{plugin_setting}.png",
+      )
+    end
   end
 
   describe ".image_data" do
@@ -59,6 +70,23 @@ RSpec.describe UpcomingChanges do
       )
       expect(result[:width]).to eq(244)
       expect(result[:height]).to eq(66)
+    end
+
+    context "when include_file_path is true" do
+      it "returns the image URL, width, height, and file path" do
+        result = described_class.image_data(setting_name, include_file_path: true)
+
+        expect(result[:file_path]).to eq(
+          File.join(
+            Rails.root,
+            "spec",
+            "fixtures",
+            "images",
+            "upcoming_changes",
+            "#{setting_name}.png",
+          ),
+        )
+      end
     end
   end
 
@@ -96,6 +124,10 @@ RSpec.describe UpcomingChanges do
   end
 
   describe ".not_yet_stable?" do
+    it "returns true for conceptual status" do
+      expect(described_class.not_yet_stable?("conceptual_setting")).to eq(true)
+    end
+
     it "returns true for experimental status" do
       expect(described_class.not_yet_stable?(setting_name)).to eq(true)
     end
@@ -118,6 +150,10 @@ RSpec.describe UpcomingChanges do
   end
 
   describe ".stable_or_permanent?" do
+    it "returns false for conceptual status" do
+      expect(described_class.stable_or_permanent?("conceptual_setting")).to eq(false)
+    end
+
     it "returns false for experimental status" do
       expect(described_class.stable_or_permanent?(setting_name)).to eq(false)
     end
@@ -140,6 +176,10 @@ RSpec.describe UpcomingChanges do
   end
 
   describe ".change_status_value" do
+    it "returns -100 for conceptual status" do
+      expect(described_class.change_status_value("conceptual_setting")).to eq(-100)
+    end
+
     it "returns 0 for experimental status" do
       expect(described_class.change_status_value(setting_name)).to eq(0)
     end
@@ -162,6 +202,10 @@ RSpec.describe UpcomingChanges do
   end
 
   describe ".change_status" do
+    it "returns :conceptual for conceptual status" do
+      expect(described_class.change_status("conceptual_setting")).to eq(:conceptual)
+    end
+
     it "returns :experimental for experimental status" do
       expect(described_class.change_status(setting_name)).to eq(:experimental)
     end
@@ -192,6 +236,66 @@ RSpec.describe UpcomingChanges do
     it "returns false when the change does not meet the required status" do
       expect(described_class.meets_or_exceeds_status?("alpha_setting", :beta)).to eq(false)
       expect(described_class.meets_or_exceeds_status?("beta_setting", :stable)).to eq(false)
+    end
+  end
+
+  describe ".previous_status_value" do
+    it "returns -100 for conceptual (lowest status)" do
+      expect(described_class.previous_status_value(:conceptual)).to eq(-100)
+    end
+
+    it "returns -100 for experimental" do
+      expect(described_class.previous_status_value(:experimental)).to eq(-100)
+    end
+
+    it "returns 0 for alpha" do
+      expect(described_class.previous_status_value(:alpha)).to eq(0)
+    end
+
+    it "returns 100 for beta" do
+      expect(described_class.previous_status_value(:beta)).to eq(100)
+    end
+
+    it "returns 200 for stable" do
+      expect(described_class.previous_status_value(:stable)).to eq(200)
+    end
+
+    it "returns 300 for permanent" do
+      expect(described_class.previous_status_value(:permanent)).to eq(300)
+    end
+
+    it "accepts string status names" do
+      expect(described_class.previous_status_value("stable")).to eq(200)
+    end
+  end
+
+  describe ".previous_status" do
+    it "returns :conceptual for conceptual (lowest status)" do
+      expect(described_class.previous_status(:conceptual)).to eq(:conceptual)
+    end
+
+    it "returns :conceptual for experimental" do
+      expect(described_class.previous_status(:experimental)).to eq(:conceptual)
+    end
+
+    it "returns :experimental for alpha" do
+      expect(described_class.previous_status(:alpha)).to eq(:experimental)
+    end
+
+    it "returns :alpha for beta" do
+      expect(described_class.previous_status(:beta)).to eq(:alpha)
+    end
+
+    it "returns :beta for stable" do
+      expect(described_class.previous_status(:stable)).to eq(:beta)
+    end
+
+    it "returns :stable for permanent" do
+      expect(described_class.previous_status(:permanent)).to eq(:stable)
+    end
+
+    it "accepts string status names" do
+      expect(described_class.previous_status("stable")).to eq(:beta)
     end
   end
 
@@ -281,6 +385,110 @@ RSpec.describe UpcomingChanges do
     end
   end
 
+  describe ".current_statuses" do
+    include ActiveSupport::Testing::TimeHelpers
+
+    before { described_class.clear_caches! }
+
+    after do
+      described_class.clear_caches!
+      UpcomingChangeEvent.where(upcoming_change_name: "timeline_status_setting").delete_all
+    end
+
+    it "returns an empty hash when there are no status_changed events" do
+      expect(described_class.current_statuses).to eq({})
+    end
+
+    it "maps each upcoming change to the latest status_changed new_value and timestamp" do
+      travel_to Time.zone.parse("2024-06-01 12:00:00") do
+        UpcomingChangeEvent.create!(
+          event_type: :status_changed,
+          upcoming_change_name: "timeline_status_setting",
+          event_data: {
+            "previous_value" => "alpha",
+            "new_value" => "beta",
+          },
+        )
+      end
+
+      latest_event =
+        travel_to(Time.zone.parse("2024-06-15 12:00:00")) do
+          UpcomingChangeEvent.create!(
+            event_type: :status_changed,
+            upcoming_change_name: "timeline_status_setting",
+            event_data: {
+              "previous_value" => "beta",
+              "new_value" => "stable",
+            },
+          )
+        end
+
+      result = described_class.current_statuses
+
+      expect(result["timeline_status_setting"]).to eq(
+        { status: "stable", changed_at: latest_event.created_at },
+      )
+    end
+
+    it "caches the result so the SQL runs only once until the cache key is deleted" do
+      UpcomingChangeEvent.create!(
+        event_type: :status_changed,
+        upcoming_change_name: "timeline_status_setting",
+        event_data: {
+          "previous_value" => nil,
+          "new_value" => "experimental",
+        },
+      )
+
+      allow(DB).to receive(:query).and_call_original
+
+      2.times { described_class.current_statuses }
+      expect(DB).to have_received(:query).once
+
+      described_class.clear_caches!
+
+      described_class.current_statuses
+      expect(DB).to have_received(:query).twice
+    end
+  end
+
+  describe ".permanent_upcoming_changes" do
+    before do
+      described_class.clear_caches!
+      mock_upcoming_change_metadata(
+        {
+          enable_upload_debug_mode: {
+            impact: "other,developers",
+            status: :permanent,
+            impact_type: "other",
+            impact_role: "developers",
+          },
+        },
+      )
+    end
+
+    after { described_class.clear_caches! }
+
+    it "returns only changes whose metadata status is permanent" do
+      list = described_class.permanent_upcoming_changes
+
+      expect(list.all? { |c| described_class.change_status(c[:setting]) == :permanent }).to eq(true)
+      expect(list.map { |c| c[:setting] }).to include(:enable_upload_debug_mode)
+    end
+
+    it "caches the list so UpcomingChanges::List runs only once until the cache key is deleted" do
+      allow(UpcomingChanges::List).to receive(:call).and_call_original
+
+      2.times { described_class.permanent_upcoming_changes }
+      expect(UpcomingChanges::List).to have_received(:call).once
+
+      described_class.clear_caches!
+
+      described_class.permanent_upcoming_changes
+      expect(UpcomingChanges::List).to have_received(:call).twice
+    end
+  end
+
   describe ".enabled_for_user?" do
     context "for logged-in user" do
       fab!(:user)
@@ -361,6 +569,17 @@ RSpec.describe UpcomingChanges do
           expect(UpcomingChanges.enabled_for_user?(setting_name, user)).to eq(false)
         end
       end
+    end
+  end
+
+  describe "conceptual status filtering" do
+    it "excludes conceptual changes from all_settings with only_upcoming_changes" do
+      settings =
+        SiteSetting
+          .all_settings(only_upcoming_changes: true, include_hidden: true)
+          .map { |s| s[:setting] }
+      expect(settings).not_to include(:conceptual_setting)
+      expect(settings).to include(:enable_upload_debug_mode)
     end
   end
 end

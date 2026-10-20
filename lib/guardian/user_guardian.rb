@@ -57,7 +57,7 @@ module UserGuardian
   end
 
   def can_unsilence_user?(user)
-    user && is_staff?
+    user && is_staff? && (!user.staff? || is_admin?)
   end
 
   def can_delete_user?(user)
@@ -120,6 +120,16 @@ module UserGuardian
   def can_see_silencing_reason?(user)
     return true unless SiteSetting.hide_silencing_reasons?
     is_me?(user) || is_staff?
+  end
+
+  def can_see_user_status?(user)
+    return false if user.blank?
+
+    if user.silenced?
+      is_me?(user) || is_staff?
+    else
+      true
+    end
   end
 
   def can_disable_second_factor?(user)

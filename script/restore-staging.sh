@@ -28,7 +28,7 @@ mkdir -p "$REPO/public/backups/default"
 cp "$BACKUP" "$REPO/public/backups/default/$NAME"
 
 say "Stopping the server while restoring"
-docker exec "$CONTAINER" bash -lc 'pkill -f unicorn; pkill -f sidekiq' >/dev/null 2>&1 || true
+docker exec "$CONTAINER" bash -lc 'pkill -f "[u]nicorn|[p]itchfork"; pkill -f "[s]idekiq"' >/dev/null 2>&1 || true
 sleep 3
 
 say "Making sure the restore tools are current"
@@ -37,14 +37,28 @@ say "Making sure the restore tools are current"
 # extension files, so PostgreSQL is restarted to match them (minor version
 # only; the data is compatible).
 docker exec -u root "$CONTAINER" bash -lc \
-  'before=$(psql --version); apt-get update -qq >/dev/null 2>&1; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --only-upgrade postgresql-client-15 postgresql-15 >/dev/null 2>&1; after=$(psql --version); if [ "$before" != "$after" ]; then sv restart postgres >/dev/null; sleep 5; fi; echo "$after"'
+  'before=$(psql --version); apt-get update -qq >/dev/null 2>&1; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --only-upgrade postgresql-client-15 postgresql-15 >/dev/null 2>&1; after=$(psql --version); if [ "$before" != "$after" ]; then sv restart postgres >/dev/null; fi; echo "$after"'
+
+# Wait until PostgreSQL really accepts queries (a fixed pause was not enough:
+# on 2026-10-19 the restore started while the server was still shutting down,
+# so nothing was restored and Layer C ran on an empty copy).
+for _ in $(seq 1 60); do
+  docker exec -u discourse:discourse "$CONTAINER" psql -d postgres -tAc 'select 1' >/dev/null 2>&1 && break
+  sleep 2
+done
+docker exec -u discourse:discourse "$CONTAINER" psql -d postgres -tAc 'select 1' >/dev/null 2>&1 \
+  || { echo "PostgreSQL did not come back in $CONTAINER"; exit 1; }
 
 say "Preparing a fresh $DB database"
 docker exec -u discourse:discourse "$CONTAINER" bash -lc "dropdb --if-exists $DB" >/dev/null
 "${IN[@]}" bash -lc 'bin/rake db:create db:migrate >/dev/null 2>&1 && bin/rails runner "SiteSetting.allow_restore = true" >/dev/null 2>&1'
 
 say "Restoring $NAME"
-"${IN[@]}" bash -lc "yes y | bundle exec script/discourse restore $NAME 2>&1 | grep -E '^\[(SUCCESS|FAILED)\]|EXCEPTION'"
+result="$("${IN[@]}" bash -lc "yes y | bundle exec script/discourse restore $NAME 2>&1 | grep -E '^\[(SUCCESS|FAILED)\]|EXCEPTION'")"
+echo "$result"
+# Stop here unless the restore really succeeded: Layer C on a half-restored
+# copy fails in confusing ways.
+echo "$result" | grep -q '^\[SUCCESS\]' || { echo "The restore did not succeed. Stopping."; exit 1; }
 
 say "Making the restored copy safe"
 "${IN[@]}" bash -lc 'bin/rails runner "

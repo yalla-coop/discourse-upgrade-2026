@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-describe "Bookmarking posts and topics", type: :system do
+describe "Bookmarking posts and topics" do
   fab!(:topic)
   fab!(:topic_2, :topic)
   fab!(:current_user) { Fabricate(:user, refresh_auto_groups: true) }
@@ -117,6 +117,21 @@ describe "Bookmarking posts and topics", type: :system do
       expect(bookmark_modal.custom_time_picker.value).to eq(
         bookmark.reminder_at_in_zone(timezone).strftime("%H:%M"),
       )
+    end
+
+    it "updates the topic status and footer button when using the keyboard shortcut" do
+      topic_page.visit_topic(topic)
+      expect(topic_page).to have_no_topic_status_bookmark
+      expect(topic_page).to have_no_bookmarks(topic)
+
+      send_keys("b")
+      expect(bookmark_modal).to be_open
+      send_keys(:enter)
+      expect(bookmark_modal).to be_closed
+
+      expect(topic_page).to have_topic_status_bookmark
+      expect(topic_page).to have_topic_bookmarked(topic)
+      expect(Bookmark.exists?(bookmarkable: topic, user: current_user)).to eq(true)
     end
 
     it "bookmark button is topic specific" do

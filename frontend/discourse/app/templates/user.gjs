@@ -1,6 +1,6 @@
 import { array, concat, fn, hash } from "@ember/helper";
 import { LinkTo } from "@ember/routing";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import DButton from "discourse/components/d-button";
 import HtmlWithLinks from "discourse/components/html-with-links";
 import PluginOutlet from "discourse/components/plugin-outlet";
@@ -52,7 +52,7 @@ export default <template>
             <div class="staff-counters">
               {{#if @controller.model.number_of_flags_given}}
                 <div>
-                  {{htmlSafe
+                  {{trustHTML
                     (i18n
                       "user.staff_counters.flags_given"
                       className="helpful-flags"
@@ -61,21 +61,20 @@ export default <template>
                   }}
                 </div>
               {{/if}}
-              {{#if @controller.model.number_of_flagged_posts}}
+              {{#if @controller.model.number_of_flags}}
                 <div>
                   <LinkTo
                     @route="review"
                     @query={{hash
                       username=@controller.model.username
                       status="all"
-                      type="ReviewableFlaggedPost"
                     }}
                   >
-                    {{htmlSafe
+                    {{trustHTML
                       (i18n
-                        "user.staff_counters.flagged_posts"
-                        className="flagged-posts"
-                        count=@controller.model.number_of_flagged_posts
+                        "user.staff_counters.flags"
+                        className="flags"
+                        count=@controller.model.number_of_flags
                       )
                     }}
                   </LinkTo>
@@ -91,7 +90,7 @@ export default <template>
                       type="ReviewableQueuedPost"
                     }}
                   >
-                    {{htmlSafe
+                    {{trustHTML
                       (i18n
                         "user.staff_counters.rejected_posts"
                         className="flagged-posts"
@@ -108,7 +107,7 @@ export default <template>
                     @route="user.deletedPosts"
                     @model={{@controller.model}}
                   >
-                    {{htmlSafe
+                    {{trustHTML
                       (i18n
                         "user.staff_counters.deleted_posts"
                         className="deleted-posts"
@@ -124,7 +123,7 @@ export default <template>
                     @route="adminLogs.staffActionLogs"
                     @query={{@controller.silencingsRouteQuery}}
                   >
-                    {{htmlSafe
+                    {{trustHTML
                       (i18n
                         "user.staff_counters.silencings"
                         className="silencings"
@@ -140,7 +139,7 @@ export default <template>
                     @route="adminLogs.staffActionLogs"
                     @query={{@controller.suspensionsRouteQuery}}
                   >
-                    {{htmlSafe
+                    {{trustHTML
                       (i18n
                         "user.staff_counters.suspensions"
                         className="suspensions"
@@ -156,7 +155,7 @@ export default <template>
                     @route="userPrivateMessages.user.warnings"
                     @model={{@controller.model}}
                   >
-                    {{htmlSafe
+                    {{trustHTML
                       (i18n
                         "user.staff_counters.warnings_received"
                         className="warnings-received"
@@ -179,10 +178,9 @@ export default <template>
               @name="before-user-profile-avatar"
               @outletArgs={{lazyHash model=@controller.model}}
             />
-            <UserProfileAvatar @user={{@controller.model}} @tagName="" />
+            <UserProfileAvatar @user={{@controller.model}} />
             <div class="primary-textual">
               <div class="user-profile-names">
-
                 <div
                   class="{{if @controller.nameFirst 'full-name' 'username'}}
                     user-profile-names__primary"
@@ -236,7 +234,7 @@ export default <template>
                       @controller.model.featured_topic.id
                     }}
                   >{{replaceEmoji
-                      (htmlSafe @controller.model.featured_topic.fancy_title)
+                      (trustHTML @controller.model.featured_topic.fancy_title)
                     }}</LinkTo>
                 </div>
               {{/if}}
@@ -311,7 +309,7 @@ export default <template>
                     {{#if @controller.model.suspend_reason}}
                       <div class="suspension-reason">
                         <b>{{i18n "user.suspended_reason"}}</b>
-                        {{htmlSafe @controller.model.suspend_reason}}
+                        {{trustHTML @controller.model.suspend_reason}}
                       </div>
                     {{/if}}
                   </div>
@@ -334,14 +332,14 @@ export default <template>
                     {{#if @controller.model.silence_reason}}
                       <div class="silence-reason">
                         <b>{{i18n "user.silenced_reason"}}</b>
-                        {{htmlSafe @controller.model.silence_reason}}
+                        {{trustHTML @controller.model.silence_reason}}
                       </div>
                     {{/if}}
                   </div>
                 {{/if}}
                 {{#if @controller.isNotRestrictedOrIsStaff}}
                   <HtmlWithLinks>
-                    {{htmlSafe @controller.model.bio_cooked}}
+                    {{trustHTML @controller.model.bio_cooked}}
                   </HtmlWithLinks>
                 {{/if}}
               </div>

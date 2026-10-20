@@ -38,7 +38,6 @@ html.composer-open:not(.has-full-page-chat) {
 }
 
 #reply-control {
-  border: 1px solid var(--content-border-color);
   position: fixed;
   display: flex;
   flex-direction: column;
@@ -117,6 +116,7 @@ html.composer-open:not(.has-full-page-chat) {
 
   &.open {
     --min-height: 255px;
+    border: 1px solid var(--content-border-color);
     box-sizing: border-box;
     height: var(--composer-height);
     min-height: var(--min-height);
@@ -129,6 +129,9 @@ html.composer-open:not(.has-full-page-chat) {
       transform: none;
       height: 100dvh;
       max-height: unset;
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+      border: none;
     }
   }
 
@@ -140,6 +143,10 @@ html.composer-open:not(.has-full-page-chat) {
     color: var(--secondary);
     flex-direction: row;
     justify-content: space-between;
+
+    .grippie {
+      display: none;
+    }
 
     .composer-controls {
       display: flex;
@@ -174,6 +181,7 @@ html.composer-open:not(.has-full-page-chat) {
 
   &.saving .saving-text {
     display: flex;
+    align-items: center;
   }
 
   .reply-to {
@@ -193,9 +201,16 @@ html.composer-open:not(.has-full-page-chat) {
       align-items: center;
       min-width: 0;
       white-space: nowrap;
+      gap: var(--space-2);
 
-      .d-icon {
-        color: var(--primary-medium);
+      .composer-actions {
+        .select-kit-header {
+          border-color: var(--primary-low-mid);
+        }
+
+        .d-icon {
+          color: var(--primary-medium);
+        }
       }
 
       @include viewport.until(sm) {
@@ -286,14 +301,10 @@ html.composer-open:not(.has-full-page-chat) {
 
   .display-edit-reason {
     display: inline-flex;
+    margin-left: auto;
 
     a {
       display: inline-flex;
-    }
-
-    .d-icon {
-      padding: 0.3em 0.5em;
-      color: var(--tertiary);
     }
   }
 
@@ -841,11 +852,13 @@ html.composer-open:not(.has-full-page-chat) {
 // especially while the software keyboard is visible, so we top-anchor it here
 // and shift it using transform
 .ipados-device {
-  #reply-control {
-    // the two properties below are equivalent to bottom: 0
-    top: calc(var(--composer-vh, 1vh) * 100);
-    transform: translateY(-100%);
-    bottom: unset;
+  body:not(.peek-mode-active) {
+    #reply-control {
+      // the two properties below are equivalent to bottom: 0
+      top: calc(var(--composer-vh, 1vh) * 100);
+      transform: translateY(-100%);
+      bottom: unset;
+    }
   }
 }
 
@@ -975,7 +988,7 @@ html.composer-open:not(.has-full-page-chat) {
 
   ul {
     margin: 0;
-    padding: 0 0 0 1.5em;
+    padding: 0 0 0 var(--space-6);
 
     &.list,
     &.topics {
@@ -985,12 +998,17 @@ html.composer-open:not(.has-full-page-chat) {
 
     li {
       font-weight: normal;
-      margin-top: 8px;
+      margin-top: var(--space-2);
     }
   }
 
   .discourse-tags {
     font-size: var(--font-down-1);
+    padding: 0;
+
+    li {
+      margin: 0;
+    }
   }
 }
 
@@ -1015,12 +1033,13 @@ html.composer-open:not(.has-full-page-chat) {
 
     .first-line {
       width: 100%;
+      line-height: var(--line-height-medium);
     }
 
     .second-line {
       display: flex;
       flex-wrap: wrap;
-      gap: var(--space-2);
+      gap: 0 var(--space-2);
     }
   }
 

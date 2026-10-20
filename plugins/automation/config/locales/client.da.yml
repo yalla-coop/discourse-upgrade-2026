@@ -51,8 +51,6 @@ da:
             label: Brødtekst
           delay:
             label: Forsinkelse (minutter)
-          prefers_encrypt:
-            label: Krypterer PM hvis tilgængelig
         group:
           label: Gruppe
         text:

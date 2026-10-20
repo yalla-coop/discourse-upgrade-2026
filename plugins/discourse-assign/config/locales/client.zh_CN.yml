@@ -129,8 +129,8 @@ zh_CN:
       web_hooks:
         assign_event:
           group_name: "指定事件"
-          assigned: "当用户指定主题时"
-          unassigned: "当用户取消指定主题时"
+          assigned: "当用户指定话题时"
+          unassigned: "当用户取消指定话题时"
     search:
       advanced:
         in:
@@ -142,6 +142,12 @@ zh_CN:
       bulk:
         unassign: "取消指定话题"
         assign: "指定话题"
+        assign_description: "将所选话题指定给以下用户："
+        unassign_description: "是否取消指定所选话题？"
+        confirm_assign_topics:
+          other: "指定 %{count} 个话题"
+        confirm_unassign_topics:
+          other: "取消指定 %{count} 个话题"
     discourse_automation:
       scriptables:
         random_assign:

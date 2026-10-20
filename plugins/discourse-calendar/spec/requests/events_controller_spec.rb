@@ -118,6 +118,153 @@ module DiscoursePostEvent
         expect(body).to include("BEGIN:VEVENT")
         expect(body).to include("END:VEVENT")
       end
+
+      it "should include post url in description when no custom description is set" do
+        event =
+          Fabricate(:event, original_starts_at: 1.day.from_now, name: "Event Without Description")
+
+        get "/discourse-post-event/events.ics"
+
+        expect(response.status).to eq(200)
+        body = response.body
+
+        description_line = body.lines.find { |l| l.start_with?("DESCRIPTION:") }
+        post_url = "#{Discourse.base_url}#{event.post.url}"
+
+        expect(description_line).to include(post_url)
+      end
+
+      it "excludes events older than 3 months from ics feed by default" do
+        recent_event = Fabricate(:event, original_starts_at: 1.day.from_now, name: "Future Event")
+        old_event = Fabricate(:event, original_starts_at: 4.months.ago, name: "Old Event")
+
+        get "/discourse-post-event/events.ics"
+
+        expect(response.status).to eq(200)
+        body = response.body
+        expect(body).to include("SUMMARY:Future Event")
+        expect(body).not_to include("SUMMARY:Old Event")
+      end
+
+      it "expands recurring events into multiple occurrences" do
+        Fabricate(
+          :event,
+          original_starts_at: 1.day.from_now,
+          original_ends_at: 1.day.from_now + 1.hour,
+          recurrence: "every_week",
+          name: "Weekly Standup",
+        )
+
+        get "/discourse-post-event/events.ics"
+
+        expect(response.status).to eq(200)
+        body = response.body
+        occurrences = body.scan("SUMMARY:Weekly Standup").size
+        expect(occurrences).to be > 1
+        expect(occurrences).to be <= 52
+      end
+
+      it "gives recurring and non-recurring events unique UIDs" do
+        Fabricate(
+          :event,
+          original_starts_at: 1.day.from_now,
+          recurrence: "every_week",
+          name: "Recurring",
+        )
+        Fabricate(:event, original_starts_at: 2.days.from_now, name: "One-off")
+
+        get "/discourse-post-event/events.ics"
+
+        body = response.body
+        uids = body.scan(/^UID:(.+)$/).flatten
+        expect(uids.size).to eq(uids.uniq.size)
+      end
+
+      it "skips events with nil starts_at in ics feed" do
+        event = Fabricate(:event, original_starts_at: 1.day.from_now, name: "Valid Event")
+
+        get "/discourse-post-event/events.ics"
+
+        expect(response.status).to eq(200)
+        expect(response.body).to include("SUMMARY:Valid Event")
+      end
+
+      context "when include_interested is requested for an attending user" do
+        fab!(:target_user, :user)
+        fab!(:going_event) do
+          Fabricate(:event, original_starts_at: 1.day.from_now, name: "Going Event")
+        end
+        fab!(:interested_event) do
+          Fabricate(:event, original_starts_at: 2.days.from_now, name: "Interested Event")
+        end
+
+        let(:events_params) { { attending_user: target_user.username, include_interested: true } }
+
+        before do
+          going_event.create_invitees(
+            [{ user_id: target_user.id, status: Invitee.statuses[:going] }],
+          )
+          interested_event.create_invitees(
+            [{ user_id: target_user.id, status: Invitee.statuses[:interested] }],
+          )
+        end
+
+        it "does not expose interested events to anonymous requests" do
+          get "/discourse-post-event/events.json", params: events_params
+
+          expect(response.status).to eq(200)
+          expect(response.parsed_body["events"].pluck("id")).to contain_exactly(going_event.id)
+        end
+
+        it "includes interested events for the same authenticated user" do
+          sign_in(target_user)
+
+          get "/discourse-post-event/events.json", params: events_params
+
+          expect(response.status).to eq(200)
+          expect(response.parsed_body["events"].pluck("id")).to contain_exactly(
+            going_event.id,
+            interested_event.id,
+          )
+        end
+
+        it "includes interested events for the owner's user api key feed" do
+          user_api_key =
+            Fabricate(
+              :user_api_key,
+              user: target_user,
+              scopes: [
+                Fabricate.build(:user_api_key_scope, name: "discourse-calendar:events_calendar"),
+              ],
+            )
+
+          get "/discourse-post-event/events.ics",
+              params: events_params.merge(user_api_key: user_api_key.key)
+
+          expect(response.status).to eq(200)
+          expect(response.body).to include("SUMMARY:Going Event")
+          expect(response.body).to include("SUMMARY:Interested Event")
+        end
+      end
+    end
+
+    context "with an all-day event" do
+      it "returns date-only strings for starts_at and ends_at" do
+        Fabricate(
+          :event,
+          original_starts_at: Time.utc(2026, 3, 12),
+          original_ends_at: Time.utc(2026, 3, 14),
+          all_day: true,
+        )
+
+        get "/discourse-post-event/events.json"
+
+        expect(response.status).to eq(200)
+        event = response.parsed_body["events"].first
+        expect(event["starts_at"]).to eq("2026-03-12")
+        expect(event["ends_at"]).to eq("2026-03-14")
+        expect(event["all_day"]).to eq(true)
+      end
     end
 
     context "with an existing post" do
@@ -539,6 +686,114 @@ module DiscoursePostEvent
       Jobs.run_immediately!
       event.reload
       expect(event.invitees.with_status(:going).count).to be <= 1
+    end
+  end
+
+  describe "#show" do
+    before do
+      SiteSetting.calendar_enabled = true
+      SiteSetting.discourse_post_event_enabled = true
+    end
+
+    fab!(:admin_user) { Fabricate(:user, admin: true) }
+    fab!(:category)
+    fab!(:topic) { Fabricate(:topic, user: admin_user, category: category) }
+    fab!(:post_1) { Fabricate(:post, user: admin_user, topic: topic) }
+    fab!(:chat_channel) { Fabricate(:chat_channel, chatable: category) }
+    fab!(:event) { Fabricate(:event, post: post_1, chat_enabled: true, chat_channel: chat_channel) }
+    fab!(:chat_message) do
+      Fabricate(
+        :chat_message,
+        chat_channel: chat_channel,
+        user: admin_user,
+        message: "private chat message body",
+      )
+    end
+
+    before { chat_channel.update!(last_message: chat_message) }
+
+    context "when the viewer is anonymous" do
+      before do
+        SiteSetting.chat_enabled = true
+        SiteSetting.chat_allowed_groups = Group::AUTO_GROUPS[:everyone]
+      end
+
+      it "does not include the chat channel block or last message body" do
+        get "/discourse-post-event/events/#{event.id}.json"
+
+        expect(response.status).to eq(200)
+        expect(response.parsed_body["event"]).not_to have_key("channel")
+        expect(response.body).not_to include("private chat message body")
+      end
+    end
+
+    context "when the viewer cannot join the chat channel" do
+      fab!(:viewer, :user)
+
+      before do
+        SiteSetting.chat_enabled = true
+        SiteSetting.chat_allowed_groups = Group::AUTO_GROUPS[:staff]
+        sign_in(viewer)
+      end
+
+      it "does not include the chat channel block or last message body" do
+        get "/discourse-post-event/events/#{event.id}.json"
+
+        expect(response.status).to eq(200)
+        expect(response.parsed_body["event"]).not_to have_key("channel")
+        expect(response.body).not_to include("private chat message body")
+      end
+    end
+
+    context "when the viewer can join the chat channel" do
+      before do
+        SiteSetting.chat_enabled = true
+        SiteSetting.chat_allowed_groups = Group::AUTO_GROUPS[:everyone]
+        sign_in(admin_user)
+      end
+
+      it "includes the chat channel block with the last message body" do
+        get "/discourse-post-event/events/#{event.id}.json"
+
+        expect(response.status).to eq(200)
+        expect(response.parsed_body["event"]["channel"]).to be_present
+        expect(response.body).to include("private chat message body")
+      end
+    end
+  end
+
+  describe "anonymous access to EventsController" do
+    before do
+      SiteSetting.calendar_enabled = true
+      SiteSetting.discourse_post_event_enabled = true
+    end
+
+    fab!(:admin_user) { Fabricate(:user, admin: true) }
+    fab!(:topic) { Fabricate(:topic, user: admin_user) }
+    fab!(:post_1) { Fabricate(:post, user: admin_user, topic: topic) }
+    fab!(:event) { Fabricate(:event, post: post_1) }
+
+    it "requires login for invite" do
+      post "/discourse-post-event/events/#{event.id}/invite.json"
+      expect(response.status).to eq(403)
+    end
+
+    it "requires login for destroy" do
+      delete "/discourse-post-event/events/#{event.id}.json"
+      expect(response.status).to eq(403)
+    end
+
+    it "requires login for bulk_invite" do
+      post "/discourse-post-event/events/#{event.id}/bulk-invite.json",
+           params: {
+             invitees: [{ "identifier" => "bob", "attendance" => "going" }],
+           }
+      expect(response.status).to eq(403)
+    end
+
+    it "requires login for csv_bulk_invite" do
+      post "/discourse-post-event/events/#{event.id}/csv-bulk-invite.json"
+      expect(response.status).to eq(403)
     end
   end
 end

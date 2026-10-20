@@ -29,6 +29,8 @@ class UserDestroyer
       UserSecurityKey.where(user_id: user.id).delete_all
       Bookmark.where(user_id: user.id).delete_all
       Draft.where(user_id: user.id).delete_all
+      reviewable_ids = Reviewable.where(created_by_id: user.id).select(:id)
+      ReviewableNote.where(reviewable_id: reviewable_ids).delete_all
       Reviewable.where(created_by_id: user.id).delete_all
       ReviewableClaimedTopic.where(user_id: user.id).delete_all
 
@@ -55,11 +57,13 @@ class UserDestroyer
       )
 
       # keep track of emails used
-      user_emails = user.user_emails.pluck(:email)
+      emails =
+        user.user_emails.pluck(:email) |
+          UserAssociatedAccount.where(user_id: user.id).pluck(Arel.sql("info->>'email'")).compact
 
       if result = user.destroy
         if opts[:block_email]
-          user_emails.each do |email|
+          emails.each do |email|
             ScreenedEmail.block(email, ip_address: result.ip_address)&.record_match!
           end
         end
@@ -87,7 +91,7 @@ class UserDestroyer
           end
 
         Invite
-          .where(email: user_emails)
+          .where(email: emails)
           .each do |invite|
             # invited_users will be removed by dependent destroy association when user is destroyed
             invite.invited_groups.destroy_all

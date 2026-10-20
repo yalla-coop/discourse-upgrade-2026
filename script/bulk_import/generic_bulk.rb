@@ -38,6 +38,11 @@ class BulkImport::Generic < BulkImport::Base
 
     puts "running 'import:ensure_consistency' rake task."
     Rake::Task["import:ensure_consistency"].invoke
+
+    # Force refresh directory items to sync user stats
+    # This is needed even when enable_user_directory is false
+    puts "", "Refreshing directory items and syncing user stats..."
+    refresh_directory_items
   end
 
   def execute
@@ -61,6 +66,7 @@ class BulkImport::Generic < BulkImport::Base
     import_user_histories
     import_user_notes
     import_user_note_counts
+    import_user_custom_fields
     import_user_followers
 
     import_user_avatars
@@ -109,6 +115,7 @@ class BulkImport::Generic < BulkImport::Base
 
     import_topic_users
     update_topic_users
+    import_bookmarks
 
     import_user_stats
 
@@ -142,6 +149,23 @@ class BulkImport::Generic < BulkImport::Base
 
     @source_db.close
     @uploads_db.close if @uploads_db
+  end
+
+  def refresh_directory_items
+    start_time = Time.now
+
+    # Force refresh all directory periods - this works even when
+    # enable_user_directory site setting is disabled
+    DirectoryItem.period_types.each_key do |period|
+      puts "  Refreshing directory items for period: #{period}"
+      DirectoryItem.refresh_period!(period, force: true)
+    end
+
+    UserStat.ensure_consistency!
+    Discourse.cache.clear
+    Site.clear_cache
+
+    puts "  Refreshed directory items in #{(Time.now - start_time).to_i} seconds."
   end
 
   def enable_required_plugins
@@ -301,7 +325,7 @@ class BulkImport::Generic < BulkImport::Base
     SQL
 
     field_names =
-      query("SELECT DISTINCT name FROM category_custom_fields") { _1.map { |row| row["name"] } }
+      query("SELECT DISTINCT name FROM category_custom_fields") { it.map { |row| row["name"] } }
     existing_category_custom_fields =
       CategoryCustomField.where(name: field_names).pluck(:category_id, :name).to_set
 
@@ -472,6 +496,7 @@ class BulkImport::Generic < BulkImport::Base
 
       {
         imported_id: row["id"],
+        existing_id: row["existing_id"],
         name: row["name"],
         full_name: row["full_name"],
         public_admission: row["public_admission"] || false,
@@ -504,7 +529,7 @@ class BulkImport::Generic < BulkImport::Base
       user_id = user_id_from_imported_id(row["user_id"])
 
       next if user_id.nil?
-      next if existing_group_user_ids.include?([group_id, user_id])
+      next unless existing_group_user_ids.add?([group_id, user_id])
 
       { group_id: group_id, user_id: user_id, owner: row["owner"] }
     end
@@ -578,7 +603,7 @@ class BulkImport::Generic < BulkImport::Base
 
     create_user_emails(users) do |row|
       user_id = user_id_from_imported_id(row["id"])
-      next if user_id && existing_user_ids.include?(user_id)
+      next unless user_id && existing_user_ids.add?(user_id)
 
       if row["anonymized"] == 1
         username = username_from_id(user_id)
@@ -604,7 +629,7 @@ class BulkImport::Generic < BulkImport::Base
 
     create_user_profiles(users) do |row|
       user_id = user_id_from_imported_id(row["id"])
-      next if user_id && existing_user_ids.include?(user_id)
+      next unless user_id && existing_user_ids.add?(user_id)
 
       if row["anonymized"] == 1
         row["bio"] = nil
@@ -635,7 +660,7 @@ class BulkImport::Generic < BulkImport::Base
 
     create_user_options(users) do |row|
       user_id = user_id_from_imported_id(row["id"])
-      next if user_id && existing_user_ids.include?(user_id)
+      next unless user_id && existing_user_ids.add?(user_id)
 
       {
         user_id: user_id,
@@ -731,7 +756,7 @@ class BulkImport::Generic < BulkImport::Base
 
     create_single_sign_on_records(users) do |row|
       user_id = user_id_from_imported_id(row["id"])
-      next if user_id && existing_user_ids.include?(user_id)
+      next unless user_id && existing_user_ids.add?(user_id)
 
       sso_record = JSON.parse(row["sso_record"], symbolize_names: true)
       sso_record[:user_id] = user_id
@@ -925,12 +950,15 @@ class BulkImport::Generic < BulkImport::Base
       SQL
 
       poll_details.each do |poll|
-        if (placeholder = poll_mapping[poll["id"]])
+        if (placeholder = poll_mapping.delete(poll["id"]))
           raw.gsub!(placeholder, poll_bbcode(poll))
         end
       end
 
       poll_details.close
+
+      # Remove placeholders for polls without options
+      poll_mapping.each_value { |placeholder| raw.gsub!(placeholder, "") }
     end
 
     if (mentions = placeholders&.fetch("mentions", nil))
@@ -1162,7 +1190,7 @@ class BulkImport::Generic < BulkImport::Base
     SQL
 
     field_names =
-      query("SELECT DISTINCT name FROM post_custom_fields") { _1.map { |row| row["name"] } }
+      query("SELECT DISTINCT name FROM post_custom_fields") { it.map { |row| row["name"] } }
     existing_post_custom_fields =
       PostCustomField.where(name: field_names).pluck(:post_id, :name).to_set
 
@@ -1497,6 +1525,85 @@ class BulkImport::Generic < BulkImport::Base
     puts "  Updated topic users in #{(Time.now - start_time).to_i} seconds."
   end
 
+  def import_bookmarks
+    unless @source_db.get_first_value(
+             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='bookmarks'",
+           )
+      return
+    end
+
+    puts "", "Importing bookmarks..."
+
+    bookmarks = query(<<~SQL)
+      SELECT id, user_id, bookmarkable_id, bookmarkable_type, name,
+             reminder_at, reminder_set_at, reminder_last_sent_at,
+             auto_delete_preference, pinned, created_at, updated_at
+        FROM bookmarks
+       ORDER BY user_id, bookmarkable_id
+    SQL
+
+    existing_bookmarks = Bookmark.pluck(:user_id, :bookmarkable_type, :bookmarkable_id).to_set
+
+    create_bookmarks(bookmarks) do |row|
+      user_id = user_id_from_imported_id(row["user_id"])
+      next unless user_id
+
+      bookmarkable_type = row["bookmarkable_type"].to_s
+      bookmarkable_id = row["bookmarkable_id"]
+
+      if bookmarkable_type == "Topic"
+        topic_id = topic_id_from_imported_id(bookmarkable_id)
+        next unless topic_id
+        next unless existing_bookmarks.add?([user_id, bookmarkable_type, topic_id])
+
+        {
+          user_id: user_id,
+          bookmarkable_id: topic_id,
+          bookmarkable_type: bookmarkable_type,
+          name: row["name"],
+          reminder_at: to_datetime(row["reminder_at"]),
+          reminder_set_at: to_datetime(row["reminder_set_at"]),
+          reminder_last_sent_at: to_datetime(row["reminder_last_sent_at"]),
+          auto_delete_preference: row["auto_delete_preference"]&.to_i,
+          pinned: row["pinned"].present? ? to_boolean(row["pinned"]) : false,
+          created_at: to_datetime(row["created_at"]),
+          updated_at: to_datetime(row["updated_at"]),
+        }
+      elsif bookmarkable_type == "Post"
+        post_id = post_id_from_imported_id(bookmarkable_id)
+        next unless post_id
+        next unless existing_bookmarks.add?([user_id, bookmarkable_type, post_id])
+
+        {
+          user_id: user_id,
+          bookmarkable_id: post_id,
+          bookmarkable_type: bookmarkable_type,
+          name: row["name"],
+          reminder_at: to_datetime(row["reminder_at"]),
+          reminder_set_at: to_datetime(row["reminder_set_at"]),
+          reminder_last_sent_at: to_datetime(row["reminder_last_sent_at"]),
+          auto_delete_preference: row["auto_delete_preference"]&.to_i,
+          pinned: row["pinned"].present? ? to_boolean(row["pinned"]) : false,
+          created_at: to_datetime(row["created_at"]),
+          updated_at: to_datetime(row["updated_at"]),
+        }
+      else
+        next
+      end
+    end
+
+    bookmarks.close
+
+    puts "  Updating topic_users.bookmarked from bookmarks..."
+    DB.exec(<<~SQL)
+      INSERT INTO topic_users (user_id, topic_id, bookmarked)
+      SELECT b.user_id, b.bookmarkable_id, TRUE
+        FROM bookmarks b
+       WHERE b.bookmarkable_type = 'Topic'
+      ON CONFLICT (user_id, topic_id) DO UPDATE SET bookmarked = TRUE
+    SQL
+  end
+
   def import_user_stats
     puts "", "Importing user stats..."
 
@@ -1723,6 +1830,57 @@ class BulkImport::Generic < BulkImport::Base
     end
 
     user_note_counts.close
+  end
+
+  def import_user_custom_fields
+    puts "", "Importing user custom fields..."
+
+    rows = query(<<~SQL)
+      SELECT user_id, name, value, created_at
+        FROM user_custom_fields
+    SQL
+
+    existing_names = query(<<~SQL) { |rs| rs.map { |r| r["name"] } }
+        SELECT DISTINCT name FROM user_custom_fields
+      SQL
+
+    return if existing_names.empty?
+
+    existing = UserCustomField.where(name: existing_names).pluck(:user_id, :name).to_set
+
+    create_user_custom_fields(rows) do |row|
+      user_id = user_id_from_imported_id(row["user_id"])
+      next if !user_id
+      next if existing.include?([user_id, row["name"]])
+
+      {
+        user_id: user_id,
+        name: row["name"],
+        value: row["value"],
+        created_at: to_datetime(row["created_at"]),
+      }
+    end
+
+    rows.close
+
+    puts "", "Cooking signature_cooked from signature_raw..."
+
+    sig_rows = query(<<~SQL)
+      SELECT user_id, value
+        FROM user_custom_fields
+       WHERE name = 'signature_raw'
+    SQL
+
+    cooked_existing = UserCustomField.where(name: "signature_cooked").pluck(:user_id).to_set
+
+    create_user_custom_fields(sig_rows) do |row|
+      user_id = user_id_from_imported_id(row["user_id"])
+      next if !user_id || cooked_existing.include?(user_id)
+      raw_sig = row["value"].to_s.strip
+      next if raw_sig.empty?
+      { user_id: user_id, name: "signature_cooked", value: PrettyText.cook(raw_sig) }
+    end
+    sig_rows.close
   end
 
   def import_user_followers

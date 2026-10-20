@@ -65,14 +65,14 @@ pl_PL:
         title: Post utworzony/edytowany
         description: Gdy zostanie edytowany lub utworzony prawidłowy post, zostanie uruchomiona automatyzacja
       pm_created:
-        title: Utworzono osobistą wiadomość
+        title: Utworzono prywatną wiadomość
         description: Po utworzeniu poprawnej wiadomości automatyzacja zostanie uruchomiona
       topic_tags_changed:
         title: Zmieniono tagi tematu
         description: Gdy tagi tematu zostaną zmienione, zostanie uruchomiona automatyzacja
       topic:
         title: Temat
-        description: Powiązany skrypt będzie używany tylko w określonym temacie, jest to przydatne na przykład dla skryptów przeprowadzających walidację.
+        description: Powiązany skrypt będzie używany tylko w określonym temacie, jest to przydatne na przykład w przypadku skryptów wykonujących walidację
       topic_closed:
         title: Temat zamknięty
         description: Uruchamia skrypt po zamknięciu tematu.

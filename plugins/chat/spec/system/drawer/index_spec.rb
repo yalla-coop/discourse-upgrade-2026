@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe "Drawer - index", type: :system do
+RSpec.describe "Drawer - index" do
   fab!(:current_user, :user)
 
   let(:drawer_page) { PageObjects::Pages::ChatDrawer.new }
@@ -31,7 +31,7 @@ RSpec.describe "Drawer - index", type: :system do
     expect(row).to be_non_existent
   end
 
-  it "can leave a group message" do
+  it "can close a group message and membership is retained" do
     channel =
       Fabricate(
         :direct_message_channel,
@@ -48,6 +48,8 @@ RSpec.describe "Drawer - index", type: :system do
     row.leave
 
     expect(row).to be_non_existent
+    expect(channel.membership_for(current_user)).to be_present
+    expect(channel.membership_for(current_user).following).to be_falsy
   end
 
   it "can open browse" do

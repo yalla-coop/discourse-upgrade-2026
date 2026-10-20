@@ -171,9 +171,8 @@ class TagUser < ActiveRecord::Base
       builder.where("tu.topic_id = :topic_id", topic_id: topic_id)
     end
 
-    if user_id = opts[:user_id]
-      builder.where("tu.user_id = :user_id", user_id: user_id)
-    end
+    user_ids = opts[:user_ids] || opts[:user_id]
+    builder.where("tu.user_id IN (:user_ids)", user_ids:) if user_ids.present?
 
     builder.exec(
       watching: notification_levels[:watching],
@@ -206,9 +205,8 @@ class TagUser < ActiveRecord::Base
       builder.where("tu.topic_id = :topic_id", topic_id: topic_id)
     end
 
-    if user_id = opts[:user_id]
-      builder.where("tu.user_id = :user_id", user_id: user_id)
-    end
+    user_ids = opts[:user_ids] || opts[:user_id]
+    builder.where("tu.user_id IN (:user_ids)", user_ids:) if user_ids.present?
 
     builder.exec(
       tracking: notification_levels[:tracking],
@@ -221,28 +219,38 @@ class TagUser < ActiveRecord::Base
     # Anonymous users have all default tags set to regular tracking,
     # except for default muted tags which stay muted.
     if user.blank?
+      default_tag_names = [
+        SiteSetting.default_tags_watching_first_post.split("|"),
+        SiteSetting.default_tags_watching.split("|"),
+        SiteSetting.default_tags_tracking.split("|"),
+      ].flatten
+
+      muted_tag_names = SiteSetting.default_tags_muted.split("|")
+
+      tag_data = Tag.where(name: default_tag_names + muted_tag_names).pluck(:name, :id).to_h
+
       notification_levels =
-        [
-          SiteSetting.default_tags_watching_first_post.split("|"),
-          SiteSetting.default_tags_watching.split("|"),
-          SiteSetting.default_tags_tracking.split("|"),
-        ].flatten.map { |name| [name, self.notification_levels[:regular]] }
+        default_tag_names.filter_map do |name|
+          id = tag_data[name]
+          [id, { level: self.notification_levels[:regular], name: }] if id
+        end
 
       notification_levels +=
-        SiteSetting
-          .default_tags_muted
-          .split("|")
-          .map { |name| [name, self.notification_levels[:muted]] }
+        muted_tag_names.filter_map do |name|
+          id = tag_data[name]
+          [id, { level: self.notification_levels[:muted], name: }] if id
+        end
     else
       notification_levels =
         TagUser
           .notification_level_visible
-          .where(user: user)
+          .where(user:)
           .joins(:tag)
-          .pluck("tags.name", :notification_level)
+          .pluck("tags.id", "tags.name", :notification_level)
+          .map { |id, name, level| [id, { level:, name: }] }
     end
 
-    Hash[*notification_levels.flatten]
+    notification_levels.to_h
   end
 end
 

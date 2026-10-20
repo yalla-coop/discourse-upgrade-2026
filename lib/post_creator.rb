@@ -49,7 +49,9 @@ class PostCreator
   #     is_warning            - Is the topic a warning?
   #     category              - Category to assign to topic
   #     target_usernames      - comma delimited list of usernames for membership (private message)
+  #     target_user_ids       - array of user IDs for membership (private message, alternative to target_usernames)
   #     target_group_names    - comma delimited list of groups for membership (private message)
+  #     target_emails         - comma delimited list of emails for membership (private message)
   #     created_at            - Topic creation time (optional)
   #     pinned_at             - Topic pinned time (optional)
   #     pinned_globally       - Is the topic pinned globally (optional)
@@ -100,13 +102,25 @@ class PostCreator
       return false
     end
 
-    if @opts[:target_usernames].present? && !skip_validations? && !@user.staff?
-      names = @opts[:target_usernames].split(",").flatten.map(&:downcase)
+    if @opts[:target_usernames].present? && @opts[:target_user_ids].present?
+      raise ArgumentError, "Cannot specify both target_usernames and target_user_ids"
+    end
 
-      # Make sure max_allowed_message_recipients setting is respected
+    if (@opts[:target_usernames].present? || @opts[:target_user_ids].present?) &&
+         !skip_validations? && !@user.staff?
+      if @opts[:target_user_ids].present?
+        ids = Array.wrap(@opts[:target_user_ids])
+        target_users = User.where(id: ids).pluck(:id, :username).to_h
+        recipient_count = ids.length
+      else
+        names = @opts[:target_usernames].split(",").flatten.map(&:downcase)
+        target_users = User.where(username_lower: names).pluck(:id, :username).to_h
+        recipient_count = names.length
+      end
+
       max_allowed_message_recipients = SiteSetting.max_allowed_message_recipients
 
-      if names.length > max_allowed_message_recipients
+      if recipient_count > max_allowed_message_recipients
         errors.add(
           :base,
           I18n.t(:max_pm_recipients, recipients_limit: max_allowed_message_recipients),
@@ -115,9 +129,6 @@ class PostCreator
         return false
       end
 
-      # Make sure none of the users have muted or ignored the creator or prevented
-      # PMs from being sent to them
-      target_users = User.where(username_lower: names.map(&:downcase)).pluck(:id, :username).to_h
       UserCommScreener
         .new(acting_user: @user, target_user_ids: target_users.keys)
         .preventing_actor_communication
@@ -140,10 +151,11 @@ class PostCreator
       end
 
       if guardian.affected_by_slow_mode?(@topic)
-        tu = TopicUser.find_by(user: @user, topic: @topic)
+        last_posted_at =
+          @topic.posts.where(user_id: @user.id).order(created_at: :desc).pick(:created_at)
 
-        if tu&.last_posted_at
-          threshold = tu.last_posted_at + @topic.slow_mode_seconds.seconds
+        if last_posted_at
+          threshold = last_posted_at + @topic.slow_mode_seconds.seconds
 
           if DateTime.now < threshold
             errors.add(:base, I18n.t(:slow_mode_enabled))
@@ -254,8 +266,10 @@ class PostCreator
   end
 
   def trigger_after_events
-    DiscourseEvent.trigger(:topic_created, @post.topic, @opts, @user) unless @opts[:topic_id]
-    DiscourseEvent.trigger(:post_created, @post, @opts, @user)
+    unless @opts[:topic_id]
+      DiscourseEvent.trigger(:topic_created, @post.topic, @opts, @user, continue_on_error: true)
+    end
+    DiscourseEvent.trigger(:post_created, @post, @opts, @user, continue_on_error: true)
   end
 
   def self.track_post_stats
@@ -279,14 +293,13 @@ class PostCreator
 
     post.word_count = post.raw.scan(/[[:word:]]+/).size
 
-    whisper = post.post_type == Post.types[:whisper]
     increase_posts_count =
       !post.topic&.private_message? || post.post_type != Post.types[:small_action]
     post.post_number ||=
       Topic.next_post_number(
         post.topic_id,
         reply: post.reply_to_post_number.present?,
-        whisper: whisper,
+        post_type: post.post_type,
         post: increase_posts_count,
       )
 
@@ -320,7 +333,15 @@ class PostCreator
     if reply_info.present?
       post.reply_to_user_id ||= reply_info.user_id
       whisper_type = Post.types[:whisper]
-      post.post_type = whisper_type if reply_info.post_type == whisper_type
+
+      if reply_info.post_type == whisper_type
+        if post.acting_user&.whisperer?
+          post.post_type = whisper_type
+        else
+          post.errors.add(:base, I18n.t(:topic_not_found))
+          throw :abort
+        end
+      end
     end
   end
 

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe "Chat composer", type: :system do
+RSpec.describe "Chat composer" do
   fab!(:current_user, :user)
   fab!(:channel_1, :chat_channel)
   fab!(:message_1) { Fabricate(:chat_message, user: current_user, chat_channel: channel_1) }
@@ -201,7 +201,7 @@ RSpec.describe "Chat composer", type: :system do
         )
       end
 
-      it "doesnt delete the message" do
+      it "doesn't delete the message" do
         chat_page.visit_channel(channel_1)
         channel_page.composer.edit_last_message_shortcut
         channel_page.composer.send_keys("")

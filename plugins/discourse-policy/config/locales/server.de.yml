@@ -8,6 +8,7 @@ de:
   site_settings:
     policy_enabled: "Richtlinien zulassen?"
     policy_restrict_to_staff_posts: "Richtlinien dürfen nur in Team-Beiträgen erscheinen"
+    create_policy_allowed_groups: "Für das Hinzufügen von Richtlinien zu Beiträgen ist eine Gruppenmitgliedschaft erforderlich."
     policy_easy_revoke: "Die Schaltflächen „Akzeptieren“ und „Widerrufen“ gleichzeitig anzeigen"
   discourse_policy:
     errors:
@@ -15,6 +16,8 @@ de:
       group_not_found: "Gruppe für Richtlinie nicht gefunden"
       no_policy: "Keine Richtlinie für Beitrag vorhanden"
       staff_only: "Richtlinien dürfen nur auf Team-Beiträge angewendet werden"
+      policy_group_inaccessible: "Diese Richtlinie kann derzeit nicht akzeptiert werden. Bitte kontaktiere einen Website-Administrator."
+      no_policy_permission: "Du bist nicht berechtigt, die Richtlinien in diesem Beitrag zu ändern."
     error:
       no_permission: "Nicht autorisiert"
   reports:

@@ -93,11 +93,16 @@ record() {
 layer_c() {
   if [ -n "${STAGING_BACKUP:-}" ]; then
     say "Layer C: restoring the staging backup for the app flows"
-    CONTAINER="$CONTAINER" "$REPO/script/restore-staging.sh" "$STAGING_BACKUP"
-    say "Layer C: Maestro flows on the real Android app (staging data)"
-    CONTAINER="$CONTAINER" DATA=staging "$REPO/script/layer-c.sh" run
+    if CONTAINER="$CONTAINER" "$REPO/script/restore-staging.sh" "$STAGING_BACKUP"; then
+      say "Layer C: Maestro flows on the real Android app (staging data)"
+      CONTAINER="$CONTAINER" DATA=staging "$REPO/script/layer-c.sh" run
+    else
+      # Never run the app flows on a copy that didn't restore.
+      echo "Layer C: NOT RUN (the staging backup did not restore)"
+      rm -f "$REPO/contract/.local/layer-c-last.json"
+    fi
     say "Switching the server back to the test database"
-    docker exec "$CONTAINER" bash -lc 'pkill -f unicorn; pkill -f sidekiq' >/dev/null 2>&1
+    docker exec "$CONTAINER" bash -lc 'pkill -f "[u]nicorn|[p]itchfork"; pkill -f "[s]idekiq"' >/dev/null 2>&1
     sleep 3
     up
   else
@@ -113,7 +118,7 @@ case "${1:-all}" in
     # Use after editing Discourse code while the server runs: the dev server
     # hot-reloads code, and some Discourse files don't survive that cleanly
     # (e.g. "superclass mismatch for class ApprovalActivator").
-    docker exec "$CONTAINER" bash -lc 'pkill -f unicorn; pkill -f sidekiq' >/dev/null 2>&1
+    docker exec "$CONTAINER" bash -lc 'pkill -f "[u]nicorn|[p]itchfork"; pkill -f "[s]idekiq"' >/dev/null 2>&1
     sleep 3
     up
     echo "Discourse server restarted in $CONTAINER."

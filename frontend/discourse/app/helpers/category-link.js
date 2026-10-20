@@ -1,5 +1,5 @@
 import { get } from "@ember/object";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import categoryVariables from "discourse/helpers/category-variables";
 import replaceEmoji from "discourse/helpers/replace-emoji";
 import getURL from "discourse/lib/get-url";
@@ -61,7 +61,7 @@ export function categoryBadgeHTML(category, opts) {
   }
 
   if (opts.ancestors) {
-    const { ancestors, ...newOpts } = opts;
+    const { ancestors, readOnly, ...newOpts } = opts;
 
     // allow each ancestor to use its own style
     ["styleType", "icon", "emoji"].forEach((k) => delete newOpts[k]);
@@ -69,7 +69,10 @@ export function categoryBadgeHTML(category, opts) {
     return [category, ...ancestors]
       .reverse()
       .map((c) => {
-        return categoryBadgeHTML(c, { ...newOpts });
+        return categoryBadgeHTML(c, {
+          ...newOpts,
+          ...(readOnly && c === category ? { readOnly } : {}),
+        });
       })
       .join("");
   }
@@ -115,7 +118,7 @@ export function categoryLinkHTML(category, options) {
       categoryOptions.emoji = options.emoji;
     }
   }
-  return htmlSafe(categoryBadgeHTML(category, categoryOptions));
+  return trustHTML(categoryBadgeHTML(category, categoryOptions));
 }
 
 export default categoryLinkHTML;
@@ -144,14 +147,16 @@ export function defaultCategoryLinkRenderer(category, opts) {
   let extraClasses = opts.extraClasses ? " " + opts.extraClasses : "";
   let style = `${categoryVariables(category)}`;
   let html = "";
-  let parentCat = null;
+  let parentCategory = null;
   let categoryDir = "";
   let dataAttributes = category
     ? `data-category-id="${get(category, "id")}"`
     : "";
 
   if (!opts.hideParent) {
-    parentCat = Category.findById(get(category, "parent_category_id"));
+    parentCategory =
+      get(category, "parentCategory") ||
+      Category.findById(get(category, "parent_category_id"));
   }
 
   let siteSettings = helperContext().siteSettings;
@@ -161,9 +166,9 @@ export function defaultCategoryLinkRenderer(category, opts) {
     classNames += " restricted";
   }
 
-  if (parentCat) {
+  if (parentCategory) {
     classNames += ` --has-parent`;
-    dataAttributes += ` data-parent-category-id="${parentCat.id}"`;
+    dataAttributes += ` data-parent-category-id="${parentCategory.id}"`;
   }
 
   if (opts.styleType) {

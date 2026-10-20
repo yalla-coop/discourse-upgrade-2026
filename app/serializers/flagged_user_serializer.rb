@@ -31,6 +31,10 @@ class FlaggedUserSerializer < BasicUserSerializer
     object.ip_address.try(:to_s)
   end
 
+  def include_ip_address?
+    scope.can_see_ip?
+  end
+
   def flags_agreed
     object.user_stat.flags_agreed
   end
@@ -44,15 +48,15 @@ class FlaggedUserSerializer < BasicUserSerializer
   end
 
   def silenced_count
-    object.number_of_silencings.to_i
+    object.number_of_silencings
   end
 
   def suspended_count
-    object.number_of_suspensions.to_i
+    object.number_of_suspensions
   end
 
   def rejected_posts_count
-    object.number_of_rejected_posts.to_i
+    object.number_of_rejected_posts
   end
 
   def custom_fields
@@ -62,34 +66,6 @@ class FlaggedUserSerializer < BasicUserSerializer
     fields.each { |k| result[k] = object.custom_fields[k] if object.custom_fields[k].present? }
 
     result
-  end
-
-  def include_created_at?
-    scope.can_see_reviewable_ui_refresh?
-  end
-
-  def include_custom_fields?
-    scope.can_see_reviewable_ui_refresh?
-  end
-
-  def include_post_count?
-    scope.can_see_reviewable_ui_refresh?
-  end
-
-  def include_trust_level?
-    scope.can_see_reviewable_ui_refresh?
-  end
-
-  def include_silenced_count?
-    scope.can_see_reviewable_ui_refresh?
-  end
-
-  def include_suspended_count?
-    scope.can_see_reviewable_ui_refresh?
-  end
-
-  def include_rejected_posts_count?
-    scope.can_see_reviewable_ui_refresh?
   end
 
   def include_email?

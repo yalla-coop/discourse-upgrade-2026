@@ -1,6 +1,6 @@
 #frozen_string_literal: true
 
-describe "Admin API Keys Page", type: :system do
+describe "Admin API Keys Page" do
   fab!(:current_user, :admin)
 
   let(:api_keys_page) { PageObjects::Pages::AdminApiKeys.new }
@@ -23,6 +23,8 @@ describe "Admin API Keys Page", type: :system do
     api_keys_page.add_api_key(description: "Second Integration")
 
     expect(api_keys_page).to have_generated_api_key
+    expect(api_keys_page).to have_copy_button
+    expect(api_keys_page).to have_warning_banner
 
     api_keys_page.click_continue
 

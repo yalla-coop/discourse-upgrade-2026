@@ -1,8 +1,22 @@
 # frozen_string_literal: true
 
-require "net/imap"
-
 class Group < ActiveRecord::Base
+  # NOTE (martin): Remove after 2026.02.0
+  # and drop columns.
+  self.ignored_columns += %w[
+    imap_server
+    imap_port
+    imap_ssl
+    imap_mailbox_name
+    imap_uid_validity
+    imap_last_uid
+    imap_last_error
+    imap_old_emails
+    imap_new_emails
+    imap_enabled
+    imap_updated_at
+    imap_updated_by_id
+  ]
   # Maximum 255 characters including terminator.
   # https://datatracker.ietf.org/doc/html/rfc1035#section-2.3.4
   MAX_EMAIL_DOMAIN_LENGTH = 253
@@ -39,7 +53,6 @@ class Group < ActiveRecord::Base
   has_many :upload_references, as: :target, dependent: :destroy
 
   belongs_to :smtp_updated_by, class_name: "User"
-  belongs_to :imap_updated_by, class_name: "User"
 
   has_and_belongs_to_many :web_hooks
 
@@ -72,11 +85,6 @@ class Group < ActiveRecord::Base
   def expire_cache
     ApplicationSerializer.expire_cache_fragment!("group_names")
     SvgSprite.expire_cache
-    expire_imap_mailbox_cache
-  end
-
-  def expire_imap_mailbox_cache
-    Discourse.cache.delete("group_imap_mailboxes_#{self.id}")
   end
 
   validate :name_format_validator
@@ -108,19 +116,10 @@ class Group < ActiveRecord::Base
   AUTO_GROUPS_ADD = "add"
   AUTO_GROUPS_REMOVE = "remove"
 
-  IMAP_SETTING_ATTRIBUTES = %w[
-    imap_server
-    imap_port
-    imap_ssl
-    imap_mailbox_name
-    email_username
-    email_password
-  ]
-
   SMTP_SETTING_ATTRIBUTES = %w[
-    imap_server
-    imap_port
-    imap_ssl
+    smtp_server
+    smtp_port
+    smtp_ssl_mode
     email_username
     email_password
     email_from_alias
@@ -142,7 +141,7 @@ class Group < ActiveRecord::Base
   end
 
   def self.smtp_ssl_modes
-    @visibility_levels = Enum.new(none: 0, ssl_tls: 1, starttls: 2)
+    @smtp_ssl_modes = Enum.new(none: 0, ssl_tls: 1, starttls: 2)
   end
 
   def self.auto_groups_between(lower, upper)
@@ -157,7 +156,6 @@ class Group < ActiveRecord::Base
   validates :mentionable_level, inclusion: { in: ALIAS_LEVELS.values }
   validates :messageable_level, inclusion: { in: ALIAS_LEVELS.values }
 
-  scope :with_imap_configured, -> { where(imap_enabled: true).where.not(imap_mailbox_name: "") }
   scope :with_smtp_configured, -> { where(smtp_enabled: true) }
 
   scope :visible_groups,
@@ -360,11 +358,6 @@ class Group < ActiveRecord::Base
   end
 
   def record_email_setting_changes!(user)
-    if (self.previous_changes.keys & IMAP_SETTING_ATTRIBUTES).any?
-      self.imap_updated_at = Time.zone.now
-      self.imap_updated_by_id = user.id
-    end
-
     if (self.previous_changes.keys & SMTP_SETTING_ATTRIBUTES).any?
       self.smtp_updated_at = Time.zone.now
       self.smtp_updated_by_id = user.id
@@ -373,12 +366,6 @@ class Group < ActiveRecord::Base
     self.smtp_enabled = [
       self.smtp_port,
       self.smtp_server,
-      self.email_password,
-      self.email_username,
-    ].all?(&:present?)
-    self.imap_enabled = [
-      self.imap_port,
-      self.imap_server,
       self.email_password,
       self.email_username,
     ].all?(&:present?)
@@ -447,6 +434,7 @@ class Group < ActiveRecord::Base
         .includes(:user, :topic, topic: :category)
         .references(:posts, :topics, :category)
         .where.not(topics: { archetype: Archetype.private_message })
+        .where("topics.visible")
         .where(post_type: Post.types[:regular])
         .where("group_mentions.group_id = ?", self.id)
 
@@ -831,41 +819,15 @@ class Group < ActiveRecord::Base
 
   def add(user, notify: false, automatic: false)
     return false if user.nil?
-    return self if group_users.exists?(user_id: user.id)
-
-    self.users.push(user)
-    send_membership_notification(user) if notify
-    publish_category_updates(user)
-    trigger_user_added_event(user, automatic)
+    added_ids = GroupManager.new(self).add([user.id], automatic:)
+    send_membership_notification(user) if notify && !added_ids.empty?
 
     self
   end
 
   def remove(user)
     return false if user.nil?
-    group_user = self.group_users.find_by(user: user)
-    return false if group_user.blank?
-
-    group_user.destroy
-    publish_category_updates(user)
-    trigger_user_removed_event(user)
-    enqueue_user_removed_from_group_webhook_events(group_user)
-
-    true
-  end
-
-  def enqueue_user_removed_from_group_webhook_events(group_user)
-    return if !WebHook.active_web_hooks(:group_user)
-
-    payload = WebHook.generate_payload(:group_user, group_user, WebHookGroupUserSerializer)
-
-    WebHook.enqueue_hooks(
-      :group_user,
-      :user_removed_from_group,
-      id: group_user.id,
-      payload: payload,
-      group_ids: [self.id],
-    )
+    GroupManager.new(self).remove([user.id]).present?
   end
 
   def trigger_user_added_event(user, automatic)
@@ -893,16 +855,19 @@ class Group < ActiveRecord::Base
     ).first
   end
 
-  def bulk_add(user_ids)
-    return if user_ids.blank?
+  def bulk_add(user_ids, automatic: false)
+    return [] if user_ids.blank?
+
+    added_user_ids = nil
 
     Group.transaction do
       sql = <<~SQL
       INSERT INTO group_users
-        (group_id, user_id, created_at, updated_at)
+        (group_id, user_id, notification_level, created_at, updated_at)
       SELECT
-        #{self.id},
+        :group_id,
         u.id,
+        :notification_level,
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
       FROM users AS u
@@ -912,41 +877,119 @@ class Group < ActiveRecord::Base
         WHERE gu.user_id = u.id AND
         gu.group_id = :group_id
       )
+      RETURNING user_id
       SQL
 
-      DB.exec(sql, group_id: self.id, user_ids: user_ids)
+      added_user_ids =
+        DB.query_single(
+          sql,
+          group_id: self.id,
+          user_ids: user_ids,
+          notification_level: self.default_notification_level,
+        )
 
-      user_attributes = {}
+      return [] if added_user_ids.blank?
 
-      user_attributes[:primary_group_id] = self.id if self.primary_group?
+      if self.primary_group?
+        User
+          .where(id: added_user_ids)
+          .where("flair_group_id IS NOT DISTINCT FROM primary_group_id")
+          .update_all(flair_group_id: self.id)
 
-      user_attributes[:title] = self.title if self.title.present?
+        DB.exec(<<~SQL, user_ids: added_user_ids, new_title: self.title)
+            UPDATE users u
+            SET title = :new_title
+            WHERE u.id IN (:user_ids)
+              AND u.primary_group_id IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM groups g
+                WHERE g.id = u.primary_group_id
+                  AND g.title = u.title
+              )
+          SQL
 
-      User.where(id: user_ids).update_all(user_attributes) if user_attributes.present?
+        User.where(id: added_user_ids).update_all(primary_group_id: self.id)
+      end
 
-      # update group user count
-      recalculate_user_count
+      if self.title.present?
+        User.where(id: added_user_ids, title: [nil, ""]).update_all(title: self.title)
+      end
+
+      Group.update_counters(self.id, user_count: added_user_ids.size)
     end
 
-    if self.grant_trust_level.present?
-      Jobs.enqueue(:bulk_grant_trust_level, user_ids: user_ids, trust_level: self.grant_trust_level)
+    if self.grant_trust_level.present? && !self.grant_trust_level.zero?
+      Jobs.enqueue(
+        :bulk_grant_trust_level,
+        user_ids: added_user_ids,
+        trust_level: self.grant_trust_level,
+      )
     end
 
-    self
+    GroupUser.bulk_set_category_notifications(self, added_user_ids)
+    GroupUser.bulk_set_tag_notifications(self, added_user_ids)
+
+    User.where(id: added_user_ids).find_each { |user| trigger_user_added_event(user, automatic) }
+
+    bulk_publish_category_updates(added_user_ids)
+
+    added_user_ids
   end
 
   def bulk_remove(user_ids)
+    return [] if user_ids.blank?
+
+    group_users_to_remove = group_users.where(user_id: user_ids)
+    return [] if group_users_to_remove.empty?
+
+    removed_user_ids = group_users_to_remove.pluck(:user_id)
+
+    webhook_payloads = build_user_removed_webhook_payloads(group_users_to_remove)
+
     Group.transaction do
-      group_users_to_be_destroyed = group_users.includes(:user).where(user_id: user_ids).destroy_all
-      group_users_to_be_destroyed.each do |group_user|
-        trigger_user_removed_event(group_user.user)
-        enqueue_user_removed_from_group_webhook_events(group_user)
+      group_users.where(user_id: removed_user_ids).delete_all
+
+      User.where(primary_group_id: self.id, id: removed_user_ids).update_all(primary_group_id: nil)
+      User.where(flair_group_id: self.id, id: removed_user_ids).update_all(flair_group_id: nil)
+
+      if self.title.present?
+        DB.exec(<<~SQL, user_ids: removed_user_ids, title: self.title)
+            UPDATE users u
+            SET title = NULL
+            WHERE u.id IN (:user_ids)
+              AND u.title = :title
+              AND NOT EXISTS (
+                SELECT 1 FROM group_users gu
+                JOIN groups g ON g.id = gu.group_id
+                WHERE gu.user_id = u.id
+                  AND g.title IS NOT NULL AND g.title <> ''
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM user_badges ub
+                JOIN badges b ON b.id = ub.badge_id
+                WHERE ub.user_id = u.id
+                  AND b.allow_title = true
+              )
+          SQL
+
+        User
+          .where(id: removed_user_ids, title: self.title)
+          .find_each { |user| user.update_column(:title, user.next_best_title) }
       end
+
+      Group.update_counters(self.id, user_count: -removed_user_ids.size)
     end
 
-    recalculate_user_count
+    if self.grant_trust_level.present? && !self.grant_trust_level.zero?
+      Jobs.enqueue(:bulk_grant_trust_level, user_ids: removed_user_ids, recalculate: true)
+    end
 
-    true
+    bulk_publish_category_updates(removed_user_ids)
+
+    User.where(id: removed_user_ids).find_each { |user| trigger_user_removed_event(user) }
+    enqueue_user_removed_webhook_events(webhook_payloads)
+
+    removed_user_ids
   end
 
   def recalculate_user_count
@@ -1046,43 +1089,6 @@ class Group < ActiveRecord::Base
         GroupTagNotificationDefault.batch_set(self, level, tag_names)
       end
     end
-  end
-
-  def imap_mailboxes
-    return [] if !self.imap_enabled || !SiteSetting.enable_imap
-
-    Discourse
-      .cache
-      .fetch("group_imap_mailboxes_#{self.id}", expires_in: 30.minutes) do
-        Rails.logger.info("[IMAP] Refreshing mailboxes list for group #{self.name}")
-        mailboxes = []
-
-        begin
-          imap_provider = Imap::Providers::Detector.init_with_detected_provider(self.imap_config)
-          imap_provider.connect!
-          mailboxes = imap_provider.filter_mailboxes(imap_provider.list_mailboxes_with_attributes)
-          imap_provider.disconnect!
-
-          update_columns(imap_last_error: nil)
-        rescue => ex
-          Rails.logger.warn(
-            "[IMAP] Mailbox refresh failed for group #{self.name} with error: #{ex}",
-          )
-          update_columns(imap_last_error: ex.message)
-        end
-
-        mailboxes
-      end
-  end
-
-  def imap_config
-    {
-      server: self.imap_server,
-      port: self.imap_port,
-      ssl: self.imap_ssl,
-      username: self.email_username,
-      password: self.email_password,
-    }
   end
 
   def email_username_domain
@@ -1285,6 +1291,43 @@ class Group < ActiveRecord::Base
 
   private
 
+  def bulk_publish_category_updates(user_ids)
+    return if user_ids.blank?
+    return unless categories.exists?
+
+    if user_ids.size == 1
+      user = User.find(user_ids.first)
+      publish_category_updates(user)
+    else
+      Discourse.request_refresh!(user_ids:)
+    end
+  end
+
+  def build_user_removed_webhook_payloads(group_users_relation)
+    return unless WebHook.active_web_hooks(:group_user)
+
+    payloads = []
+    group_users_relation.find_each do |gu|
+      payloads << {
+        id: gu.id,
+        payload: WebHook.generate_payload(:group_user, gu, WebHookGroupUserSerializer),
+      }
+    end
+    payloads
+  end
+
+  def enqueue_user_removed_webhook_events(webhook_payloads)
+    webhook_payloads&.each do |webhook_payload|
+      WebHook.enqueue_hooks(
+        :group_user,
+        :user_removed_from_group,
+        id: webhook_payload[:id],
+        payload: webhook_payload[:payload],
+        group_ids: [self.id],
+      )
+    end
+  end
+
   def send_membership_notification(user)
     Notification.create!(
       notification_type: Notification.types[:membership_request_accepted],
@@ -1349,56 +1392,44 @@ end
 # Table name: groups
 #
 #  id                                 :integer          not null, primary key
-#  name                               :string           not null
-#  created_at                         :datetime         not null
-#  updated_at                         :datetime         not null
+#  allow_membership_requests          :boolean          default(FALSE), not null
+#  allow_unknown_sender_topic_replies :boolean          default(FALSE), not null
 #  automatic                          :boolean          default(FALSE), not null
-#  user_count                         :integer          default(0), not null
 #  automatic_membership_email_domains :text
-#  primary_group                      :boolean          default(FALSE), not null
-#  title                              :string
-#  grant_trust_level                  :integer
-#  incoming_email                     :string
-#  has_messages                       :boolean          default(FALSE), not null
+#  bio_cooked                         :text
+#  bio_raw                            :text
+#  default_notification_level         :integer          default(3), not null
+#  email_from_alias                   :string
+#  email_password                     :string
+#  email_username                     :string
 #  flair_bg_color                     :string
 #  flair_color                        :string
-#  bio_raw                            :text
-#  bio_cooked                         :text
-#  allow_membership_requests          :boolean          default(FALSE), not null
-#  full_name                          :string
-#  default_notification_level         :integer          default(3), not null
-#  visibility_level                   :integer          default(0), not null
-#  public_exit                        :boolean          default(FALSE), not null
-#  public_admission                   :boolean          default(FALSE), not null
-#  membership_request_template        :text
-#  messageable_level                  :integer          default(0)
-#  mentionable_level                  :integer          default(0)
-#  smtp_server                        :string
-#  smtp_port                          :integer
-#  imap_server                        :string
-#  imap_port                          :integer
-#  imap_ssl                           :boolean
-#  imap_mailbox_name                  :string           default(""), not null
-#  imap_uid_validity                  :integer          default(0), not null
-#  imap_last_uid                      :integer          default(0), not null
-#  email_username                     :string
-#  email_password                     :string
-#  publish_read_state                 :boolean          default(FALSE), not null
-#  members_visibility_level           :integer          default(0), not null
-#  imap_last_error                    :text
-#  imap_old_emails                    :integer
-#  imap_new_emails                    :integer
 #  flair_icon                         :string
-#  flair_upload_id                    :integer
-#  allow_unknown_sender_topic_replies :boolean          default(FALSE), not null
+#  full_name                          :string
+#  grant_trust_level                  :integer
+#  has_messages                       :boolean          default(FALSE), not null
+#  incoming_email                     :string
+#  members_visibility_level           :integer          default(0), not null
+#  membership_request_template        :text
+#  mentionable_level                  :integer          default(0)
+#  messageable_level                  :integer          default(0)
+#  name                               :string           not null
+#  primary_group                      :boolean          default(FALSE), not null
+#  public_admission                   :boolean          default(FALSE), not null
+#  public_exit                        :boolean          default(FALSE), not null
+#  publish_read_state                 :boolean          default(FALSE), not null
 #  smtp_enabled                       :boolean          default(FALSE)
-#  smtp_updated_at                    :datetime
-#  smtp_updated_by_id                 :integer
-#  imap_enabled                       :boolean          default(FALSE)
-#  imap_updated_at                    :datetime
-#  imap_updated_by_id                 :integer
-#  email_from_alias                   :string
+#  smtp_port                          :integer
+#  smtp_server                        :string
 #  smtp_ssl_mode                      :integer          default(0), not null
+#  smtp_updated_at                    :datetime
+#  title                              :string
+#  user_count                         :integer          default(0), not null
+#  visibility_level                   :integer          default(0), not null
+#  created_at                         :datetime         not null
+#  updated_at                         :datetime         not null
+#  flair_upload_id                    :integer
+#  smtp_updated_by_id                 :integer
 #
 # Indexes
 #

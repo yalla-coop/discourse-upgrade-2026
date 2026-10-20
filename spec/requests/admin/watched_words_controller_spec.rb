@@ -38,20 +38,20 @@ RSpec.describe Admin::WatchedWordsController do
           hash_including(
             "id" => word1.id,
             "word" => word1.word,
-            "regexp" => WordWatcher.word_to_regexp(word1.word, engine: :js),
+            "regexp" => WordWatcher.word_to_regexp(word1.word),
             "case_sensitive" => false,
             "action" => "block",
           ),
           hash_including(
             "id" => word4.id,
             "word" => word4.word,
-            "regexp" => WordWatcher.word_to_regexp(word4.word, engine: :js),
+            "regexp" => WordWatcher.word_to_regexp(word4.word),
             "case_sensitive" => false,
             "action" => "censor",
           ),
         )
         expect(watched_words["compiled_regular_expressions"]["block"].first).to eq(
-          WordWatcher.serialized_regexps_for_action(:block, engine: :js).first.deep_stringify_keys,
+          WordWatcher.serialized_regexps_for_action(:block).first.deep_stringify_keys,
         )
       end
     end
@@ -146,6 +146,62 @@ RSpec.describe Admin::WatchedWordsController do
         expect(WatchedWord.take.case_sensitive?).to eq(true)
         expect(WatchedWord.take.word).to eq("PNG")
       end
+
+      it "creates a tag watched word with existing tags by id" do
+        tag = Fabricate(:tag, name: "greeting")
+
+        post "/admin/customize/watched_words.json",
+             params: {
+               action_key: "tag",
+               words: ["hello"],
+               replacement_tags: [{ id: tag.id, name: tag.name }],
+             }
+
+        expect(response.status).to eq(200)
+        expect(WatchedWord.last.replacement).to eq("greeting")
+      end
+
+      it "creates a tag watched word and creates new tags" do
+        post "/admin/customize/watched_words.json",
+             params: {
+               action_key: "tag",
+               words: ["hello"],
+               replacement_tags: [{ name: "brandnewtag" }],
+             }
+
+        expect(response.status).to eq(200)
+        expect(Tag.find_by(name: "brandnewtag")).to be_present
+        expect(WatchedWord.last.replacement).to eq("brandnewtag")
+      end
+
+      it "creates a tag watched word with a mix of existing and new tags" do
+        tag = Fabricate(:tag, name: "existing")
+
+        post "/admin/customize/watched_words.json",
+             params: {
+               action_key: "tag",
+               words: ["hello"],
+               replacement_tags: [{ id: tag.id, name: tag.name }, { name: "newone" }],
+             }
+
+        expect(response.status).to eq(200)
+        expect(Tag.find_by(name: "newone")).to be_present
+        expect(WatchedWord.last.replacement).to eq("existing,newone")
+      end
+
+      it "creates a tag watched word via the legacy replacement param" do
+        Fabricate(:tag, name: "greeting")
+
+        post "/admin/customize/watched_words.json",
+             params: {
+               action_key: "tag",
+               words: ["hello"],
+               replacement: "greeting",
+             }
+
+        expect(response.status).to eq(200)
+        expect(WatchedWord.last.replacement).to eq("greeting")
+      end
     end
   end
 
@@ -231,6 +287,31 @@ RSpec.describe Admin::WatchedWordsController do
           ["world", false],
           ["test", false],
         )
+      end
+
+      it "reads file content before deferring work so tempfile cleanup does not cause errors" do
+        allow(Scheduler::Defer).to receive(
+          :later,
+        ).and_wrap_original do |original, *args, **kwargs, &block|
+          if args.first == "Upload watched words"
+            # Simulate Rack::TempfileReaper: delete all tempfiles before the deferred block runs.
+            # With the fix, File.read has already been called before Defer.later, so this is safe.
+            # Without the fix, the block tries File.read on a deleted tempfile.
+            ObjectSpace.each_object(Tempfile) do |tempfile|
+              tempfile.close! if tempfile.path&.include?("RackMultipart")
+            end
+          end
+          block.call
+        end
+
+        post "/admin/customize/watched_words/upload.json",
+             params: {
+               action_key: "flag",
+               file: Rack::Test::UploadedFile.new(file_from_fixtures("words.csv", "csv")),
+             }
+
+        expect(response.status).to eq(200)
+        expect(WatchedWord.count).to eq(6)
       end
 
       it "handles files with invalid UTF-8 sequences" do

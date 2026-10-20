@@ -34,6 +34,7 @@ class CategoriesController < ApplicationController
 
   SYMMETRICAL_CATEGORIES_TO_TOPICS_FACTOR = 1.5
   MIN_CATEGORIES_TOPICS = 5
+  MAX_CATEGORIES_TOPICS = 100
   MAX_CATEGORIES_LIMIT = 25
 
   def redirect
@@ -97,6 +98,7 @@ class CategoriesController < ApplicationController
     params.require("position")
 
     if category = Category.find(params["category_id"])
+      guardian.ensure_can_see!(category)
       category.move_to(params["position"].to_i)
       render json: success_json
     else
@@ -125,6 +127,22 @@ class CategoriesController < ApplicationController
     render json: success_json
   end
 
+  def types
+    guardian.ensure_can_create_category!
+
+    counts_by_type =
+      Discourse
+        .cache
+        .fetch(Categories::TypeRegistry::COUNTS_CACHE_KEY, expires_in: 1.hour) do
+          Categories::TypeRegistry.counts
+        end
+
+    render json: {
+             types: Categories::TypeRegistry.list(only_visible: true),
+             counts: counts_by_type,
+           }
+  end
+
   def show
     guardian.ensure_can_see!(@category)
 
@@ -139,6 +157,7 @@ class CategoriesController < ApplicationController
   def create
     guardian.ensure_can_create!(Category)
     position = category_params.delete(:position)
+    category_type = params[:category_type]
 
     if category_params[:description].present? &&
          category_params[:description].size > MAX_DESCRIPTION_PARAM_LENGTH
@@ -164,6 +183,33 @@ class CategoriesController < ApplicationController
     if @category.save
       @category.move_to(position.to_i) if position
 
+      if category_type.present? &&
+           UpcomingChanges.enabled_for_user?(:enable_simplified_category_creation, current_user)
+        Categories::Configure.call(
+          guardian:,
+          params: {
+            category_id: @category.id,
+            category_type:,
+            site_setting_configuration_values: params[:category_type_site_settings],
+            category_configuration_values: category_params[:custom_fields],
+          },
+        ) do |result|
+          on_failed_policy(:type_is_available) do
+            return(
+              render json: {
+                       errors: [
+                         I18n.t(
+                           "category_types.not_available",
+                           type_name: category_type.capitalize,
+                         ),
+                       ],
+                     },
+                     status: :unprocessable_entity
+            )
+          end
+        end
+      end
+
       Scheduler::Defer.later "Log staff action create category" do
         @staff_action_logger.log_category_creation(@category)
       end
@@ -184,16 +230,48 @@ class CategoriesController < ApplicationController
       category_params.delete(:position)
 
       old_custom_fields = cat.custom_fields.dup
-      if category_params[:custom_fields]
-        category_params[:custom_fields].each do |key, value|
-          if value.present?
-            cat.custom_fields[key] = value
+      category_params[:custom_fields]&.each do |key, value|
+        if value.nil? || value == ""
+          cat.custom_fields.delete(key)
+        else
+          cat.custom_fields[key] = if value.is_a?(TrueClass) || value.is_a?(FalseClass)
+            value.to_s
           else
-            cat.custom_fields.delete(key)
+            value
           end
         end
       end
       category_params.delete(:custom_fields)
+
+      if UpcomingChanges.enabled_for_user?(:enable_simplified_category_creation, current_user) &&
+           params[:category_type_site_settings].present?
+        # NOTE: The code in this block is pretty similar to what we are doing in
+        # configure_site_settings in Categories::Types::Base, however here we
+        # need to be able to update site settings across all category types for
+        # the category and it's best to do this in one query rather than
+        # multiple.
+        #
+        # Maybe in future we do something different, but this is a good starting point.
+        category_type_settings =
+          params[:category_type_site_settings].permit!.to_h.map do |name, value|
+            { setting_name: name, value: }
+          end
+
+        # We do this because we want to allow updating hidden settings for the
+        # category type, but not other settings. The configuration schema for a
+        # category type defines which settings it wants to change, so that's a
+        # good source to use as an allowlist here.
+        allowed_setting_names = cat.category_type_site_setting_names
+        SiteSetting::Update.call(
+          guardian:,
+          options: {
+            allow_changing_hidden: allowed_setting_names,
+          },
+          params: {
+            settings: category_type_settings,
+          },
+        )
+      end
 
       # properly null the value so the database constraint doesn't catch us
       category_params[:email_in] = nil if category_params[:email_in]&.blank?
@@ -254,6 +332,7 @@ class CategoriesController < ApplicationController
   def destroy
     guardian.ensure_can_delete!(@category)
     @category.destroy
+    Discourse.cache.delete(Categories::TypeRegistry::COUNTS_CACHE_KEY)
 
     Scheduler::Defer.later "Log staff action delete category" do
       @staff_action_logger.log_category_deletion(@category)
@@ -335,68 +414,17 @@ class CategoriesController < ApplicationController
   end
 
   def hierarchical_search
-    term = params[:term].to_s.strip
-    page = [1, params[:page].to_i].max
-    offset = params[:offset].to_i
-    parent_category_id = params[:parent_category_id].to_i if params[:parent_category_id].present?
-    only =
-      if params[:only].present?
-        Category.secured(guardian).where(id: params[:only].to_a.map(&:to_i))
-      else
-        Category.secured(guardian)
-      end
-    except_ids = params[:except].to_a.map(&:to_i)
-    include_uncategorized =
-      (
-        if params[:include_uncategorized].present?
-          ActiveModel::Type::Boolean.new.cast(params[:include_uncategorized])
-        else
-          true
-        end
-      )
-
-    except_ids << SiteSetting.uncategorized_category_id unless include_uncategorized
-
-    except = Category.where(id: except_ids) if except_ids.present?
-
-    limit =
-      (
-        if params[:limit].present?
-          params[:limit].to_i.clamp(1, MAX_CATEGORIES_LIMIT)
-        else
-          MAX_CATEGORIES_LIMIT
-        end
-      )
-
-    categories =
-      Category
-        .secured(guardian)
-        .limited_categories_matching(only, except, parent_category_id, term)
-        .preload(
-          :uploaded_logo,
-          :uploaded_logo_dark,
-          :uploaded_background,
-          :uploaded_background_dark,
-          :tags,
-          :tag_groups,
-          :form_templates,
-          category_required_tag_groups: :tag_group,
+    Category::HierarchicalSearch.call(service_params) do
+      on_success do |categories:|
+        render_json_dump(
+          categories: serialize_data(categories, SiteCategorySerializer, scope: guardian),
         )
-        .joins("LEFT JOIN topics t on t.id = categories.topic_id")
-        .select("categories.*, t.slug topic_slug")
-        .limit(limit)
-        .offset((page - 1) * limit + offset)
-        .to_a
-
-    if Site.preloaded_category_custom_fields.present?
-      Category.preload_custom_fields(categories, Site.preloaded_category_custom_fields)
+      end
+      on_failed_contract do |contract|
+        render json: failed_json.merge(errors: contract.errors.full_messages), status: :bad_request
+      end
+      on_failure { render json: failed_json, status: :unprocessable_entity }
     end
-
-    Category.preload_user_fields!(guardian, categories)
-
-    response = { categories: serialize_data(categories, SiteCategorySerializer, scope: guardian) }
-
-    render_json_dump(response)
   end
 
   def search
@@ -444,7 +472,13 @@ class CategoriesController < ApplicationController
     categories = Category.secured(guardian)
 
     if term.present? && words = term.split
-      words.each { |word| categories = categories.where("name ILIKE ?", "%#{word}%") }
+      words.each do |word|
+        categories =
+          categories.where(
+            "#{Category.normalize_sql("name")} ILIKE #{Category.normalize_sql("?")}",
+            "%#{word}%",
+          )
+      end
     end
 
     categories =
@@ -482,7 +516,7 @@ class CategoriesController < ApplicationController
         .joins("LEFT JOIN topics t on t.id = categories.topic_id")
         .select("categories.*, t.slug topic_slug")
         .order(
-          "starts_with(lower(categories.name), #{ActiveRecord::Base.connection.quote(term)}) DESC",
+          "starts_with(#{Category.normalize_sql("categories.name")}, #{Category.normalize_sql(ActiveRecord::Base.connection.quote(term))}) DESC",
           "categories.parent_category_id IS NULL DESC",
           "categories.id IS NOT DISTINCT FROM #{ActiveRecord::Base.connection.quote(prioritized_category_id)} DESC",
           "categories.parent_category_id IS NOT DISTINCT FROM #{ActiveRecord::Base.connection.quote(prioritized_category_id)} DESC",
@@ -513,12 +547,12 @@ class CategoriesController < ApplicationController
 
   private
 
-  def self.topics_per_page
+  def topics_per_page
     return SiteSetting.categories_topics if SiteSetting.categories_topics > 0
 
-    count = Category.where(parent_category: nil).count
+    count = Category.secured(guardian).where(parent_category: nil).count
     count = (SYMMETRICAL_CATEGORIES_TO_TOPICS_FACTOR * count).to_i
-    count > MIN_CATEGORIES_TOPICS ? count : MIN_CATEGORIES_TOPICS
+    count.clamp(MIN_CATEGORIES_TOPICS, MAX_CATEGORIES_TOPICS)
   end
 
   def categories_and_topics(topics_filter)
@@ -563,6 +597,7 @@ class CategoriesController < ApplicationController
         end
 
         if SiteSetting.content_localization_enabled?
+          conditional_param_keys << :locale
           conditional_param_keys << { category_localizations: %i[id locale name description] }
         end
 
@@ -591,6 +626,7 @@ class CategoriesController < ApplicationController
           :slug,
           :allow_badges,
           :topic_template,
+          :topic_title_placeholder,
           :description,
           :sort_order,
           :sort_ascending,
@@ -700,7 +736,7 @@ class CategoriesController < ApplicationController
         SiteSetting.desktop_category_page_style
       end
 
-    topic_options = { per_page: CategoriesController.topics_per_page, no_definitions: true }
+    topic_options = { per_page: topics_per_page, no_definitions: true }
     topic_options.merge!(build_topic_list_options)
     topic_options[:order] = "created" if SiteSetting.desktop_category_page_style ==
       "categories_and_latest_topics_created_date"

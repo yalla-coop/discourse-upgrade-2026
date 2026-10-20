@@ -2,6 +2,7 @@ import { setupTest } from "ember-qunit";
 import { module, test } from "qunit";
 import sinon from "sinon";
 import { setPrefix } from "discourse/lib/get-url";
+import { withPluginApi } from "discourse/lib/plugin-api";
 import DiscourseURL, {
   getCanonicalUrl,
   getCategoryAndTagUrl,
@@ -192,6 +193,75 @@ module("Unit | Utility | url", function (hooks) {
     );
   });
 
+  test("routeTo applies route-to-url value transformer", async function (assert) {
+    sinon.stub(DiscourseURL, "origin").get(() => "http://example.com");
+    sinon.stub(DiscourseURL, "handleURL");
+    sinon.stub(DiscourseURL, "router").get(() => {
+      return { currentURL: "/bar" };
+    });
+
+    withPluginApi((api) => {
+      api.registerValueTransformer("route-to-url", ({ value }) => {
+        if (value === "/t/some-topic/123") {
+          return "/nested/some-topic/123";
+        }
+        return value;
+      });
+    });
+
+    DiscourseURL.routeTo("/t/some-topic/123");
+    assert.true(
+      DiscourseURL.handleURL.calledWith("/nested/some-topic/123"),
+      "the transformed URL is used for routing"
+    );
+  });
+
+  test("routeTo passes untransformed URLs through", async function (assert) {
+    sinon.stub(DiscourseURL, "origin").get(() => "http://example.com");
+    sinon.stub(DiscourseURL, "handleURL");
+    sinon.stub(DiscourseURL, "router").get(() => {
+      return { currentURL: "/bar" };
+    });
+
+    withPluginApi((api) => {
+      api.registerValueTransformer("route-to-url", ({ value }) => {
+        if (value.startsWith("/t/redirect-me")) {
+          return "/other/path";
+        }
+        return value;
+      });
+    });
+
+    DiscourseURL.routeTo("/some/other/path");
+    assert.true(
+      DiscourseURL.handleURL.calledWith("/some/other/path"),
+      "non-matching URLs pass through unchanged"
+    );
+  });
+
+  test("routeTo aborts when transformer returns null", async function (assert) {
+    sinon.stub(DiscourseURL, "origin").get(() => "http://example.com");
+    sinon.stub(DiscourseURL, "handleURL");
+    sinon.stub(DiscourseURL, "redirectTo");
+    sinon.stub(DiscourseURL, "router").get(() => {
+      return { currentURL: "/bar" };
+    });
+
+    withPluginApi((api) => {
+      api.registerValueTransformer("route-to-url", () => null);
+    });
+
+    DiscourseURL.routeTo("/t/some-topic/123");
+    assert.false(
+      DiscourseURL.handleURL.called,
+      "handleURL is not called when transformer returns null"
+    );
+    assert.false(
+      DiscourseURL.redirectTo.called,
+      "redirectTo is not called when transformer returns null"
+    );
+  });
+
   test("prefixProtocol", async function (assert) {
     assert.strictEqual(
       prefixProtocol("mailto:mr-beaver@aol.com"),
@@ -262,6 +332,55 @@ module("Unit | Utility | url", function (hooks) {
     assert.true(
       DiscourseURL.redirectTo.calledWith("/secure-uploads/original/1X/test.pdf")
     );
+  });
+
+  test("routeTo redirects server-side-only URLs on subfolder setup", async function (assert) {
+    setPrefix("/forum");
+    sinon.stub(DiscourseURL, "redirectTo");
+    sinon.stub(DiscourseURL, "handleURL");
+
+    DiscourseURL.routeTo("/forum/uploads/short-url/test.csv.gz");
+    assert.true(
+      DiscourseURL.redirectTo.calledWith(
+        "/forum/uploads/short-url/test.csv.gz"
+      ),
+      "uploads short-url on subfolder is redirected to server"
+    );
+
+    DiscourseURL.redirectTo.resetHistory();
+
+    DiscourseURL.routeTo("/forum/secure-uploads/original/1X/test.pdf");
+    assert.true(
+      DiscourseURL.redirectTo.calledWith(
+        "/forum/secure-uploads/original/1X/test.pdf"
+      ),
+      "secure-uploads on subfolder is redirected to server"
+    );
+  });
+
+  test("routeTo redirects server-side-only routes", async function (assert) {
+    sinon.stub(DiscourseURL, "redirectTo");
+    sinon.stub(DiscourseURL, "handleURL");
+
+    const routes = [
+      "/safe-mode",
+      "/dev-mode",
+      "/theme-qunit",
+      "/llms.txt",
+      "/robots.txt",
+      "/offline.html",
+      "/manifest.webmanifest",
+      "/opensearch.xml",
+    ];
+
+    for (const route of routes) {
+      DiscourseURL.redirectTo.resetHistory();
+      DiscourseURL.routeTo(route);
+      assert.true(
+        DiscourseURL.redirectTo.calledWith(route),
+        `${route} is redirected to server`
+      );
+    }
   });
 
   test("anchor handling", async function (assert) {

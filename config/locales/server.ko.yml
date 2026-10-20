@@ -730,11 +730,8 @@ ko:
     pm_body: "백업 초안이 포함된 주제"
   email_settings:
     pop3_authentication_error: "제공된 POP3 크리덴셜에 문제가 있습니다. 아이디와 비밀번호를 확인하고 다시 시도하세요."
-    imap_authentication_error: "제공된 IMAP 크리덴셜에 문제가 있습니다. 아이디와 비밀번호를 확인하고 다시 시도하세요."
-    imap_no_response_error: "IMAP 서버와 통신하는 중에 오류가 발생했습니다. %{message}"
     smtp_server_busy_error: "SMTP 서버가 현재 사용 중입니다. 나중에 다시 시도하세요."
     smtp_unhandled_error: "SMTP 서버와 통신 중에 처리되지 않은 오류가 발생했습니다. %{message}"
-    imap_unhandled_error: "IMAP 서버와 통신 중에 처리되지 않은 오류가 발생했습니다. %{message}"
     connection_error: "서버에 연결하는 중에 문제가 발생했습니다. 서버 이름과 포트를 확인한 후 다시 시도하세요."
     timeout_error: "서버 연결 시간이 초과되었습니다. 서버 이름과 포트를 확인한 후 다시 시도하세요."
     unhandled_error: "이메일 설정을 테스트하는 중에 처리되지 않은 오류가 발생했습니다. %{message}"
@@ -893,7 +890,9 @@ ko:
       description: "신고 유형, 게시자, 신고자 및 해결 시간을 포함한 신고 상태 목록입니다."
     visits:
       title: "사용자 방문 횟수"
-      xaxis: "일"
+      xaxis:
+        desktop: "데스크톱"
+        mobile: "모바일"
       yaxis: "방문 횟수"
     signups:
       title: "가입"
@@ -938,10 +937,8 @@ ko:
       yaxis: "일"
       description_link: "https://meta.discourse.org/t/understanding-pageviews-and-the-site-traffic-report/324062"
     dau_by_mau:
-      title: "DAU / MAU"
       xaxis: "일"
       yaxis: "DAU / MAU"
-      description: "마지막 날에 로그인 한 회원 수를 지난 달에 로그인 한 회원 수로 나눈 값 – 커뮤니티 &#39;고착성&#39;을 나타내는 %를 반환합니다. 20 % 이상을 목표로하십시오."
     daily_engaged_users:
       title: "일일 참여 사용자"
       xaxis: "일"
@@ -1348,7 +1345,6 @@ ko:
     allowed_crawler_user_agents: "사이트 액세스를 허용해야 하는 웹 크롤러의 사용자 에이전트입니다. 경고! 이것을 설정하면 여기에 나열되지 않은 모든 크롤러가 비활성화됩니다!"
     blocked_crawler_user_agents: "사이트 액세스가 허용되지 않아야 하는 웹 크롤러를 식별하는 사용자 에이전트 스트링에서 대소문자를 구분하지 않는 고유한 단어입니다. 허용 목록이 정의된 경우 적용되지 않습니다."
     slow_down_crawler_rate: "slow_down_crawler_user_agents를 지정하면 이 비율이 모든 크롤러에 적용됩니다(요청 간 지연 시간(초))."
-    content_security_policy_collect_reports: "/csp_reports에서 CSP 위반 리포트 수집 활성화"
     content_security_policy_frame_ancestors: "CSP를 통해 iframe에 이 사이트를 임베드할 수 있는 사용자를 제한합니다. <a href='%{base_path}/admin/customize/embedding'>임베딩</a>에서 허용된 호스트를 제어합니다."
     invalidate_inactive_admin_email_after_days: "이 기간에 사이트를 방문하지 않은 관리자 계정은 로그인하기 전에 이메일 주소를 다시 확인해야 합니다. 비활성화하려면 0으로 설정하세요."
     share_links: "공유 대화창에 표시할 항목과 순서를 결정합니다."
@@ -1451,7 +1447,6 @@ ko:
     invite_link_max_redemptions_limit_users: "일반 사용자가 생성한 초대 링크에 허용되는 최대 사용 횟수는 이 값을 초과할 수 없습니다."
     alert_admins_if_errors_per_minute: "관리자 경고를 트리거하기 위한 분당 오류 수입니다. 이 기능을 비활성화하려면 0으로 설정하세요. 참고: 재시작해야 합니다."
     alert_admins_if_errors_per_hour: "관리자 경고를 트리거하기 위한 시간당 오류 수입니다. 이 기능을 비활성화하려면 0으로 설정하세요. 참고: 재시작해야 합니다."
-    categories_topics: "/categories 페이지에 표시할 주제 수입니다. 0으로 설정하면 두 열을 대칭으로 유지하기 위해 값을 자동으로 찾습니다(카테고리 및 주제)."
     suggested_topics: "주제 하단에 표시할 제안된 주제 수입니다."
     limit_suggested_to_category: "제안된 주제는 현재의 카테고리에 있는 주제만 표시합니다."
     suggested_topics_max_days_old: "제안된 주제는 n일을 넘지 않아야 합니다."
@@ -1562,7 +1557,6 @@ ko:
     num_flaggers_to_close_topic: "중재를 위해 주제를 자동으로 일시 중지하기 위한 최소 고유 신고자 수"
     num_hours_to_close_topic: "중재를 위해 주제를 일시 중지하는 시간입니다."
     auto_respond_to_flag_actions: "신고를 제거할 때 자동 댓글을 활성화합니다."
-    min_first_post_typing_time: "사용자가 첫 게시 중에 입력해야 하는 최소 시간(밀리초)입니다. 한계치가 충족되지 않으면 게시물이 자동으로 필요 승인 대기열에 들어갑니다. 비활성화하려면 0으로 설정합니다(권장하지 않음)."
     auto_silence_fast_typers_max_trust_level: "빠른 게시자를 자동으로 차단하기 위한 최대 신뢰 레벨"
     reviewable_claiming: "검토 가능한 콘텐츠에 대해 조치를 취하려면 먼저 독점해야 하나요?"
     reviewable_default_topics: "기본적으로 주제별로 그룹화된 검토 가능한 콘텐츠 표시"
@@ -1573,7 +1567,6 @@ ko:
     alternative_reply_by_email_addresses: "수신 이메일 주소로 회신 이메일을 보내는 데 사용하는 대체 템플릿 목록입니다. 예: %%{reply_key}@reply.example.com|replies+%%{reply_key}@example.com"
     incoming_email_prefer_html: "수신 이메일에 텍스트 대신 HTML을 사용합니다."
     strip_incoming_email_lines: "수신 이메일의 각 줄에서 앞뒤 공백을 제거합니다."
-    disable_emails: "Discourse에서 모든 유형의 이메일을 보내지 못하도록 합니다. 모든 사용자의 이메일을 비활성화하려면 '예'를 선택합니다. 운영진이 아닌 사용자에 대해서만 이메일을 비활성화하려면 '비운영진'을 선택하세요."
     strip_images_from_short_emails: "2800바이트, 즉 2.73KB 이내 크기를 가지도록 이메일에서 이미지 제거"
     display_name_on_email_from: "이메일 보내는 사람 필드에 전체 이름 표시"
     unsubscribe_via_email: "사용자가 이메일 제목이나 본문에 '구독 해제'를 포함하여 답장하면 이메일을 구독 해제하도록 허용"
@@ -1609,14 +1602,7 @@ ko:
     pop3_polling_delete_from_server: "서버에서 이메일을 삭제하세요. 참고: 이 기능을 비활성화하면 받은 편지함을 수동으로 정리해야 합니다."
     log_mail_processing_failures: "모든 이메일 처리 실패를 <a href='%{base_path}/logs' target='_blank'>/logs</a>에 기록"
     email_in_authserv_id: "수신 이메일에 대한 인증 확인을 수행하는 서비스의 식별자입니다. 이를 환경설정하는 방법에 대한 지침은 <a href='https://meta.discourse.org/t/134358'>https://meta.discourse.org/t/134358</a>을 참조하세요."
-    enable_imap: "그룹 메시지를 동기화하기 위해 IMAP을 활성화합니다."
-    enable_imap_write: "양방향 IMAP 동기화를 활성화합니다. 비활성화하면 IMAP 계정에 대한 모든 쓰기 작업이 비활성화됩니다."
-    enable_imap_idle: "새 이메일을 기다리는 IMAP IDLE 메커니즘을 사용합니다."
     enable_smtp: "그룹 메시지에 대한 알림을 보내기 위해 SMTP를 활성화합니다."
-    imap_polling_period_mins: "IMAP 계정에서 이메일을 확인하는 간격(분)입니다."
-    imap_polling_old_emails: "IMAP 상자가 폴링될 때마다 업데이트되는 오래된 이메일(처리됨)의 최대 개수(모두 하려면 0)입니다."
-    imap_polling_new_emails: "IMAP 상자가 폴링될 때마다 업데이트되는 새 이메일(처리 안 됨)의 최대 개수입니다."
-    imap_batch_import_email: "임포트 모드를 트리거하는 새 이메일의 최소 개수입니다(임포트한 게시물 알림 비활성화)."
     email_prefix: "이메일 제목에 사용할 [라벨]입니다. 설정하지 않으면 기본적으로 '제목'이 됩니다."
     email_site_title: "사이트에서 이메일의 발신자로 사용되는 사이트 제목입니다. 설정하지 않으면 기본적으로 '제목'이 됩니다. '제목'에 이메일 발신자 스트링에 허용되지 않는 문자가 포함된 경우 이 설정을 사용하세요."
     find_related_post_with_key: "댓글을 달은 게시물을 찾으려면 '댓글 키'만 사용하세요. 경고: 이 기능을 비활성화하면 이메일 주소를 기반으로 사용자 가장이 허용됩니다."
@@ -1649,11 +1635,9 @@ ko:
     enable_category_group_moderation: "그룹이 특정 카테고리의 콘텐츠를 관리하도록 허용"
     group_in_subject: "PM의 첫 번째 그룹 이름으로 이메일 제목에 %%{optional_pm} 을 설정합니다. 참조: <a href='https://meta.discourse.org/t/customize-specific-email-templates/88323' target='_blank'>표준 이메일의 제목 형식 사용자 지정</a>"
     anonymous_account_duration_minutes: "익명성을 보호하기 위해 각 사용자에 대해 N분마다 새 익명 계정을 만듭니다. 예: 600으로 설정하면 마지막 게시물로부터 600분이 경과하고 사용자가 익명으로 전환하는 즉시 새 익명 계정이 생성됩니다."
-    hide_user_profiles_from_public: "익명 사용자의 사용자 카드, 사용자 프로필 및 사용자 디렉터리를 비활성화합니다."
     allow_users_to_hide_profile: "사용자가 자신의 프로필과 현재 상태를 숨기도록 허용"
     allow_featured_topic_on_user_profiles: "사용자가 자신의 사용자 카드 및 프로필에 있는 주제로 연결되는 링크를 제공하도록 허용합니다."
     show_inactive_accounts: "로그인한 사용자가 비활성 계정의 프로필을 탐색할 수 있도록 허용합니다."
-    hide_suspension_reasons: "사용자 프로필에 정지 이유를 공개적으로 표시하지 않습니다."
     log_personal_messages_views: "다른 사용자/그룹에 대해 관리자가 개인 메시지 조회수를 기록합니다."
     ignored_users_count_message_threshold: "이 정도의 다른 사용자가 특정 사용자를 무시하는 경우 운영자에게 알립니다."
     ignored_users_message_gap_days: "많은 사용자가 무시한 사용자를 운영자에게 다시 알리기 전에 기다려야 하는 시간입니다."
@@ -1726,6 +1710,7 @@ ko:
     default_other_external_links_in_new_tab: "기본적으로 새 탭에서 외부 링크를 엽니다."
     default_other_enable_quoting: "기본적으로 하이라이트된 텍스트에 대한 인용 댓글을 활성화합니다."
     default_other_enable_defer: "기본적으로 주제 함수 기능 연기를 활성화합니다."
+    default_other_enable_markdown_monospace_font: "마크다운 모드에서 글 작성시 기본적으로 고정폭 글꼴 사용"
     default_other_dynamic_favicon: "기본적으로 브라우저 아이콘에 신규/업데이트된 주제 수를 표시합니다."
     default_other_skip_new_user_tips: "신규 사용자 온보딩 팁 및 배지를 건너뜁니다."
     default_topics_automatic_unpin: "기본적으로 사용자가 주제 하단에 도달하면 주제를 자동으로 고정 해제합니다."
@@ -1797,10 +1782,6 @@ ko:
       reply_by_email_disabled: "이 설정을 활성화하기 전에 먼저 '이메일로 회신'을 활성화해야 합니다."
       discourse_connect_url_is_empty: "이 설정을 활성화하기 전에 'discourse connect url'을 설정해야 합니다."
       enable_local_logins_disabled: "이 설정을 활성화하기 전에 먼저 '로컬 로그인 활성화'를 활성화해야 합니다."
-      min_username_length_exists: "최소 아이디 길이를 가장 짧은 아이디(%{username}) 이상으로 설정할 수 없습니다."
-      min_username_length_range: "최솟값은 최댓값보다 크게 설정할 수 없습니다."
-      max_username_length_exists: "최대 아이디 길이를 가장 긴 아이디(%{username}) 이하로 설정할 수 없습니다."
-      max_username_length_range: "최솟값은 최댓값보다 작게 설정할 수 없습니다."
       invalid_hex_value: "색상 값은 6자리 16진수 코드여야 합니다."
       empty_selectable_avatars: "이 설정을 활성화하기 전에 먼저 두 개 이상의 선택 가능한 아바타를 업로드해야 합니다."
       category_search_priority:
@@ -2226,6 +2207,7 @@ ko:
         여기를 확인하면 일시적인 신규 사용자 제한이 해제됩니다. 시간이 지남에 따라 [신뢰 레벨](https://blog.discourse.org/2018/06/understanding-discourse-trust-levels/)이 부여되어 함께 커뮤니티를 관리하는 데 유용한 특수 기능을 사용하실 수 있습니다.
     welcome_user:
       title: "사용자 환영"
+      preview: "%{site_name}에 오신 것을 환영합니다!"
       subject_template: "%{site_name}에 오신 것을 환영합니다!"
       text_body_template: |
         %{site_name}에 가입해 주셔서 감사합니다. 환영합니다!
@@ -2253,6 +2235,7 @@ ko:
         이런 권한에는 책임이 따르기 마련입니다. 운영이 처음이라면 [관리 가이드](https://meta.discourse.org/t/discourse-moderation-guide/63116)를 참조하세요.
     welcome_invite:
       title: "초대 환영"
+      preview: "%{site_name}에 오신 것을 환영합니다!"
       subject_template: "%{site_name}에 오신 것을 환영합니다!"
       text_body_template: |
         %{site_name} 초대를 수락해 주셔서 감사합니다. 환영합니다!
@@ -2614,6 +2597,7 @@ ko:
         이는 `newuser_spam_host_threshold` 및 `allowed_spam_host_domains` 사이트 설정에서 수정할 수 있습니다. 도메인에 문제가 없다면 허용 목록에 %{domains} 도메인을 추가하세요.
     unsilenced:
       title: "차단 해제됨"
+      preview: "계정의 대기가 해제되었습니다."
       subject_template: "계정 보류 해제됨"
       text_body_template: |
         안녕하세요,
@@ -2660,7 +2644,6 @@ ko:
     이러한 이메일을 구독 해제하려면 [여기를 클릭하세요](%{unsubscribe_url}).
   subject_re: "덧: "
   subject_pm: "[PM] "
-  email_from: "%{site_name}의 %{user_name} 님"
   user_notifications:
     previous_discussion: "이전 답장"
     reached_limit:
@@ -2982,6 +2965,7 @@ ko:
         %{base_url}/u/password-reset/%{email_token}
     email_login:
       title: "링크를 통해 로그인"
+      preview: "링크를 통해 로그인."
       subject_template: "[%{email_prefix}] 링크를 통해 로그인"
       text_body_template: |
         다음은 [%{site_name}](%{base_url})에 로그인할 수 있는 링크입니다.
@@ -3632,33 +3616,37 @@ ko:
         complete: "게시물 삭제됨."
       delete_and_agree_replies:
         confirm: "게시물에 대한 댓글도 삭제할까요?"
-      disagree_and_restore:
-        description: "모든 사용자가 볼 수 있도록 게시물을 복원합니다."
-      disagree:
+      disagree_bundle:
         title: "아니오"
       ignore:
         title: "무시"
       ignore_and_do_nothing:
         title: "아무것도하지 않음"
       approve:
-        title: "승인"
+        title: "예"
       approve_post:
-        title: "게시물 승인"
+        title: "예"
       approve_post_closed:
-        title: "게시물 승인"
+        title: "예"
         confirm: "이 주제는 종료되었습니다. 어쨌든 게시물을 작성 하시겠습니까?"
+      reject_post_bundle:
+        title: "아니오"
       reject_post:
         title: "게시물 거부"
       approve_user:
-        title: "사용자 승인"
+        title: "예"
       reject_user:
+        title: "아니오"
         delete:
           title: "사용자 삭제"
-          description: "사용자가 포럼에서 삭제됩니다."
           complete: "사용자 삭제됨."
         block:
           title: "사용자 삭제 및 차단"
           description: "사용자가 삭제되고 IP 및 이메일 주소가 차단됩니다."
+      confirm_spam:
+        title: "예"
+      not_spam:
+        title: "아니오"
       reject:
         title: "거부"
       reject_and_suspend:
@@ -3670,13 +3658,11 @@ ko:
       reject_and_keep_deleted:
         title: "게시물 삭제 유지"
       approve_and_restore:
-        title: "게시물 승인 및 복원"
-      no_action_post:
-        title: "조치 없음"
+        title: "예"
+      approve_and_unhide:
+        title: "예"
       delete_post:
         complete: "게시물 삭제됨"
-      no_action_user:
-        title: "조치 없음"
       delete_user:
         complete: "사용자 삭제됨"
         reason: "검토 대기열을 통해 삭제됨"

@@ -20,6 +20,88 @@ RSpec.describe DiscourseAi::AiBot::BotController do
       expect(response.status).to eq(403)
     end
 
+    it "does not disclose hidden whisper audit logs" do
+      debug_group = Fabricate(:group)
+      debug_group.add(user)
+      SiteSetting.ai_bot_debugging_allowed_groups = debug_group.id.to_s
+      SiteSetting.whispers_allowed_groups = Group::AUTO_GROUPS[:staff].to_s
+
+      visible_bot_post = Fabricate(:post, user: user)
+      hidden_whisper_post =
+        Fabricate(
+          :post,
+          topic: visible_bot_post.topic,
+          user: Fabricate(:admin),
+          post_type: Post.types[:whisper],
+        )
+      later_regular_post = Fabricate(:post, topic: visible_bot_post.topic, user: user)
+
+      visible_bot_log =
+        AiApiAuditLog.create!(
+          post_id: visible_bot_post.id,
+          provider_id: 1,
+          topic_id: visible_bot_post.topic_id,
+          feature_name: "ai_bot",
+          raw_request_payload: "bot request",
+          raw_response_payload: "bot response",
+          request_tokens: 1,
+          response_tokens: 2,
+          created_at: 2.minutes.ago,
+        )
+
+      hidden_bot_log =
+        AiApiAuditLog.create!(
+          post_id: hidden_whisper_post.id,
+          provider_id: 1,
+          topic_id: hidden_whisper_post.topic_id,
+          feature_name: "ai_bot",
+          raw_request_payload: "hidden bot request",
+          raw_response_payload: "hidden bot response",
+          request_tokens: 3,
+          response_tokens: 4,
+          created_at: 1.minute.ago,
+        )
+
+      hidden_translation_log =
+        AiApiAuditLog.create!(
+          post_id: hidden_whisper_post.id,
+          provider_id: 1,
+          topic_id: hidden_whisper_post.topic_id,
+          feature_name: "translation",
+          raw_request_payload: "hidden translation request",
+          raw_response_payload: "hidden translation response",
+          request_tokens: 5,
+          response_tokens: 6,
+          created_at: Time.zone.now,
+        )
+
+      get "/discourse-ai/ai-bot/post/#{later_regular_post.id}/show-debug-info"
+      show_debug_info_status = response.status
+      show_debug_info_body = response.parsed_body.deep_dup
+
+      get "/discourse-ai/ai-bot/show-debug-info/#{hidden_translation_log.id}"
+      hidden_translation_status = response.status
+      hidden_translation_body = response.body.dup
+
+      get "/discourse-ai/ai-bot/show-debug-info/#{hidden_bot_log.id}"
+      hidden_bot_status = response.status
+      hidden_bot_body = response.parsed_body.deep_dup
+
+      aggregate_failures do
+        expect(show_debug_info_status).to eq(200)
+        expect(show_debug_info_body["id"]).to eq(visible_bot_log.id)
+        expect(show_debug_info_body["raw_request_payload"]).to eq("bot request")
+        expect(show_debug_info_body["raw_response_payload"]).to eq("bot response")
+
+        expect(hidden_translation_status).to eq(404)
+        expect(hidden_translation_body).not_to include("hidden translation request")
+        expect(hidden_translation_body).not_to include("hidden translation response")
+
+        expect(hidden_bot_status).to eq(403)
+        expect(hidden_bot_body["errors"]).to include(I18n.t("invalid_access"))
+      end
+    end
+
     it "returns debug info if the user can debug the AI bot conversation" do
       user = pm_topic.topic_allowed_users.first.user
       sign_in(user)
@@ -28,6 +110,7 @@ RSpec.describe DiscourseAi::AiBot::BotController do
         AiApiAuditLog.create!(
           provider_id: 1,
           topic_id: pm_topic.id,
+          feature_name: "ai_bot",
           raw_request_payload: "request",
           raw_response_payload: "response",
           request_tokens: 1,
@@ -39,6 +122,7 @@ RSpec.describe DiscourseAi::AiBot::BotController do
           post_id: pm_post.id,
           provider_id: 1,
           topic_id: pm_topic.id,
+          feature_name: "ai_bot",
           raw_request_payload: "request",
           raw_response_payload: "response",
           request_tokens: 1,
@@ -50,6 +134,7 @@ RSpec.describe DiscourseAi::AiBot::BotController do
           post_id: pm_post2.id,
           provider_id: 1,
           topic_id: pm_topic.id,
+          feature_name: "ai_bot",
           raw_request_payload: "request",
           raw_response_payload: "response",
           request_tokens: 1,
@@ -72,13 +157,11 @@ RSpec.describe DiscourseAi::AiBot::BotController do
       expect(response.parsed_body["raw_request_payload"]).to eq("request")
       expect(response.parsed_body["raw_response_payload"]).to eq("response")
 
-      # return previous post if current has no debug info
       get "/discourse-ai/ai-bot/post/#{pm_post3.id}/show-debug-info"
       expect(response.status).to eq(200)
       expect(response.parsed_body["request_tokens"]).to eq(1)
       expect(response.parsed_body["response_tokens"]).to eq(2)
 
-      # can return debug info by id as well
       get "/discourse-ai/ai-bot/show-debug-info/#{log1.id}"
       expect(response.status).to eq(200)
       expect(response.parsed_body["id"]).to eq(log1.id)
@@ -88,7 +171,10 @@ RSpec.describe DiscourseAi::AiBot::BotController do
   describe "#stop_streaming_response" do
     let(:redis_stream_key) { "gpt_cancel:#{pm_post.id}" }
 
-    before { Discourse.redis.setex(redis_stream_key, 60, 1) }
+    before do
+      SiteSetting.ai_bot_enabled = true
+      Discourse.redis.setex(redis_stream_key, 60, 1)
+    end
 
     it "returns a 403 when the user cannot see the PM" do
       post "/discourse-ai/ai-bot/post/#{pm_post.id}/stop-streaming"
@@ -96,8 +182,36 @@ RSpec.describe DiscourseAi::AiBot::BotController do
       expect(response.status).to eq(403)
     end
 
+    it "returns a 403 when the user can see the PM but is not in ai_bot_allowed_groups" do
+      allowed_user = pm_topic.topic_allowed_users.first.user
+      sign_in(allowed_user)
+
+      SiteSetting.ai_bot_allowed_groups = Group::AUTO_GROUPS[:staff].to_s
+
+      post "/discourse-ai/ai-bot/post/#{pm_post.id}/stop-streaming"
+
+      expect(response.status).to eq(403)
+      expect(Discourse.redis.get(redis_stream_key)).to eq("1")
+    end
+
+    it "returns a 403 when ai_bot_enabled is false" do
+      allowed_user = pm_topic.topic_allowed_users.first.user
+      sign_in(allowed_user)
+
+      SiteSetting.ai_bot_enabled = false
+
+      post "/discourse-ai/ai-bot/post/#{pm_post.id}/stop-streaming"
+
+      expect(response.status).to eq(403)
+      expect(Discourse.redis.get(redis_stream_key)).to eq("1")
+    end
+
     it "deletes the key using to track the streaming" do
-      sign_in(pm_topic.topic_allowed_users.first.user)
+      allowed_user = pm_topic.topic_allowed_users.first.user
+      sign_in(allowed_user)
+
+      Group.refresh_automatic_groups!
+      SiteSetting.ai_bot_allowed_groups = allowed_user.groups.first.id.to_s
 
       post "/discourse-ai/ai-bot/post/#{pm_post.id}/stop-streaming"
 
@@ -109,16 +223,16 @@ RSpec.describe DiscourseAi::AiBot::BotController do
   describe "#retry_response" do
     fab!(:bot_user, :user)
     let!(:llm_model) { Fabricate(:llm_model, user: bot_user) }
-    let!(:ai_persona) do
+    let!(:ai_agent) do
       Fabricate(
-        :ai_persona,
+        :ai_agent,
         user: bot_user,
         default_llm_id: llm_model.id,
         allowed_group_ids: [Group::AUTO_GROUPS[:trust_level_0]],
       )
     end
-    let(:persona) { ai_persona.class_instance.new }
-    let(:bot) { DiscourseAi::Personas::Bot.as(bot_user, persona: persona) }
+    let(:agent) { ai_agent.class_instance.new }
+    let(:bot) { DiscourseAi::Agents::Bot.as(bot_user, agent: agent) }
 
     let!(:prompt_post) do
       Fabricate(:post, topic: pm_topic, user: user, raw: "Hello @#{bot_user.username}")
@@ -135,7 +249,8 @@ RSpec.describe DiscourseAi::AiBot::BotController do
     before do
       Group.refresh_automatic_groups!
       SiteSetting.ai_bot_enabled = true
-      AiPersona.persona_cache.flush!
+      SiteSetting.ai_bot_allowed_groups = Group::AUTO_GROUPS[:trust_level_0].to_s
+      AiAgent.agent_cache.flush!
 
       tl0_group =
         Group.find_by(name: "trust_level_0") || Group.find(Group::AUTO_GROUPS[:trust_level_0])
@@ -149,6 +264,22 @@ RSpec.describe DiscourseAi::AiBot::BotController do
       end
     end
 
+    it "returns 403 when ai_bot_enabled is false" do
+      SiteSetting.ai_bot_enabled = false
+
+      post "/discourse-ai/ai-bot/post/#{reply_post.id}/retry"
+
+      expect(response.status).to eq(403)
+    end
+
+    it "returns 403 when user is not in ai_bot_allowed_groups" do
+      SiteSetting.ai_bot_allowed_groups = Group::AUTO_GROUPS[:admins].to_s
+
+      post "/discourse-ai/ai-bot/post/#{reply_post.id}/retry"
+
+      expect(response.status).to eq(403)
+    end
+
     it "streams a replacement into the existing bot reply" do
       retry_text = "second attempt"
 
@@ -158,15 +289,15 @@ RSpec.describe DiscourseAi::AiBot::BotController do
         Jobs::CreateAiReply.new.execute(
           post_id: prompt_post.id,
           bot_user_id: bot_user.id,
-          persona_id: reply_post.custom_fields[DiscourseAi::AiBot::POST_AI_PERSONA_ID_FIELD].to_i,
+          agent_id: reply_post.custom_fields[DiscourseAi::AiBot::POST_AI_AGENT_ID_FIELD].to_i,
           reply_post_id: reply_post.id,
         )
       end
 
       expect(response.status).to eq(200)
       expect(reply_post.reload.raw).to eq(retry_text)
-      expect(reply_post.custom_fields[DiscourseAi::AiBot::POST_AI_PERSONA_ID_FIELD].to_i).to eq(
-        persona.id,
+      expect(reply_post.custom_fields[DiscourseAi::AiBot::POST_AI_AGENT_ID_FIELD].to_i).to eq(
+        agent.id,
       )
     end
 
@@ -184,7 +315,7 @@ RSpec.describe DiscourseAi::AiBot::BotController do
     it "allows retrying if LLM model has a negative id (seeded)" do
       seeded_llm_model = Fabricate(:llm_model, id: -9999, user: bot_user, name: "second-model")
 
-      bot = DiscourseAi::Personas::Bot.as(bot_user, persona: persona, model: seeded_llm_model)
+      bot = DiscourseAi::Agents::Bot.as(bot_user, agent: agent, model: seeded_llm_model)
       DiscourseAi::Completions::Llm.with_prepared_responses(["first try"], llm: seeded_llm_model) do
         DiscourseAi::AiBot::Playground.new(bot).reply_to(prompt_post)
       end
@@ -209,7 +340,7 @@ RSpec.describe DiscourseAi::AiBot::BotController do
       expect(reply.reload.raw).to eq(retry_text)
     end
 
-    it "uses the original LLM model when retrying even if persona default changed" do
+    it "uses the original LLM model when retrying even if agent default changed" do
       second_bot_user = Fabricate(:user)
       second_llm_model = Fabricate(:llm_model, user: second_bot_user, name: "second-model")
 
@@ -221,8 +352,8 @@ RSpec.describe DiscourseAi::AiBot::BotController do
       expect(original_llm_name).to be_present
       expect(original_llm_id.to_i).to eq(llm_model.id)
 
-      ai_persona.update!(default_llm_id: second_llm_model.id)
-      AiPersona.persona_cache.flush!
+      ai_agent.update!(default_llm_id: second_llm_model.id)
+      AiAgent.agent_cache.flush!
 
       retry_text = "retry with original model"
 

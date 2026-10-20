@@ -2,7 +2,7 @@
 import Component from "@glimmer/component";
 import { LinkTo } from "@ember/routing";
 import { service } from "@ember/service";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import { isPresent } from "@ember/utils";
 import concatClass from "discourse/helpers/concat-class";
 import getURL from "discourse/lib/get-url";
@@ -11,11 +11,12 @@ import { i18n } from "discourse-i18n";
 
 export default class NavItem extends Component {
   @service router;
+  @service session;
 
   get contents() {
     const text = this.args.i18nLabel || i18n(this.args.label);
     if (this.args.icon) {
-      return htmlSafe(`${iconHTML(this.args.icon)} ${text}`);
+      return trustHTML(`${iconHTML(this.args.icon)} ${text}`);
     }
     return text;
   }
@@ -64,14 +65,31 @@ export default class NavItem extends Component {
           this.router.currentRoute.params.field_name === this.args.routeParam
         );
       }
+
+      return this.router.isActive(this.args.route, this.args.routeParam);
     }
 
     return this.router.isActive(this.args.route);
   }
 
+  get refreshHref() {
+    if (!this.session.requiresRefresh || !this.args.route) {
+      return null;
+    }
+    try {
+      return this.args.routeParam
+        ? getURL(this.router.urlFor(this.args.route, this.args.routeParam))
+        : getURL(this.router.urlFor(this.args.route));
+    } catch {
+      return null;
+    }
+  }
+
   <template>
     <li class={{concatClass (if this.active "active") @class}} ...attributes>
-      {{#if @routeParam}}
+      {{#if this.refreshHref}}
+        <a href={{this.refreshHref}}>{{this.contents}}</a>
+      {{else if @routeParam}}
         <LinkTo
           @route={{@route}}
           @model={{@routeParam}}

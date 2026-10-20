@@ -2,9 +2,9 @@ import { Input } from "@ember/component";
 import { concat, fn } from "@ember/helper";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
+import { trackedArray, trackedObject } from "@ember/reactive/collections";
 import { next } from "@ember/runloop";
 import { service } from "@ember/service";
-import { TrackedArray, TrackedObject } from "@ember-compat/tracked-built-ins";
 import DButton from "discourse/components/d-button";
 import DEditor from "discourse/components/d-editor";
 import { removeValueFromArray } from "discourse/lib/array-tools";
@@ -18,10 +18,6 @@ export default class PmsField extends BaseField {
   @service dialog;
 
   noPmCreatedLabel = i18n("discourse_automation.fields.pms.no_pm_created");
-
-  prefersEncryptLabel = i18n(
-    "discourse_automation.fields.pms.prefers_encrypt.label"
-  );
 
   delayLabel = i18n("discourse_automation.fields.pms.delay.label");
 
@@ -104,21 +100,6 @@ export default class PmsField extends BaseField {
             </div>
           </div>
 
-          <div class="control-group">
-            <label class="control-label">
-              {{this.prefersEncryptLabel}}
-            </label>
-
-            <div class="controls">
-              <Input
-                @type="checkbox"
-                class="pm-prefers-encrypt"
-                @checked={{pm.prefers_encrypt}}
-                {{on "click" (fn this.prefersEncrypt pm)}}
-                disabled={{@field.isDisabled}}
-              />
-            </div>
-          </div>
           <section class="actions">
             <DButton
               @icon="trash-can"
@@ -148,9 +129,9 @@ export default class PmsField extends BaseField {
 
     // a hack to prevent warnings about modifying multiple times in the same runloop
     next(() => {
-      this.args.field.metadata.value = new TrackedArray(
+      this.args.field.metadata.value = trackedArray(
         (this.args.field.metadata.value || []).map((pm) => {
-          return new TrackedObject(pm);
+          return trackedObject(pm);
         })
       );
     });
@@ -169,18 +150,12 @@ export default class PmsField extends BaseField {
   @action
   insertPM() {
     this.args.field.metadata.value.push(
-      new TrackedObject({
+      trackedObject({
         title: "",
         raw: "",
         delay: 0,
-        prefers_encrypt: true,
       })
     );
-  }
-
-  @action
-  prefersEncrypt(pm, event) {
-    pm.prefers_encrypt = event.target.checked;
   }
 
   @action

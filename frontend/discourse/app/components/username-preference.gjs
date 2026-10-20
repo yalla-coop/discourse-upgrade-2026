@@ -1,3 +1,4 @@
+/* eslint-disable ember/no-tracked-properties-from-args */
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { Input } from "@ember/component";
@@ -5,7 +6,7 @@ import { on } from "@ember/modifier";
 import { action } from "@ember/object";
 import { empty, or } from "@ember/object/computed";
 import { service } from "@ember/service";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import { isEmpty } from "@ember/utils";
 import DButton from "discourse/components/d-button";
 import DModalCancel from "discourse/components/d-modal-cancel";
@@ -156,7 +157,7 @@ export default class UsernamePreference extends Component {
 
       {{#if this.siteSettings.enable_mentions}}
         <div class="instructions">
-          {{htmlSafe
+          {{trustHTML
             (i18n "user.username.short_instructions" username=@user.username)
           }}
         </div>

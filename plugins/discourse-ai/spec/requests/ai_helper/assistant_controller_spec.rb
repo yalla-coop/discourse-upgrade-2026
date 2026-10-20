@@ -16,6 +16,27 @@ RSpec.describe DiscourseAi::AiHelper::AssistantController do
       SiteSetting.composer_ai_helper_allowed_groups = Group::AUTO_GROUPS[:trust_level_0]
     end
 
+    it "returns 403 when user cannot see the post" do
+      sign_in(user)
+
+      group = Fabricate(:group)
+      private_category = Fabricate(:private_category, group: group)
+      topic = Fabricate(:topic, category: private_category)
+      private_post = Fabricate(:post, topic: topic)
+
+      post "/discourse-ai/ai-helper/stream_suggestion.json",
+           params: {
+             text: "hello wrld",
+             location: "post",
+             client_id: "1234",
+             post_id: private_post.id,
+             custom_prompt: "Translate to Spanish",
+             mode: DiscourseAi::AiHelper::Assistant::CUSTOM_PROMPT,
+           }
+
+      expect(response.status).to eq(403)
+    end
+
     it "is able to stream suggestions to helper" do
       sign_in(user)
 
@@ -60,6 +81,68 @@ RSpec.describe DiscourseAi::AiHelper::AssistantController do
       expect(last_message.data[:done]).to eq(true)
     end
 
+    context "when mode is illustrate_post" do
+      let(:image_tool) do
+        AiTool.create!(
+          name: "Test Image Generator",
+          tool_name: "test_image_generator",
+          description: "Generates test images",
+          summary: "Test image generation",
+          parameters: [{ name: "prompt", type: "string", required: true }],
+          script: <<~JS,
+            function invoke(params) {
+              const image = upload.create("test.png", "base64data");
+              chain.setCustomRaw(`![test](${image.short_url})`);
+              return { result: "success" };
+            }
+          JS
+          created_by_id: user.id,
+          enabled: true,
+          is_image_generation_tool: true,
+        )
+      end
+
+      let(:upload) do
+        Fabricate(
+          :upload,
+          sha1: Upload.sha1_from_short_url("upload://test123"),
+          original_filename: "test.png",
+        )
+      end
+
+      let(:post_illustrator_agent) do
+        AiAgent.find_by(id: SiteSetting.ai_helper_post_illustrator_agent)
+      end
+
+      before do
+        image_tool
+        post_illustrator_agent.update_columns(system: false)
+        post_illustrator_agent.update!(tools: [["custom-#{image_tool.id}", nil, true]])
+
+        allow_any_instance_of(DiscourseAi::Agents::Bot).to receive(
+          :reply,
+        ) do |_bot, _context, &block|
+          block.call("", "![test](#{upload.short_url})", :partial_invoke)
+        end
+      end
+
+      it "suggests thumbnails" do
+        sign_in(user)
+
+        post "/discourse-ai/ai-helper/stream_suggestion.json",
+             params: {
+               text: "A beautiful sunset",
+               location: "composer",
+               mode: DiscourseAi::AiHelper::Assistant::ILLUSTRATE_POST,
+             }
+
+        expect(response.status).to eq(200)
+        expect(response.parsed_body["thumbnails"]).to be_present
+        expect(response.parsed_body["thumbnails"].length).to eq(1)
+        expect(response.parsed_body["thumbnails"].first["id"]).to eq(upload.id)
+      end
+    end
+
     it "is able to stream suggestions to composer" do
       sign_in(user)
       channel = nil
@@ -91,6 +174,99 @@ RSpec.describe DiscourseAi::AiHelper::AssistantController do
       expect(last_message.channel).to eq(channel)
       expect(last_message.data[:result]).to eq("hello world")
       expect(last_message.data[:done]).to eq(true)
+    end
+
+    context "when enforcing context-specific group permissions" do
+      fab!(:composer_group, :group)
+      fab!(:post_group, :group)
+      fab!(:composer_only_user) { Fabricate(:user, refresh_auto_groups: true) }
+      fab!(:post_only_user) { Fabricate(:user, refresh_auto_groups: true) }
+      fab!(:my_post, :post)
+
+      before do
+        SiteSetting.composer_ai_helper_allowed_groups = composer_group.id.to_s
+        SiteSetting.post_ai_helper_allowed_groups = post_group.id.to_s
+        composer_group.add(composer_only_user)
+        post_group.add(post_only_user)
+      end
+
+      it "returns 403 when a composer-only user tries to use post helper" do
+        sign_in(composer_only_user)
+
+        post "/discourse-ai/ai-helper/stream_suggestion.json",
+             params: {
+               text: "hello",
+               location: "post",
+               post_id: my_post.id,
+               mode: DiscourseAi::AiHelper::Assistant::PROOFREAD,
+               client_id: "test123",
+             }
+
+        expect(response.status).to eq(403)
+      end
+
+      it "returns 400 with a location error when location is missing" do
+        sign_in(composer_only_user)
+
+        post "/discourse-ai/ai-helper/stream_suggestion.json",
+             params: {
+               text: "hello",
+               mode: DiscourseAi::AiHelper::Assistant::PROOFREAD,
+               client_id: "test123",
+             }
+
+        expect(response.status).to eq(400)
+        expect(response.parsed_body["errors"].join).to include("location")
+      end
+
+      it "returns 403 when a post-only user tries to use composer helper" do
+        sign_in(post_only_user)
+
+        post "/discourse-ai/ai-helper/stream_suggestion.json",
+             params: {
+               text: "hello",
+               location: "composer",
+               mode: DiscourseAi::AiHelper::Assistant::PROOFREAD,
+               client_id: "test123",
+             }
+
+        expect(response.status).to eq(403)
+      end
+
+      it "allows a composer-only user to use the composer helper" do
+        sign_in(composer_only_user)
+
+        results = [["hello ", "world"]]
+        DiscourseAi::Completions::Llm.with_prepared_responses(results) do
+          post "/discourse-ai/ai-helper/stream_suggestion.json",
+               params: {
+                 text: "hello",
+                 location: "composer",
+                 mode: DiscourseAi::AiHelper::Assistant::PROOFREAD,
+                 client_id: "test123",
+               }
+
+          expect(response.status).to eq(200)
+        end
+      end
+
+      it "allows a post-only user to use the post helper" do
+        sign_in(post_only_user)
+
+        results = [["hello ", "world"]]
+        DiscourseAi::Completions::Llm.with_prepared_responses(results) do
+          post "/discourse-ai/ai-helper/stream_suggestion.json",
+               params: {
+                 text: "hello",
+                 location: "post",
+                 post_id: my_post.id,
+                 mode: DiscourseAi::AiHelper::Assistant::PROOFREAD,
+                 client_id: "test123",
+               }
+
+          expect(response.status).to eq(200)
+        end
+      end
     end
   end
 
@@ -188,7 +364,7 @@ RSpec.describe DiscourseAi::AiHelper::AssistantController do
         end
       end
 
-      it "returns error when PostIllustrator persona has no image generation tool" do
+      it "returns error when PostIllustrator agent has no image generation tool" do
         post "/discourse-ai/ai-helper/suggest",
              params: {
                mode: DiscourseAi::AiHelper::Assistant::ILLUSTRATE_POST,
@@ -198,12 +374,12 @@ RSpec.describe DiscourseAi::AiHelper::AssistantController do
 
         expect(response.status).to eq(422)
         expect(response.parsed_body["errors"].first).to include(
-          "Post Illustrator persona must have an image generation tool",
+          "Post Illustrator agent must have an image generation tool",
         )
       end
 
-      it "returns error when PostIllustrator persona is not found" do
-        SiteSetting.ai_helper_post_illustrator_persona = 99_999
+      it "returns error when PostIllustrator agent is not found" do
+        SiteSetting.ai_helper_post_illustrator_agent = 99_999
 
         post "/discourse-ai/ai-helper/suggest",
              params: {
@@ -214,11 +390,11 @@ RSpec.describe DiscourseAi::AiHelper::AssistantController do
 
         expect(response.status).to eq(404)
         expect(response.parsed_body["errors"].first).to include(
-          "Post Illustrator persona is not configured",
+          "Post Illustrator agent is not configured",
         )
       end
 
-      context "when PostIllustrator persona has image generation tool" do
+      context "when PostIllustrator agent has image generation tool" do
         let(:image_tool) do
           AiTool.create!(
             name: "Test Image Generator",
@@ -247,16 +423,16 @@ RSpec.describe DiscourseAi::AiHelper::AssistantController do
           )
         end
 
-        let(:post_illustrator_persona) do
-          AiPersona.find_by(id: SiteSetting.ai_helper_post_illustrator_persona)
+        let(:post_illustrator_agent) do
+          AiAgent.find_by(id: SiteSetting.ai_helper_post_illustrator_agent)
         end
 
         before do
           image_tool
-          post_illustrator_persona.update_columns(system: false) # Allow editing for test
-          post_illustrator_persona.update!(tools: [["custom-#{image_tool.id}", nil, true]])
+          post_illustrator_agent.update_columns(system: false) # Allow editing for test
+          post_illustrator_agent.update!(tools: [["custom-#{image_tool.id}", nil, true]])
 
-          allow_any_instance_of(DiscourseAi::Personas::Bot).to receive(
+          allow_any_instance_of(DiscourseAi::Agents::Bot).to receive(
             :reply,
           ) do |_bot, _context, &block|
             block.call("", "![test](#{upload.short_url})", :partial_invoke)
@@ -278,7 +454,7 @@ RSpec.describe DiscourseAi::AiHelper::AssistantController do
         end
 
         it "returns error when image generation fails" do
-          allow_any_instance_of(DiscourseAi::Personas::Bot).to receive(:reply).and_return(nil)
+          allow_any_instance_of(DiscourseAi::Agents::Bot).to receive(:reply).and_return(nil)
 
           post "/discourse-ai/ai-helper/suggest",
                params: {

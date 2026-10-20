@@ -15,7 +15,7 @@ class ThemeField < ActiveRecord::Base
            dependent: :destroy,
            autosave: true
   has_one :upload_reference, as: :target, dependent: :destroy
-  has_one :theme_settings_migration
+  has_one :theme_settings_migration, dependent: :destroy
 
   validates :value, { length: { maximum: 1024**2 } }
 
@@ -127,91 +127,7 @@ class ThemeField < ActiveRecord::Base
     errors = []
     errors << I18n.t("themes.errors.optimized_link") if contains_optimized_link?(html)
 
-    js_tree = {}
-    js_errors = []
-    deprecated_template_names = []
-
     doc = Nokogiri::HTML5.fragment(html)
-
-    doc
-      .css('script[type="text/x-handlebars"]')
-      .each do |node|
-        name = node["name"] || node["data-template-name"] || "broken"
-        is_raw = name =~ /\.(raw|hbr)\z/
-        hbs_template = node.inner_html
-
-        if is_raw
-          js_errors.push(
-            "[THEME #{theme.id}] [discourse/templates/#{name}] Raw templates are no longer supported",
-          )
-        else
-          js_tree["discourse/templates/#{name.delete_prefix("/")}.hbs"] = hbs_template
-          deprecated_template_names << name
-        end
-
-        node.remove
-      end
-
-    if deprecated_template_names.present? || js_errors.present?
-      js = <<~JS
-        import deprecated from "discourse/lib/deprecated";
-
-        export default {
-          initialize(){
-            const names = #{deprecated_template_names.to_json};
-            names.forEach((name) => {
-              deprecated(
-                `[${name}] adding templates to a theme using <script type='text/x-handlebars'> is deprecated. Move to dedicated .hbs or .gjs files.`,
-                {
-                  id: "discourse.script-tag-hbs",
-                  url: "https://meta.discourse.org/t/366482",
-                }
-              )
-            });
-            const errors = #{js_errors.to_json};
-            errors.forEach((error) => console.error(error));
-          }
-        }
-      JS
-      js_tree["discourse/initializers/script-tag-hbs-deprecations.js"] = js
-    end
-
-    doc
-      .css('script[type="text/discourse-plugin"]')
-      .each_with_index do |node, index|
-        version = node["version"]
-        next if version.blank?
-
-        initializer_name =
-          "theme-field" + "-#{self.id}" + "-#{Theme.targets[self.target_id]}" +
-            "-#{ThemeField.types[self.type_id]}" + "-script-#{index + 1}"
-
-        js = <<~JS
-          import { withPluginApi } from "discourse/lib/plugin-api";
-          import deprecated from "discourse/lib/deprecated";
-
-          export default {
-            name: #{initializer_name.inspect},
-            after: "inject-objects",
-
-            initialize() {
-              deprecated(
-                "Adding JS code using <script type='text/discourse-plugin'> is deprecated. Move this code to a dedicated JavaScript file.",
-                {
-                  id: "discourse.script-tag-discourse-plugin",
-                  url: "https://meta.discourse.org/t/366482",
-                }
-              )
-              withPluginApi(#{version.inspect}, (api) => {
-                #{node.inner_html}
-              });
-            }
-          };
-        JS
-
-        js_tree["discourse/initializers/#{initializer_name}.js"] = js
-        node.remove
-      end
 
     unused_raw_caches = Set.new raw_javascript_caches.to_a
 
@@ -250,40 +166,21 @@ class ThemeField < ActiveRecord::Base
 
     unused_raw_caches.each(&:destroy!)
 
-    if js_tree.present?
-      js_compiler =
-        ThemeJavascriptCompiler.new(theme_id, self.theme.name, theme.build_settings_hash)
-      js_compiler.append_tree(js_tree)
-
-      javascript_cache || build_javascript_cache
-      javascript_cache.content = js_compiler.content
-      javascript_cache.source_map = js_compiler.source_map
-      javascript_cache.save!
-
-      doc.add_child(<<~HTML.html_safe)
-        <link rel="modulepreload" href="#{javascript_cache.url}" data-theme-id="#{theme_id}" nonce="#{CSP_NONCE_PLACEHOLDER}" />
-      HTML
-    else
-      javascript_cache&.destroy!
-    end
-
     [doc.to_s, errors&.join("\n")]
   end
 
   def validate_svg_sprite_xml
-    upload =
-      begin
-        Upload.find(self.upload_id)
-      rescue StandardError
-        nil
-      end
+    upload = Upload.find_by(id: self.upload_id)
+
+    return "Error with #{self.name}: No upload found for the provided upload_id" if upload.nil?
 
     if Discourse.store.external?
-      external_copy = Discourse.store.download_safe(upload)
-      path = external_copy&.path
+      path = Discourse.store.download(upload)
     else
       path = Discourse.store.path_for(upload)
     end
+
+    return "Error with #{self.name}: Could not download icon sprite" if path.nil?
 
     error = nil
 
@@ -297,6 +194,7 @@ class ThemeField < ActiveRecord::Base
     rescue => e
       error = "Error with #{self.name}: #{e.inspect}"
     end
+
     error
   end
 
@@ -341,15 +239,9 @@ class ThemeField < ActiveRecord::Base
 
     js = <<~JS
       /* Translation data for theme #{self.theme_id} (#{self.name})*/
-      const data = #{data.to_json};
-
-      for (let lang in data){
-        let cursor = I18n.translations;
-        for (let key of [lang, "js", "theme_translations"]){
-          cursor = cursor[key] ??= {};
-        }
-        cursor[#{self.theme_id}] = data[lang];
-      }
+      const localeData = window._discourse_locale_data ??= {};
+      localeData.theme ??= {};
+      localeData.theme[#{self.theme_id}] = #{data.to_json};
     JS
 
     javascript_cache.content = js

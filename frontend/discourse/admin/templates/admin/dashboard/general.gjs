@@ -1,5 +1,5 @@
 import { LinkTo } from "@ember/routing";
-import { htmlSafe } from "@ember/template";
+import { trustHTML } from "@ember/template";
 import AdminReport from "discourse/admin/components/admin-report";
 import DashboardPeriodSelector from "discourse/admin/components/dashboard-period-selector";
 import ConditionalLoadingSection from "discourse/components/conditional-loading-section";
@@ -31,7 +31,6 @@ export default <template>
               @startDate={{@controller.startDate}}
               @endDate={{@controller.endDate}}
               @setCustomDateRange={{@controller.setCustomDateRange}}
-              @onDateChange={{@controller.onDateChange}}
             />
           </div>
 
@@ -205,7 +204,7 @@ export default <template>
             @isEnabled={{@controller.logSearchQueriesEnabled}}
             @disabledLabel={{@controller.trendingSearchDisabledLabel}}
           />
-          {{htmlSafe
+          {{trustHTML
             (i18n
               "admin.dashboard.reports.trending_search.more" basePath=(basePath)
             )
