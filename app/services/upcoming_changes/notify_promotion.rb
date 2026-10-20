@@ -26,17 +26,21 @@ class UpcomingChanges::NotifyPromotion
   end
 
   policy :setting_is_available
+  policy :change_should_be_displayed
   policy :meets_or_exceeds_status
   policy :change_has_not_already_been_notified_about_promotion
   policy :admin_has_not_manually_toggled
   policy :should_notify_admins
 
   try do
-    step :log_promotion
-    model :existing_notifications, optional: true
-    model :bulk_notification_new_records
-    step :notify_admins
-    step :create_event
+    transaction do
+      step :log_promotion
+      model :existing_notifications, optional: true
+      model :bulk_notification_new_records
+      step :notify_admins
+      step :create_event
+    end
+
     step :trigger_discourse_event
   end
 
@@ -44,6 +48,10 @@ class UpcomingChanges::NotifyPromotion
 
   def setting_is_available(params:)
     SiteSetting.respond_to?(params.setting_name)
+  end
+
+  def change_should_be_displayed(params:)
+    UpcomingChanges::ConditionalDisplay.should_display?(params.setting_name)
   end
 
   def meets_or_exceeds_status(params:)
@@ -58,7 +66,7 @@ class UpcomingChanges::NotifyPromotion
   end
 
   def admin_has_not_manually_toggled(params:)
-    !SiteSetting.modified.key?(params.setting_name)
+    !SiteSetting.setting_modified_from_default?(params.setting_name)
   end
 
   def should_notify_admins(params:)
@@ -97,7 +105,7 @@ class UpcomingChanges::NotifyPromotion
         notification_type: Notification.types[:upcoming_change_automatically_promoted],
         data:
           UpcomingChanges::Action::NotificationDataMerger.call(
-            existing_notification: existing_by_user[admin_id],
+            existing_notification_data: existing_by_user[admin_id]&.data,
             new_change_name: params.setting_name,
           ).to_json,
       }

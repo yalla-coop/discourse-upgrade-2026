@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 RSpec.describe Group do
-  let(:admin) { Fabricate(:admin) }
-  let(:user) { Fabricate(:user) }
-  let(:group) { Fabricate(:group) }
+  fab!(:admin)
+  fab!(:user)
+  fab!(:group)
 
   it_behaves_like "it has custom fields"
 
@@ -296,7 +296,7 @@ RSpec.describe Group do
       ).to contain_exactly(10, 11, 12, 13)
     end
 
-    it "excludes the undefined groups between staff and TL0" do
+    it "excludes the undefined and pseudo groups between staff and TL0" do
       expect(described_class.auto_groups_between(:admins, :trust_level_0)).to contain_exactly(
         1,
         2,
@@ -311,6 +311,16 @@ RSpec.describe Group do
 
     it "returns an empty array when passing an unknown group" do
       expect(described_class.auto_groups_between(:trust_level_0, :trust_level_1337)).to be_empty
+    end
+
+    it "excludes pseudogroups that encompass large sets of users" do
+      expect(described_class.auto_groups_between(:admins, :trust_level_1)).to contain_exactly(
+        1,
+        2,
+        3,
+        10,
+        11,
+      )
     end
   end
 
@@ -408,6 +418,18 @@ RSpec.describe Group do
       expect(g.visibility_level).to eq(Group.visibility_levels[:staff])
     end
 
+    it "makes sure the anonymous_users and logged_in_users pseudogroups are hidden and have no members" do
+      anon = Group.refresh_automatic_group!(:anonymous_users)
+      expect(anon.id).to eq(Group::AUTO_GROUPS[:anonymous_users])
+      expect(anon.visibility_level).to eq(Group.visibility_levels[:staff])
+      expect(GroupUser.where(group_id: anon.id).count).to eq(0)
+
+      logged_in = Group.refresh_automatic_group!(:logged_in_users)
+      expect(logged_in.id).to eq(Group::AUTO_GROUPS[:logged_in_users])
+      expect(logged_in.visibility_level).to eq(Group.visibility_levels[:staff])
+      expect(GroupUser.where(group_id: logged_in.id).count).to eq(0)
+    end
+
     it "makes sure automatic groups are visible to logged on users" do
       g = Group.refresh_automatic_group!(:moderators)
       expect(g.visibility_level).to eq(Group.visibility_levels[:logged_on_users])
@@ -425,33 +447,29 @@ RSpec.describe Group do
     end
 
     it "does not reset the localized name" do
-      begin
-        I18n.locale = SiteSetting.default_locale = "fi"
+      I18n.locale = SiteSetting.default_locale = "fi"
 
-        group = Group.find(Group::AUTO_GROUPS[:everyone])
-        group.update!(name: I18n.t("groups.default_names.everyone"))
+      group = Group.find(Group::AUTO_GROUPS[:everyone])
+      group.update!(name: I18n.t("groups.default_names.everyone"))
 
-        Group.refresh_automatic_group!(:everyone)
+      Group.refresh_automatic_group!(:everyone)
 
-        expect(group.reload.name).to eq(I18n.t("groups.default_names.everyone"))
+      expect(group.reload.name).to eq(I18n.t("groups.default_names.everyone"))
 
-        I18n.locale = SiteSetting.default_locale = "en"
+      I18n.locale = SiteSetting.default_locale = "en"
 
-        Group.refresh_automatic_group!(:everyone)
+      Group.refresh_automatic_group!(:everyone)
 
-        expect(group.reload.name).to eq(I18n.t("groups.default_names.everyone"))
-      end
+      expect(group.reload.name).to eq(I18n.t("groups.default_names.everyone"))
     end
 
     it "uses the localized name if name has not been taken" do
-      begin
-        I18n.locale = SiteSetting.default_locale = "de"
+      I18n.locale = SiteSetting.default_locale = "de"
 
-        group = Group.refresh_automatic_group!(:staff)
+      group = Group.refresh_automatic_group!(:staff)
 
-        expect(group.name).to_not eq("staff")
-        expect(group.name).to eq(I18n.t("groups.default_names.staff"))
-      end
+      expect(group.name).to_not eq("staff")
+      expect(group.name).to eq(I18n.t("groups.default_names.staff"))
     end
 
     it "does not use the localized name if name has already been taken when switching to a the english locale" do
@@ -543,20 +561,20 @@ RSpec.describe Group do
   end
 
   it "Can update moderator/staff/admin groups correctly" do
-    admin = Fabricate(:admin)
+    other_admin = Fabricate(:admin)
     moderator = Fabricate(:moderator)
 
     Group.refresh_automatic_groups!(:admins, :staff, :moderators)
 
-    expect(Group[:admins].human_users).to contain_exactly(admin)
+    expect(Group[:admins].human_users).to contain_exactly(admin, other_admin)
     expect(Group[:moderators].human_users).to contain_exactly(moderator)
-    expect(Group[:staff].human_users).to contain_exactly(moderator, admin)
+    expect(Group[:staff].human_users).to contain_exactly(moderator, admin, other_admin)
 
-    admin.admin = false
-    admin.save
+    other_admin.admin = false
+    other_admin.save
 
     Group.refresh_automatic_group!(:admins)
-    expect(Group[:admins].human_users).to be_empty
+    expect(Group[:admins].human_users).to contain_exactly(admin)
 
     moderator.revoke_moderation!
 
@@ -610,9 +628,9 @@ RSpec.describe Group do
   end
 
   it "Correctly updates all automatic groups upon request" do
-    admin = Fabricate(:admin)
-    user = Fabricate(:user)
-    user.change_trust_level!(TrustLevel[2])
+    other_admin = Fabricate(:admin)
+    other_user = Fabricate(:user)
+    other_user.change_trust_level!(TrustLevel[2])
 
     DB.exec("UPDATE groups SET user_count = 0 WHERE id = #{Group::AUTO_GROUPS[:trust_level_2]}")
 
@@ -623,19 +641,19 @@ RSpec.describe Group do
 
     g = Group[:admins]
     expect(g.human_users.count).to eq(g.user_count)
-    expect(g.human_users).to contain_exactly(admin)
+    expect(g.human_users).to contain_exactly(admin, other_admin)
 
     g = Group[:admins]
     expect(g.human_users.count).to eq(g.user_count)
-    expect(g.human_users).to contain_exactly(admin)
+    expect(g.human_users).to contain_exactly(admin, other_admin)
 
     g = Group[:trust_level_1]
     expect(g.human_users.count).to eq(g.user_count)
-    expect(g.human_users).to contain_exactly(admin, user)
+    expect(g.human_users).to contain_exactly(admin, other_admin, user, other_user)
 
     g = Group[:trust_level_2]
     expect(g.human_users.count).to eq(g.user_count)
-    expect(g.human_users).to contain_exactly(admin, user)
+    expect(g.human_users).to contain_exactly(admin, other_admin, other_user)
   end
 
   it "can set members via usernames helper" do
@@ -930,6 +948,39 @@ RSpec.describe Group do
 
       expect(
         Group.visible_groups(admin, [], {}).where(id: Group::AUTO_GROUPS[:everyone]).exists?,
+      ).to eq(false)
+    end
+
+    it "includes logged_in_users, anonymous_users and everyone groups when include_pseudogroups is true" do
+      expect(
+        Group
+          .visible_groups(admin, [], include_pseudogroups: true)
+          .where(id: Group::AUTO_GROUPS[:everyone])
+          .exists?,
+      ).to eq(true)
+      expect(
+        Group
+          .visible_groups(admin, [], include_pseudogroups: true)
+          .where(id: Group::AUTO_GROUPS[:anonymous_users])
+          .exists?,
+      ).to eq(true)
+      expect(
+        Group
+          .visible_groups(admin, [], include_pseudogroups: true)
+          .where(id: Group::AUTO_GROUPS[:logged_in_users])
+          .exists?,
+      ).to eq(true)
+    end
+
+    it "does not include logged_in_users, anonymous_users and everyone groups by default" do
+      expect(
+        Group.visible_groups(admin, []).where(id: Group::AUTO_GROUPS[:everyone]).exists?,
+      ).to eq(false)
+      expect(
+        Group.visible_groups(admin, []).where(id: Group::AUTO_GROUPS[:anonymous_users]).exists?,
+      ).to eq(false)
+      expect(
+        Group.visible_groups(admin, []).where(id: Group::AUTO_GROUPS[:logged_in_users]).exists?,
       ).to eq(false)
     end
 
@@ -1341,13 +1392,14 @@ RSpec.describe Group do
     it "enqueues bulk_grant_trust_level job when group grants trust level" do
       group.update!(grant_trust_level: 2)
 
-      expect_enqueued_with(
-        job: :bulk_grant_trust_level,
-        args: {
-          trust_level: 2,
-          user_ids: [user.id, admin.id],
-        },
-      ) { group.bulk_add([user.id, admin.id]) }
+      expect { group.bulk_add([user.id, admin.id]) }.to change(
+        Jobs::BulkGrantTrustLevel.jobs,
+        :size,
+      ).by(1)
+
+      job_args = Jobs::BulkGrantTrustLevel.jobs.last["args"].first
+      expect(job_args["trust_level"]).to eq(2)
+      expect(job_args["user_ids"]).to contain_exactly(user.id, admin.id)
     end
 
     it "does not enqueue trust level job when grant_trust_level is nil" do
@@ -1840,6 +1892,14 @@ RSpec.describe Group do
       expect(Group.find_by_email("abc@test.com")).to eq(group)
       expect(Group.find_by_email("somealias@test.com")).to eq(group)
       expect(Group.find_by_email("nope@test.com")).to eq(nil)
+    end
+  end
+
+  context "when a group is deleted" do
+    it "enqueues a job to update the associated access_control_list records" do
+      expect_enqueued_with(job: :cleanup_acls_for_deleted, args: { group_id: group.id }) do
+        group.destroy!
+      end
     end
   end
 end

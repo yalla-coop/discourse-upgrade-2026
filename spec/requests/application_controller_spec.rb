@@ -3,6 +3,31 @@
 RSpec.describe ApplicationController do
   fab!(:user)
 
+  describe "shared session key" do
+    before { SiteSetting.long_polling_base_url = "https://mb.example.com/" }
+
+    it "renders the meta tag for a logged-in user" do
+      sign_in(user)
+
+      get "/latest"
+
+      expect(response.body).to match(/<meta name="shared_session_key" content="[^"]+">/)
+    end
+
+    it "authenticates a login-required route via the header" do
+      SiteSetting.login_required = true
+      token = UserAuthToken.generate!(user_id: user.id)
+      key = SecureRandom.hex
+      Auth::DefaultCurrentUserProvider.store_shared_session_key(key, token.id.to_s)
+
+      get "/latest.json"
+      expect(response.status).to eq(403)
+
+      get "/latest.json", headers: { "HTTP_X_SHARED_SESSION_KEY" => key }
+      expect(response.status).to eq(200)
+    end
+  end
+
   context "for cache control headers" do
     it "sets the `no-cache, no-store` cache control response header when no error is raised" do
       get "/latest"
@@ -88,6 +113,7 @@ RSpec.describe ApplicationController do
 
     it "should redirect to SSO if enabled" do
       SiteSetting.discourse_connect_url = "http://someurl.com"
+      SiteSetting.discourse_connect_secret = "x" * 10
       SiteSetting.enable_discourse_connect = true
       get "/"
       expect(response).to redirect_to("/session/sso")
@@ -115,6 +141,7 @@ RSpec.describe ApplicationController do
     it "should not redirect to SSO when auth_immediately is disabled" do
       SiteSetting.auth_immediately = false
       SiteSetting.discourse_connect_url = "http://someurl.com"
+      SiteSetting.discourse_connect_secret = "x" * 10
       SiteSetting.enable_discourse_connect = true
 
       get "/"
@@ -760,20 +787,18 @@ RSpec.describe ApplicationController do
   describe "splash_screen" do
     let(:admin) { Fabricate(:admin) }
 
-    before { admin }
+    before do
+      admin
+      allow_any_instance_of(ApplicationController).to receive(:include_splash_screen?).and_return(
+        true,
+      )
+    end
 
-    it "adds a preloader splash screen when enabled" do
+    it "adds a preloader splash screen" do
       get "/"
 
       expect(response.status).to eq(200)
       expect(response.body).to include("d-splash")
-
-      SiteSetting.splash_screen = false
-
-      get "/"
-
-      expect(response.status).to eq(200)
-      expect(response.body).not_to include("d-splash")
     end
 
     context "with color schemes" do
@@ -1108,6 +1133,47 @@ RSpec.describe ApplicationController do
       nonce = script_src.lazy.map { |src| src[/\A'nonce-([^']+)'\z/, 1] }.find(&:itself)
       expect(nonce).to be_present
       nonce
+    end
+  end
+
+  describe "browser pageview tracking session id" do
+    it "doesn't reuse session ids between requests served from the anon cache" do
+      global_setting :anon_cache_store_threshold, 1
+      Middleware::AnonymousCache.enable_anon_cache
+      Middleware::AnonymousCache.clear_all_cache!
+
+      SiteSetting.trigger_browser_pageview_events = true
+
+      get "/latest"
+
+      expect(response.headers["X-Discourse-Cached"]).to eq("store")
+      expect(response.headers).not_to include(
+        Middleware::TrackViewSessionIdInjector::PLACEHOLDER_HEADER,
+      )
+
+      session_id_format = /\A[A-Za-z0-9]{#{Middleware::RequestTracker::MAX_SESSION_ID_LENGTH}}\z/
+
+      first_session_id = extract_session_id_from_body(response.body)
+      expect(first_session_id).to match(session_id_format)
+
+      get "/latest"
+
+      expect(response.headers["X-Discourse-Cached"]).to eq("true")
+      expect(response.headers).not_to include(
+        Middleware::TrackViewSessionIdInjector::PLACEHOLDER_HEADER,
+      )
+
+      second_session_id = extract_session_id_from_body(response.body)
+      expect(second_session_id).to match(session_id_format)
+
+      expect(first_session_id).not_to eq(second_session_id)
+    end
+
+    def extract_session_id_from_body(body)
+      meta_tag =
+        Nokogiri::HTML5.fragment(body).css("meta[name='discourse-track-view-session-id']").first
+      expect(meta_tag).to be_present
+      meta_tag["content"]
     end
   end
 
@@ -1889,10 +1955,27 @@ RSpec.describe ApplicationController do
 
   describe "color definition stylesheets" do
     let!(:dark_scheme) { ColorScheme.find_by(base_scheme_id: ColorScheme::NAMES_TO_ID_MAP["Dark"]) }
+    let!(:light_scheme) do
+      ColorScheme.find_by(base_scheme_id: ColorScheme::NAMES_TO_ID_MAP["Solarized Light"])
+    end
 
     before do
       Theme.find_default.update!(dark_color_scheme_id: dark_scheme.id)
       SiteSetting.interface_color_selector = "sidebar_footer"
+    end
+
+    context "when scheme cookies contain HTML" do
+      it "does not add injected links to the page" do
+        injected_link =
+          '<link rel="modulepreload" data-plugin-name="poc" href="https://example.com/xss.js">'
+        cookies[:color_scheme_id] = %(#{light_scheme.id}">#{injected_link})
+        cookies[:dark_scheme_id] = %(#{dark_scheme.id}">#{injected_link})
+
+        get "/"
+
+        injected_links = css_select('link[rel="modulepreload"][data-plugin-name="poc"]')
+        expect(injected_links).to be_empty
+      end
     end
 
     context "with early hints" do

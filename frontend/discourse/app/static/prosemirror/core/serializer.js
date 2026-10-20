@@ -11,6 +11,10 @@ export default class Serializer {
     this.nodes.hard_break = (state) =>
       state.write(state.inTable ? "<br>" : "\n");
 
+    this.nodes.text = (state, node) => {
+      state.text(node.text, !state.inAutolink);
+    };
+
     this.marks = includeDefault ? { ...defaultMarkdownSerializer.marks } : {};
 
     this.#extractNodeSerializers(extensions, pluginParams);

@@ -16,6 +16,13 @@ class Admin::GroupsController < Admin::StaffController
     ) do |result|
       on_success { |group:| render_serialized(group, BasicGroupSerializer) }
       on_failed_policy(:can_create_group) { |policy| raise Discourse::InvalidAccess }
+      on_failed_policy(:can_request_access) do
+        render json:
+                 failed_json.merge(
+                   errors: [I18n.t("groups.errors.cant_allow_membership_requests")],
+                 ),
+               status: :unprocessable_entity
+      end
       on_failure { render(json: failed_json, status: :unprocessable_entity) }
     end
   end
@@ -69,6 +76,7 @@ class Admin::GroupsController < Admin::StaffController
   end
 
   def automatic_membership_count
+    guardian.ensure_can_create_group!
     domains = Group.get_valid_email_domains(params.require(:automatic_membership_email_domains))
     group_id = params[:id]
     user_count = 0

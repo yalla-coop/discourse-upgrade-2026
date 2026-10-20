@@ -12,8 +12,9 @@ class DiscourseSolved::BuildSchemaMarkup
   model :topic
   policy :accepted_answers_allowed
   policy :schema_markup_enabled
-  model :accepted_answer, optional: true
+  model :accepted_answers, optional: true
   model :suggested_answers, optional: true
+  policy :has_answers
   model :html
 
   private
@@ -30,24 +31,36 @@ class DiscourseSolved::BuildSchemaMarkup
     DiscourseSolved::SchemaUtils.schema_markup_enabled?(topic)
   end
 
-  def fetch_accepted_answer(topic:)
-    topic.solved&.answer_post
+  def has_answers(accepted_answers:, suggested_answers:)
+    accepted_answers.present? || suggested_answers.present?
   end
 
-  def fetch_suggested_answers(params:, topic:, accepted_answer:)
-    excluded_ids = [topic.first_post.id]
-    excluded_ids << accepted_answer.id if accepted_answer.present?
+  def fetch_accepted_answers(topic:, guardian:)
+    topic.topic_answers.filter_map do |ta|
+      post = ta.post
+      next unless post.present? && guardian.can_see_post?(post)
+      post if DiscourseSolved::SchemaUtils.eligible_answer?(post)
+    end
+  end
+
+  def fetch_suggested_answers(params:, topic:, accepted_answers:)
+    excluded_ids = [topic.first_post.id] + Array(accepted_answers).map(&:id)
     scope = topic.posts.where.not(id: excluded_ids)
     scope = scope.where(id: params.post_ids) if params.post_ids.present?
-    scope.where(post_type: Post.types[:regular], hidden: false).order(:post_number).to_a
+    scope
+      .where(post_type: Post.types[:regular], hidden: false)
+      .order(:post_number)
+      .to_a
+      .select { |post| DiscourseSolved::SchemaUtils.eligible_answer?(post) }
   end
 
-  def fetch_html(topic:, accepted_answer:, suggested_answers:)
+  def fetch_html(topic:, guardian:, accepted_answers:, suggested_answers:)
     question_json =
       DiscourseSolved::QuestionSchemaSerializer.new(
         topic,
         root: false,
-        accepted_answer: accepted_answer,
+        scope: guardian,
+        accepted_answers: accepted_answers,
         suggested_answers: suggested_answers,
       ).serializable_hash
 
@@ -57,6 +70,7 @@ class DiscourseSolved::BuildSchemaMarkup
           "@context" => "http://schema.org",
           "@type" => "QAPage",
           "name" => topic.title,
+          "datePublished" => topic.created_at,
           "mainEntity" => question_json,
         )
         .gsub("</", "<\\/")

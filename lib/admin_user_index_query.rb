@@ -1,13 +1,20 @@
 # frozen_string_literal: true
 
 class AdminUserIndexQuery
-  def initialize(params = {}, klass = User, trust_levels = TrustLevel.levels)
-    @params = params
+  def initialize(
+    params = {},
+    klass = User,
+    trust_levels = TrustLevel.levels,
+    guardian: nil,
+    **kwargs
+  )
+    @params = params.merge(kwargs)
     @query = initialize_query_with_order(klass)
     @trust_levels = trust_levels
+    @guardian = guardian
   end
 
-  attr_reader :params, :trust_levels
+  attr_reader :params, :trust_levels, :guardian
 
   SORTABLE_MAPPING = {
     "created" => "created_at",
@@ -22,7 +29,10 @@ class AdminUserIndexQuery
     "posts" => "user_stats.post_count",
     "read_time" => "user_stats.time_read",
     "silence_reason" => "silence_reason",
+    "suspend_reason" => "suspend_reason",
   }
+
+  SAME_IP_ADDRESS_COLUMNS = { "last" => :ip_address, "registration" => :registration_ip_address }
 
   def find_users(limit = 100)
     page = params[:page].to_i - 1
@@ -39,8 +49,7 @@ class AdminUserIndexQuery
 
     custom_order = params[:order]
     custom_direction = params[:asc].present? ? "ASC" : "DESC"
-    if custom_order.present? &&
-         without_dir = SORTABLE_MAPPING[custom_order.downcase.sub(/ (asc|desc)\z/, "")]
+    if custom_order.present? && without_dir = SORTABLE_MAPPING[normalized_order]
       order << "#{without_dir} #{custom_direction} NULLS LAST"
     end
 
@@ -67,6 +76,15 @@ class AdminUserIndexQuery
     levels = trust_levels.map { |key, _| key.to_s }
     if levels.include?(params[:query])
       @query.where("trust_level = ?", trust_levels[params[:query].to_sym])
+    end
+  end
+
+  def filter_by_activation
+    case params[:activation]
+    when "activated"
+      @query.activated
+    when "not_activated"
+      @query.not_activated
     end
   end
 
@@ -97,12 +115,10 @@ class AdminUserIndexQuery
     filter = params[:filter]
     if filter.present?
       filter = filter.strip
-      if ip =
-           begin
-             IPAddr.new(filter)
-           rescue StandardError
-             nil
-           end
+      if ip = parse_ip(filter)
+        return if params[:same_ip_user_id].present?
+        return @query.none unless can_see_ip?
+
         @query.where("ip_address <<= :ip OR registration_ip_address <<= :ip", ip: ip.to_cidr_s)
       else
         @query.filter_by_username_or_email(filter)
@@ -112,8 +128,30 @@ class AdminUserIndexQuery
 
   def filter_by_ip
     if params[:ip].present?
+      return if params[:same_ip_user_id].present?
+      return @query.none unless can_see_ip?
+
       @query.where("ip_address = :ip OR registration_ip_address = :ip", ip: params[:ip].strip)
     end
+  end
+
+  def filter_by_same_ip_user
+    if params[:same_ip_user_id].present?
+      if same_ip_address.present?
+        @query.where("ip_address = :ip OR registration_ip_address = :ip", ip: same_ip_address.to_s)
+      else
+        @query.none
+      end
+    end
+  end
+
+  def same_ip_target_user
+    return @same_ip_target_user if defined?(@same_ip_target_user)
+    @same_ip_target_user = User.find_by(id: params[:same_ip_user_id])
+  end
+
+  def same_ip_address
+    @same_ip_address ||= same_ip_target_user&.public_send(same_ip_address_column)
   end
 
   def filter_exclude
@@ -124,27 +162,67 @@ class AdminUserIndexQuery
     @query = active_relation if active_relation
   end
 
-  def with_silence_reason
-    @query.joins(
-      "LEFT JOIN LATERAL (
-        SELECT user_histories.details silence_reason
+  def same_ip_address_column
+    SAME_IP_ADDRESS_COLUMNS.fetch(params[:ip_type].presence, :ip_address)
+  end
+
+  def parse_ip(filter)
+    IPAddr.new(filter)
+  rescue StandardError
+    nil
+  end
+
+  def can_see_ip?
+    guardian&.can_see_ip?
+  end
+
+  def with_penalty_reason(action, till_column, name)
+    @query.joins(<<~SQL)
+      LEFT JOIN LATERAL (
+        SELECT user_histories.details #{name}
         FROM user_histories
         WHERE user_histories.target_user_id = users.id
-        AND user_histories.action = #{UserHistory.actions[:silence_user]}
-        AND users.silenced_till IS NOT NULL
-        ORDER BY user_histories.created_at DESC
+          AND user_histories.action = #{UserHistory.actions[action]}
+          AND users.#{till_column} IS NOT NULL
+        ORDER BY user_histories.id DESC
         LIMIT 1
-      ) user_histories ON true",
-    )
+      ) #{name}s ON true
+    SQL
+  end
+
+  def penalty_reasons(users, action)
+    return {} if users.empty?
+
+    UserHistory
+      .where(action: UserHistory.actions[action], target_user_id: users.map(&:id))
+      .order(:target_user_id, id: :desc)
+      .select(Arel.sql("DISTINCT ON (target_user_id) target_user_id, details"))
+      .each_with_object({}) { |record, hash| hash[record.target_user_id] = record.details }
+  end
+
+  def normalized_order
+    params[:order]&.downcase&.sub(/ (asc|desc)\z/, "")
+  end
+
+  def sorting_by?(column)
+    normalized_order == column
   end
 
   def find_users_query
     append filter_by_trust
     append filter_by_query_classification
+    append filter_by_activation
     append filter_by_ip
+    append filter_by_same_ip_user
     append filter_exclude
     append filter_by_search
-    append with_silence_reason
+
+    if sorting_by?("silence_reason")
+      append with_penalty_reason(:silence_user, :silenced_till, "silence_reason")
+    elsif sorting_by?("suspend_reason")
+      append with_penalty_reason(:suspend_user, :suspended_till, "suspend_reason")
+    end
+
     @query
   end
 end

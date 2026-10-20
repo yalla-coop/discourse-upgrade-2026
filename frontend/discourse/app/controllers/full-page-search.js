@@ -1,7 +1,8 @@
 /* eslint-disable ember/no-observers */
+import { tracked } from "@glimmer/tracking";
 import Controller, { inject as controller } from "@ember/controller";
 import { action, computed } from "@ember/object";
-import { gt, or } from "@ember/object/computed";
+import { dependentKeyCompat } from "@ember/object/compat";
 import { service } from "@ember/service";
 import { isEmpty } from "@ember/utils";
 import { observes } from "@ember-decorators/object";
@@ -19,6 +20,7 @@ import {
   logSearchLinkClick,
   reciprocallyRankedList,
   searchContextDescription,
+  searchTermScopesToPMs,
   translateResults,
   updateRecentSearches,
 } from "discourse/lib/search";
@@ -47,14 +49,21 @@ export function registerFullPageSearchType(
 
 export default class FullPageSearchController extends Controller {
   @service composer;
+
   @service appEvents;
+
   @service siteSettings;
+
   @service searchPreferencesManager;
+
   @service currentUser;
+
   @controller application;
 
+  @tracked searching = false;
+  @tracked loading = false;
+
   bulkSelectEnabled = null;
-  loading = false;
 
   queryParams = [
     "q",
@@ -69,7 +78,6 @@ export default class FullPageSearchController extends Controller {
   context_id = null;
   search_type = SEARCH_TYPE_DEFAULT;
   context = null;
-  searching = false;
   sortOrder = 0;
   sortOrders = null;
   invalidSearch = false;
@@ -78,8 +86,6 @@ export default class FullPageSearchController extends Controller {
   searchTypes = null;
   additionalSearchResults = [];
   error = null;
-  @gt("bulkSelectHelper.selected.length", 0) hasSelection;
-  @or("searching", "loading") searchButtonDisabled;
   _searchOnSortChange = true;
 
   init() {
@@ -138,6 +144,16 @@ export default class FullPageSearchController extends Controller {
     }
 
     this.bulkSelectHelper = new PostBulkSelectHelper(this);
+  }
+
+  @computed("bulkSelectHelper.selected.length")
+  get hasSelection() {
+    return this.bulkSelectHelper?.selected?.length > 0;
+  }
+
+  @dependentKeyCompat
+  get searchButtonDisabled() {
+    return this.searching || this.loading;
   }
 
   @computed("resultCount")
@@ -290,11 +306,7 @@ export default class FullPageSearchController extends Controller {
 
   @computed("q")
   get isPMOnly() {
-    // Check if search is filtered to private messages only
-    return (
-      this.q &&
-      /\bin:(personal|messages|personal-direct|all-pms)\b/i.test(this.q)
-    );
+    return searchTermScopesToPMs(this.q);
   }
 
   @computed("resultCount", "noSortQ")

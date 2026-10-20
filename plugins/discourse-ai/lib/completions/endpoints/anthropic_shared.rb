@@ -4,6 +4,8 @@ module DiscourseAi
   module Completions
     module Endpoints
       module AnthropicShared
+        EFFORT_VALUES = %w[low medium high xhigh max].freeze
+
         def normalize_model_params(model_params)
           model_params = model_params.dup
 
@@ -52,6 +54,10 @@ module DiscourseAi
 
         def decode(response_data)
           processor.process_message(response_data)
+        end
+
+        def decode_chunk_finish
+          processor.finish
         end
 
         def claude_processor

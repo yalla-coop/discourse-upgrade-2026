@@ -144,6 +144,16 @@ RSpec.describe DiscourseAi::Completions::Endpoints::AwsBedrockConverse do
       options = endpoint.default_options(dialect)
       expect(options[:output_config]).to eq({ effort: "high" })
     end
+
+    it "configures xhigh effort" do
+      model.provider_params["effort"] = "xhigh"
+
+      prompt = DiscourseAi::Completions::Prompt.new("hello")
+      dialect = DiscourseAi::Completions::Dialects::Converse.new(prompt, model)
+
+      options = endpoint.default_options(dialect)
+      expect(options[:output_config]).to eq({ effort: "xhigh" })
+    end
   end
 
   describe "non-streaming completion" do
@@ -169,6 +179,33 @@ RSpec.describe DiscourseAi::Completions::Endpoints::AwsBedrockConverse do
       expect(client).to have_received(:converse) do |params|
         expect(params[:model_id]).to eq("claude-3-sonnet")
         expect(params[:system]).to be_present
+      end
+    end
+
+    it "logs a placeholder when image bytes are binary" do
+      model.update!(vision_enabled: true)
+      raw_bytes = "\x89PNG\r\n\x1a\nbinary".b
+      response = mock_converse_response
+      client = stub_sdk_client(response: response)
+      prompt =
+        DiscourseAi::Completions::Prompt.new(
+          nil,
+          messages: [{ type: :user, content: ["Describe: ", { upload_id: 456 }] }],
+        )
+
+      allow(DiscourseAi::Completions::UploadEncoder).to receive(:encode).and_return(
+        [{ kind: :image, mime_type: "image/png", base64: Base64.strict_encode64(raw_bytes) }],
+      )
+
+      llm = DiscourseAi::Completions::Llm.proxy("custom:#{model.id}")
+      result = llm.generate(prompt, user: user)
+
+      expect(result).to eq("Hello world")
+      expect(AiApiAuditLog.last.raw_request_payload).to eq(
+        "[converse params contained binary payload, omitted from log]",
+      )
+      expect(client).to have_received(:converse) do |params|
+        expect(params.dig(:messages, 0, :content, 1, :image, :source, :bytes)).to eq(raw_bytes)
       end
     end
   end
@@ -275,6 +312,23 @@ RSpec.describe DiscourseAi::Completions::Endpoints::AwsBedrockConverse do
       expect { llm.generate("hello", user: user) }.to raise_error(
         DiscourseAi::Completions::Endpoints::Base::CompletionFailed,
       )
+      expect(AiApiAuditLog.last.response_status).to be_nil
+    end
+    it "records SDK error response status when available" do
+      client = instance_double(Aws::BedrockRuntime::Client)
+      context = Seahorse::Client::RequestContext.new
+      context.http_response.status_code = 429
+      allow(client).to receive(:converse).and_raise(
+        Aws::BedrockRuntime::Errors::ThrottlingException.new(context, "Rate exceeded"),
+      )
+      allow(Aws::BedrockRuntime::Client).to receive(:new).and_return(client)
+
+      llm = DiscourseAi::Completions::Llm.proxy("custom:#{model.id}")
+
+      expect { llm.generate("hello", user: user) }.to raise_error(
+        DiscourseAi::Completions::Endpoints::Base::CompletionFailed,
+      )
+      expect(AiApiAuditLog.last.response_status).to eq(429)
     end
   end
 end

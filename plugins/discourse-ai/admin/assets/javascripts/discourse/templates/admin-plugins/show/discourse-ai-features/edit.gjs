@@ -2,9 +2,8 @@ import { concat } from "@ember/helper";
 import AdminConfigAreaCard from "discourse/admin/components/admin-config-area-card";
 import BackButton from "discourse/components/back-button";
 import Form from "discourse/components/form";
-import { eq } from "discourse/truth-helpers";
+import SettingDefinitionField from "discourse/components/setting-definition-field";
 import { i18n } from "discourse-i18n";
-import AiFeatureSettingField from "discourse/plugins/discourse-ai/discourse/components/ai-feature-setting-field";
 
 export default <template>
   <BackButton
@@ -26,47 +25,32 @@ export default <template>
               class="ai-feature-editor"
               as |form|
             >
-              {{#each @model.settingGroups as |group|}}
-                <form.Section @title={{i18n group.titleKey}}>
-                  {{#each group.settings as |settingName|}}
-                    {{#let (@controller.findSetting settingName) as |setting|}}
-                      {{#if setting}}
-                        <form.Field
-                          @name={{setting.setting}}
-                          @title={{setting.humanized_name}}
-                          @description={{if
-                            (eq setting.type "bool")
-                            null
-                            setting.description
-                          }}
-                          @format="large"
-                          @validation={{@controller.getValidationFor setting}}
-                          @type={{if
-                            (eq setting.type "bool")
-                            "checkbox"
-                            (if
-                              (eq setting.type "integer")
-                              "input-number"
-                              (if
-                                (eq setting.type "enum")
-                                "select"
-                                (if (eq setting.type "list") "custom" "input")
-                              )
-                            )
-                          }}
-                          as |field|
-                        >
-                          <AiFeatureSettingField
-                            @Control={{field.Control}}
-                            @setting={{setting}}
-                            @field={{field}}
+              {{#if @model.settingGroups.length}}
+                {{#each @model.settingGroups as |group|}}
+                  <form.Section @title={{i18n group.titleKey}}>
+                    {{#each group.settings as |settingName|}}
+                      {{#let
+                        (@controller.findSetting settingName)
+                        as |setting|
+                      }}
+                        {{#if setting}}
+                          <SettingDefinitionField
+                            @definition={{setting.definition}}
+                            @form={{form}}
                           />
-                        </form.Field>
-                      {{/if}}
-                    {{/let}}
-                  {{/each}}
-                </form.Section>
-              {{/each}}
+                        {{/if}}
+                      {{/let}}
+                    {{/each}}
+                  </form.Section>
+                {{/each}}
+              {{else}}
+                {{#each @model.feature_settings as |setting|}}
+                  <SettingDefinitionField
+                    @definition={{setting.definition}}
+                    @form={{form}}
+                  />
+                {{/each}}
+              {{/if}}
               <form.Actions>
                 <form.Submit />
               </form.Actions>

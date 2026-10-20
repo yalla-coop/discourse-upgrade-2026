@@ -494,6 +494,7 @@ export default class Category extends RestModel {
   init() {
     super.init(...arguments);
     this.setupGroupsAndPermissions();
+    this.setupCategoryTypes();
   }
 
   setupCategoryTypes() {
@@ -835,6 +836,8 @@ export default class Category extends RestModel {
         ),
         search_priority: this.search_priority,
         moderating_group_ids: this.moderating_group_ids,
+        topic_posting_review_group_ids: this.topic_posting_review_group_ids,
+        reply_posting_review_group_ids: this.reply_posting_review_group_ids,
         read_only_banner: this.read_only_banner,
         default_list_filter: this.default_list_filter,
         style_type: this.style_type,
@@ -846,6 +849,7 @@ export default class Category extends RestModel {
         }),
         ...this._categoryTypeSaveProperties(id),
         ...this._pluginSaveProperties(),
+        category_types: this.category_types,
       }),
       type: id ? "PUT" : "POST",
     });
@@ -854,10 +858,14 @@ export default class Category extends RestModel {
   _categoryTypeSaveProperties(id) {
     const props = {
       category_type_site_settings: this.category_type_site_settings,
+      category_type_settings: this.category_type_settings,
     };
 
     if (!id && this.categoryTypes) {
-      props.category_type = Object.keys(this.categoryTypes)[0];
+      const primaryType = Object.keys(this.categoryTypes)[0];
+      if (this.category_types?.includes(primaryType)) {
+        props.category_type = primaryType;
+      }
     }
 
     return props;

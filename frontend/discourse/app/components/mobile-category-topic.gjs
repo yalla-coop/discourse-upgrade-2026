@@ -1,27 +1,24 @@
-/* eslint-disable ember/no-classic-components, ember/no-jquery, ember/require-tagless-components */
+/* eslint-disable ember/no-classic-components, ember/require-tagless-components */
 import Component from "@ember/component";
 import { classNameBindings, tagName } from "@ember-decorators/component";
-import $ from "jquery";
 import PostCountOrBadges from "discourse/components/topic-list/post-count-or-badges";
 import TopicStatus from "discourse/components/topic-status";
-import ageWithTooltip from "discourse/helpers/age-with-tooltip";
 import coldAgeClass from "discourse/helpers/cold-age-class";
-import topicLink from "discourse/helpers/topic-link";
+import domUtils from "discourse/lib/dom-utils";
+import dAgeWithTooltip from "discourse/ui-kit/helpers/d-age-with-tooltip";
+import dTopicLink from "discourse/ui-kit/helpers/d-topic-link";
 
 export function showEntrance(e) {
-  let target = $(e.target);
+  let target = e.target;
 
-  if (target.hasClass("posts-map") || target.parents(".posts-map").length > 0) {
-    if (target.prop("tagName") !== "A") {
-      target = target.find("a");
-      if (target.length === 0) {
-        target = target.end();
-      }
+  if (target.closest(".posts-map")) {
+    if (target.tagName !== "A") {
+      target = target.querySelector("a") || target;
     }
 
     this.appEvents.trigger("topic-entrance:show", {
       topic: this.topic,
-      position: target.offset(),
+      position: domUtils.offset(target),
     });
     return false;
   }
@@ -36,11 +33,11 @@ export default class MobileCategoryTopic extends Component {
     <td class="main-link">
       <div class="topic-inset">
         <TopicStatus @topic={{this.topic}} @disableActions={{true}} />
-        {{topicLink this.topic}}
+        {{dTopicLink this.topic}}
         {{#if this.topic.unseen}}
           <span class="badge-notification new-topic"></span>
         {{/if}}
-        <span class={{coldAgeClass this.topic.last_posted_at}}>{{ageWithTooltip
+        <span class={{coldAgeClass this.topic.last_posted_at}}>{{dAgeWithTooltip
             this.topic.last_posted_at
           }}</span>
       </div>

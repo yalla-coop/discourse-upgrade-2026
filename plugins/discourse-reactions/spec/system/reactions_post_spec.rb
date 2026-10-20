@@ -18,6 +18,25 @@ describe "Reactions | Post reactions" do
     sign_in(current_user)
   end
 
+  context "when topic is archived" do
+    fab!(:unliked_post) { Fabricate(:post, topic:) }
+
+    before { topic.update!(archived: true) }
+
+    it "does not allow reacting to a post with no likes" do
+      visit unliked_post.url
+
+      selector = "#post_#{unliked_post.post_number}"
+
+      expect(page).to have_no_css("#{selector} .discourse-reactions-actions.can-toggle-reaction")
+
+      find("#{selector} .discourse-reactions-reaction-button").click
+
+      expect(page).to have_no_css(".dialog-body")
+      expect(DiscourseReactions::ReactionUser.where(user: current_user).count).to eq(0)
+    end
+  end
+
   context "when user has reacted but like_count is 0 and undo window passed" do
     fab!(:reaction) { Fabricate(:reaction, post: post_2) }
     fab!(:reaction_user) { Fabricate(:reaction_user, reaction:, user: current_user, post: post_2) }
@@ -87,6 +106,29 @@ describe "Reactions | Post reactions" do
       reactions_button.open_emoji_picker
       reactions_button.filter_emoji_picker("middle_finger")
       expect(reactions_button).to have_no_emoji_picker_emoji("middle_finger")
+    end
+  end
+
+  context "when clicking a reaction whose value contains a URL-reserved character" do
+    fab!(:other_user, :user)
+    let(:popup) { PageObjects::Components::PostReactionsPopup.new }
+
+    before do
+      DiscourseReactions::ReactionManager.new(
+        reaction_value: "+1",
+        user: other_user,
+        post: post_2,
+      ).toggle!
+    end
+
+    it "loads the reaction users in the popup" do
+      visit post_2.url
+      expect(reactions_list).to have_reaction("+1")
+
+      reactions_list.click_reaction("+1")
+
+      expect(popup).to be_open
+      expect(popup).to have_user(other_user.username)
     end
   end
 end

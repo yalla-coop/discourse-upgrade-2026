@@ -52,6 +52,10 @@ body.has-full-page-chat {
   &:has(.is-expanded) {
     z-index: calc(z("composer", "dropdown") + 1);
   }
+
+  &.above-composer {
+    padding-bottom: 0;
+  }
 }
 
 // the below are elements whose z-index needs to be adjusted due to the above change
@@ -61,7 +65,8 @@ body.has-full-page-chat {
   }
 }
 
-.fk-d-menu[data-identifier="usercard"] {
+.fk-d-menu[data-identifier="usercard"],
+.fk-d-menu[data-identifier="chat-message-reaction-users"] {
   .has-drawer-chat & {
     z-index: z("modal", "dialog");
   }

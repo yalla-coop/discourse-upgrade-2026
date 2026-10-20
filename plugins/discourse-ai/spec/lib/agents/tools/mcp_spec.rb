@@ -108,7 +108,7 @@ RSpec.describe DiscourseAi::Agents::Tools::Mcp do
     expect(schema[:properties][:combined][:required]).to eq(["b"])
 
     expect(schema[:required]).to eq(%w[places])
-    expect(schema).not_to have_key(:"$defs")
+    expect(schema).not_to have_key(:$defs)
   end
 
   it "uses a short title in thinking summaries and renders the invocation parameters in details" do
@@ -152,5 +152,28 @@ RSpec.describe DiscourseAi::Agents::Tools::Mcp do
     expect(first.invoke).to eq({ result: "Found results" })
     expect(second.invoke).to eq({ result: "Found results" })
     expect(context.mcp_session_for(ai_mcp_server.id)).to eq("session-1")
+  end
+
+  it "returns tool execution errors as text the model can inspect" do
+    context = DiscourseAi::Agents::BotContext.new(messages: [])
+    DiscourseAi::Mcp::Client
+      .any_instance
+      .stubs(:initialize_session)
+      .returns({ session_id: "session-1", result: {} })
+    DiscourseAi::Mcp::Client
+      .any_instance
+      .stubs(:call_tool)
+      .returns(
+        {
+          "content" => [{ "type" => "text", "text" => "Not found: Project google.com:chops-prod" }],
+          "isError" => true,
+        },
+      )
+
+    tool = tool_class.new({ query: "bug" }, bot_user: user, llm: nil, context: context)
+
+    expect(tool.invoke).to eq(
+      { status: "error", error: "Not found: Project google.com:chops-prod" },
+    )
   end
 end

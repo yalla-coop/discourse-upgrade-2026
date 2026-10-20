@@ -6,8 +6,10 @@ import didUpdate from "@ember/render-modifiers/modifiers/did-update";
 import { service } from "@ember/service";
 import { trustHTML } from "@ember/template";
 import { modifier as modifierFn } from "ember-modifier";
+import { iconHTML } from "discourse/lib/icon-library";
 import loadFullCalendar from "discourse/lib/load-full-calendar";
 import DiscourseURL from "discourse/lib/url";
+import { i18n } from "discourse-i18n";
 import DiscoursePostEvent from "discourse/plugins/discourse-calendar/discourse/components/discourse-post-event";
 import {
   getCalendarButtonsText,
@@ -20,7 +22,8 @@ const PostEventMenu = <template>
     @linkToPost={{true}}
     @event={{@data.event}}
     @onClose={{@data.onClose}}
-    @withDescription={{false}}
+    @withDescription={{true}}
+    @clampDescription={{true}}
   />
 </template>;
 
@@ -82,6 +85,7 @@ export default class FullCalendar extends Component {
       weekends: this.args.weekends ?? true,
       initialDate: this.args.initialDate,
       height: this.args.height ?? "100%",
+      selectable: true,
       events: async (info, successCallback, failureCallback) => {
         if (this.args.onLoadEvents) {
           try {
@@ -98,6 +102,7 @@ export default class FullCalendar extends Component {
         calendarModule.DayGrid,
         calendarModule.TimeGrid,
         calendarModule.List,
+        calendarModule.Interaction,
         calendarModule.MomentPlugin,
         calendarModule.MomentTimezonePlugin,
       ],
@@ -107,6 +112,16 @@ export default class FullCalendar extends Component {
       eventWillUnmount: async () => {
         await this.activeMenu?.close?.();
         await this.activeTooltip?.close?.();
+      },
+      eventDidMount: ({ el, event }) => {
+        const { postEvent } = event.extendedProps;
+        if (postEvent?.recurrence) {
+          el.classList.add("fc-recurring-event");
+          const titleEl = el.querySelector(".fc-event-title");
+          if (titleEl) {
+            titleEl.insertAdjacentHTML("afterbegin", iconHTML("arrows-rotate"));
+          }
+        }
       },
       datesSet: (info) => {
         this.args.onDatesChange?.(info);
@@ -158,6 +173,11 @@ export default class FullCalendar extends Component {
         } else if (postNumber) {
           this.topic.send("jumpToPost", postNumber);
         }
+      },
+      allDayContent: () =>
+        i18n("discourse_post_event.upcoming_events_list.all_day"),
+      select: async (info) => {
+        await this.args.onDateClick?.(info);
       },
     });
 

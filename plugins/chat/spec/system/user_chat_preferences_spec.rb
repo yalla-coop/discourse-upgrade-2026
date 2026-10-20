@@ -61,14 +61,15 @@ RSpec.describe "User chat preferences" do
     fab!(:category_channel_1, :category_channel)
     fab!(:message_1) { Fabricate(:chat_message, chat_channel: category_channel_1) }
 
-    xit "sees expected quick-reactions on hover" do
-      sign_in(current_user)
+    before { category_channel_1.add(current_user) }
 
+    it "sees expected quick-reactions on hover" do
       # save custom and look for reaction
       user_preferences_chat_page.visit
       form.field("chat_quick_reaction_type").select("custom")
       form.submit
-      user_preferences_chat_page.visit
+      expect(page).to have_css(".save-controls .saved")
+
       chat.visit_channel(category_channel_1)
       channel.hover_message(message_1)
 
@@ -78,7 +79,8 @@ RSpec.describe "User chat preferences" do
       user_preferences_chat_page.visit
       form.field("chat_quick_reaction_type").select("frequent")
       form.submit
-      user_preferences_chat_page.visit
+      expect(page).to have_css(".save-controls .saved")
+
       chat.visit_channel(category_channel_1)
       channel.hover_message(message_1)
 
@@ -100,7 +102,7 @@ RSpec.describe "User chat preferences" do
   describe "chat sound" do
     include_examples "select and save" do
       let(:field_name) { "chat_sound" }
-      let(:val) { "bell" }
+      let(:val) { "classic" }
     end
   end
 

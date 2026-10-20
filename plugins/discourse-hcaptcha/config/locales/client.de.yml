@@ -6,10 +6,11 @@
 
 de:
   js:
-    discourse_hCaptcha:
-      missing_token: "Bitte schließe die hCaptcha-Aufgabe ab."
+    discourse_captcha:
+      missing_token: "Bitte schließe die Captcha-Aufgabe ab."
+      verification_failed: "Captcha-Verifizierung fehlgeschlagen. Bitte versuche es erneut."
       placeholder: Platzhalter
-      contact_system_administrator: "Es ist ein Problem mit hCaptcha aufgetreten. Falls dieses Problem weiterhin besteht, kontaktiere bitte einen Systemadministrator"
+      contact_system_administrator: "Es ist ein Problem mit deinem Captcha-Anbieter aufgetreten. Falls dieses Problem weiterhin besteht, kontaktiere bitte einen Systemadministrator"
   admin_js:
     admin:
       site_settings:

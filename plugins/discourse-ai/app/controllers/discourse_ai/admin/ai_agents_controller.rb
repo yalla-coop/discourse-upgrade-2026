@@ -15,9 +15,10 @@ module DiscourseAi
             .map { |agent| LocalizedAiAgentSerializer.new(agent, root: false) }
 
         tools =
-          DiscourseAi::Agents::Agent.all_available_tools.map do |tool|
-            AiToolSerializer.new(tool, root: false)
-          end
+          (
+            DiscourseAi::Agents::Agent.all_available_tools +
+              DiscourseAi::Agents::Agent.external_tools
+          ).map { |tool| AiToolSerializer.new(tool, root: false) }
 
         AiTool
           .where(enabled: true)
@@ -34,6 +35,15 @@ module DiscourseAi
                 DiscourseAi::Tokenizer::OpenAiCl100kTokenizer.size(tool.signature.to_json),
             }
           end
+
+        DiscourseAi::Completions::NativeTools.all.each do |native_tool|
+          tools << {
+            id: "#{DiscourseAi::Completions::NativeTools::PREFIX}#{native_tool.id}",
+            name: native_tool.name,
+            help: native_tool.help,
+            native: true,
+          }
+        end
 
         llms = DiscourseAi::Configuration::LlmEnumerator.values_for_serialization
         mcp_servers =
@@ -71,6 +81,7 @@ module DiscourseAi
         ai_agent = AiAgent.new(params.except(:rag_uploads))
 
         if ai_agent.save
+          ensure_ai_agent_user(ai_agent)
           if mcp_server_ids
             sync_mcp_server_assignments(ai_agent, mcp_server_ids, mcp_server_tool_names)
           end
@@ -95,6 +106,7 @@ module DiscourseAi
         initial_attributes = @ai_agent.attributes.dup
 
         if @ai_agent.update(params.except(:rag_uploads))
+          ensure_ai_agent_user(@ai_agent)
           if mcp_server_ids
             sync_mcp_server_assignments(@ai_agent, mcp_server_ids, mcp_server_tool_names)
           end
@@ -424,6 +436,17 @@ module DiscourseAi
 
       def attached_upload_ids
         ai_agent_params[:rag_uploads].to_a.map { |h| h[:id] }
+      end
+
+      def ensure_ai_agent_user(agent)
+        return if agent.system? || agent.user_id.present? || !agent_needs_user?(agent)
+
+        agent.create_user!
+      end
+
+      def agent_needs_user?(agent)
+        agent.force_default_llm? || agent.allow_topic_mentions? ||
+          agent.allow_chat_direct_messages? || agent.allow_chat_channel_mentions?
       end
 
       def ai_agent_params

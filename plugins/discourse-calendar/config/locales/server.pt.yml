@@ -13,6 +13,13 @@ pt:
     triggerables:
       event_started:
         title: Evento iniciado
+  discourse_calendar:
+    category_type:
+      default_calendar_view:
+        day: "Dia"
+        week: "Semana"
+        month: "Mês"
+        year: "Ano"
   discourse_post_event:
     errors:
       bulk_invite:

@@ -20,7 +20,7 @@ gem "propshaft"
 gem "json"
 
 # this will eventually be added to rails,
-# allows us to precompile all our templates in the unicorn master
+# allows us to precompile all our templates in the app server master
 gem "actionview_precompiler", require: false
 
 gem "discourse-seed-fu"
@@ -63,6 +63,7 @@ gem "fastimage"
 
 gem "aws-sdk-s3", require: false
 gem "aws-sdk-sns", require: false
+gem "aws-sdk-sts", require: false
 gem "aws-sdk-mediaconvert", require: false
 gem "aws-sdk-bedrockruntime", require: false
 gem "excon"
@@ -73,6 +74,7 @@ gem "email_reply_trimmer"
 gem "image_optim"
 gem "multi_json"
 gem "mustache"
+gem "liquid", "5.12.0"
 gem "nokogiri"
 gem "loofah"
 gem "css_parser", require: false
@@ -105,7 +107,7 @@ gem "mini_racer"
 
 gem "highline", require: false
 
-# When unicorn is not used anymore, we can use Rack 3
+# TODO: upgrade to Rack 3 now that Unicorn has been removed
 gem "rack", "< 3"
 
 gem "rack-protection" # security
@@ -194,8 +196,11 @@ gem "htmlentities", require: false
 
 gem "rack-mini-profiler", require: ["enable_rails_patches"]
 
-gem "unicorn", require: false, platform: :ruby
 gem "pitchfork", require: false
+
+# Used by discourse-prometheus to collect socket queue stats.
+# Was previously a transitive dependency of the unicorn gem.
+gem "raindrops", require: false, platform: :ruby
 
 gem "rbtrace", require: false, platform: :mri
 
@@ -221,8 +226,9 @@ gem "rotp", require: false
 
 gem "rqrcode"
 
-# can't upgrade to 3.x due to d-token-gate
-gem "rubyzip", "~> 2.0", require: false
+gem "rubyzip", require: false
+
+gem "landlock", require: false
 
 gem "sshkey", require: false
 
@@ -272,19 +278,10 @@ gem "iso8601"
 gem "rrule"
 
 group :migrations, optional: true do
-  gem "extralite-bundle", require: "extralite"
-
-  # auto-loading
-  gem "zeitwerk"
-
-  # databases
-  gem "trilogy"
-
-  # CLI
-  gem "ruby-progressbar"
-
-  # non-cryptographic hashing algorithm for generating placeholder IDs
-  gem "digest-xxhash"
+  gem "migrations-core", path: "migrations/core"
+  gem "migrations-tooling", path: "migrations/tooling"
+  gem "migrations-converters", path: "migrations/converters"
+  gem "migrations-importer", path: "migrations/importer"
 end
 
 gem "dry-initializer", "~> 3.1"
@@ -301,7 +298,7 @@ gem "zendesk_api", require: false
 # for discourse-subscriptions
 gem "stripe", require: false
 
-# for discourse-github
+# for discourse-code-review
 gem "sawyer", require: false
 gem "octokit", require: false
 

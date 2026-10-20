@@ -1,12 +1,13 @@
 import { tracked } from "@glimmer/tracking";
 import Controller from "@ember/controller";
 import { action, computed } from "@ember/object";
+import { dependentKeyCompat } from "@ember/object/compat";
 import { trackedArray } from "@ember/reactive/collections";
 import { service } from "@ember/service";
 import BulkUserDeleteConfirmation from "discourse/admin/components/bulk-user-delete-confirmation";
+import BulkUserSuspendConfirmation from "discourse/admin/components/bulk-user-suspend-confirmation";
 import AdminUser from "discourse/admin/models/admin-user";
 import CanCheckEmailsHelper from "discourse/lib/can-check-emails-helper";
-import { computedI18n, setting } from "discourse/lib/computed";
 import discourseDebounce from "discourse/lib/debounce";
 import { bind } from "discourse/lib/decorators";
 import { INPUT_DELAY } from "discourse/lib/environment";
@@ -20,23 +21,30 @@ export default class AdminUsersListShowController extends Controller {
 
   @tracked bulkSelect = false;
   @tracked displayBulkActions = false;
-  @tracked bulkSelectedUserIdsSet = new Set();
   @tracked bulkSelectedUsersMap = {};
-  @setting("moderators_view_emails") canModeratorsViewEmails;
 
   query = null;
   order = null;
   asc = null;
+  activation = null;
   showEmails = false;
   refreshing = false;
   listFilter = null;
   lastSelected = null;
 
-  @computedI18n("search_hint") searchHint;
-
   _page = 1;
   _results = trackedArray();
   _canLoadMore = true;
+
+  @computed("siteSettings.moderators_view_emails")
+  get canModeratorsViewEmails() {
+    return this.siteSettings.moderators_view_emails;
+  }
+
+  @dependentKeyCompat
+  get searchHint() {
+    return i18n(`search_hint`);
+  }
 
   get users() {
     return this._results.flat();
@@ -85,6 +93,16 @@ export default class AdminUsersListShowController extends Controller {
     return this.query === "silenced";
   }
 
+  @computed("query")
+  get showSuspendReason() {
+    return this.query === "suspended";
+  }
+
+  @computed("query")
+  get showActivationFilter() {
+    return this.query === "new";
+  }
+
   resetFilters() {
     this._page = 1;
     this._results.length = 0;
@@ -93,6 +111,9 @@ export default class AdminUsersListShowController extends Controller {
   }
 
   stripHtml(html) {
+    if (!html) {
+      return "";
+    }
     const doc = new DOMParser().parseFromString(html, "text/html");
     return doc.body.textContent || "";
   }
@@ -110,6 +131,7 @@ export default class AdminUsersListShowController extends Controller {
       show_emails: this.showEmails,
       order: this.order,
       asc: this.asc,
+      activation: this.activation,
       page,
     })
       .then((result) => {
@@ -153,18 +175,45 @@ export default class AdminUsersListShowController extends Controller {
   }
 
   @action
+  updateActivation(value) {
+    this.set("activation", value);
+  }
+
+  @action
   toggleBulkSelect() {
     this.bulkSelect = !this.bulkSelect;
     this.displayBulkActions = false;
     this.bulkSelectedUsersMap = {};
-    this.bulkSelectedUserIdsSet = new Set();
+  }
+
+  @action
+  bulkSelectAll() {
+    const unchecked = [
+      ...document.querySelectorAll(
+        "input.directory-table__cell-bulk-select:not(:checked)"
+      ),
+    ];
+    const remaining = MAX_BULK_SELECT_LIMIT - this.bulkSelectedUsers.length;
+    unchecked.slice(0, remaining).forEach((input) => input.click());
+
+    if (unchecked.length > remaining) {
+      this.#showBulkSelectionLimitToast();
+    }
+  }
+
+  @action
+  bulkClearAll() {
+    document
+      .querySelectorAll("input.directory-table__cell-bulk-select:checked")
+      .forEach((input) => input.click());
   }
 
   @action
   bulkSelectItemToggle(userId, event) {
     if (event.target.checked) {
       if (!this.#canBulkSelectMoreUsers(1)) {
-        this.#showBulkSelectionLimitToast(event);
+        event.preventDefault();
+        this.#showBulkSelectionLimitToast();
         return;
       }
 
@@ -181,7 +230,8 @@ export default class AdminUsersListShowController extends Controller {
           const end = Math.max(lastSelectedIndex, newSelectedIndex);
 
           if (!this.#canBulkSelectMoreUsers(end - start)) {
-            this.#showBulkSelectionLimitToast(event);
+            event.preventDefault();
+            this.#showBulkSelectionLimitToast();
             return;
           }
 
@@ -194,41 +244,70 @@ export default class AdminUsersListShowController extends Controller {
       this.#addUserToBulkSelection(userId);
       this.lastSelected = event.target;
     } else {
-      this.bulkSelectedUserIdsSet.delete(userId);
       delete this.bulkSelectedUsersMap[userId];
     }
 
-    this.displayBulkActions = this.bulkSelectedUserIdsSet.size > 0;
+    this.displayBulkActions = this.bulkSelectedUsers.length > 0;
+  }
+
+  get bulkSelectedUsers() {
+    return Object.values(this.bulkSelectedUsersMap);
   }
 
   @bind
-  async afterBulkDelete() {
+  async afterBulkAction() {
     await this.resetFilters();
     this.bulkSelectedUsersMap = {};
-    this.bulkSelectedUserIdsSet = new Set();
     this.displayBulkActions = false;
+  }
+
+  #openBulkActionConfirmation({ canBeActioned, emptyMessageKey, modal }) {
+    const userIds = this.bulkSelectedUsers
+      .filter(canBeActioned)
+      .map((user) => user.id);
+
+    if (userIds.length === 0) {
+      this.toasts.error({
+        duration: "short",
+        data: { message: i18n(emptyMessageKey) },
+      });
+      return;
+    }
+
+    this.modal.show(modal, {
+      model: { userIds, afterBulkAction: this.afterBulkAction },
+    });
   }
 
   @action
   openBulkDeleteConfirmation() {
-    this.modal.show(BulkUserDeleteConfirmation, {
-      model: {
-        userIds: Array.from(this.bulkSelectedUserIdsSet),
-        afterBulkDelete: this.afterBulkDelete,
-      },
+    this.#openBulkActionConfirmation({
+      canBeActioned: (user) => user.can_be_deleted,
+      emptyMessageKey: "admin.users.bulk_actions.no_users_can_be_deleted",
+      modal: BulkUserDeleteConfirmation,
+    });
+  }
+
+  @action
+  openBulkSuspendConfirmation() {
+    this.#openBulkActionConfirmation({
+      canBeActioned: (user) => user.can_be_suspended,
+      emptyMessageKey: "admin.users.bulk_actions.no_users_can_be_suspended",
+      modal: BulkUserSuspendConfirmation,
     });
   }
 
   #addUserToBulkSelection(userId) {
-    this.bulkSelectedUserIdsSet.add(userId);
-    this.bulkSelectedUsersMap[userId] = 1;
+    this.bulkSelectedUsersMap[userId] = this.users.find(
+      (user) => user.id === userId
+    );
   }
 
   #canBulkSelectMoreUsers(count) {
-    return this.bulkSelectedUserIdsSet.size + count <= MAX_BULK_SELECT_LIMIT;
+    return this.bulkSelectedUsers.length + count <= MAX_BULK_SELECT_LIMIT;
   }
 
-  #showBulkSelectionLimitToast(event) {
+  #showBulkSelectionLimitToast() {
     this.toasts.error({
       duration: "short",
       data: {
@@ -237,6 +316,5 @@ export default class AdminUsersListShowController extends Controller {
         }),
       },
     });
-    event.preventDefault();
   }
 }

@@ -91,8 +91,7 @@ pt:
           name: "Robô"
           description: "Um robô de conversação pode responder a perguntas e assistir os utilizadores nas mensagens pessoais, fórum e na conversação"
         nav:
-          configured: "Configurada"
-          unconfigured: "Não configurada"
+          enabled: "Ativado"
         filters:
           all: "Todos"
           reset: "Repor"
@@ -145,6 +144,9 @@ pt:
           bar_done:
             one: "%{count} mensagem"
             other: "%{count} mensagens"
+        theme_translations:
+          translate:
+            label: "Traduzir"
       spam:
         short_title: "Spam"
         title: "Configurar manipulação do lixo eletrónico"
@@ -246,7 +248,7 @@ pt:
           ai_summarization: "Resumir"
           ai_spam: "Spam"
         model_description:
-          anthropic-claude-opus-4-6: "O modelo mais inteligente da Anthropic"
+          anthropic-claude-opus-4-7: "O modelo mais inteligente da Anthropic"
         next:
           title: "Próximo"
         tests:
@@ -292,6 +294,7 @@ pt:
           today: "Hoje"
           last_7_days: "Últimos 7 Dias"
           last_30_days: "Últimos 30 Dias"
+          scroll_to_bottom: "Rolar até o final"
       sentiments:
         sentiment_analysis:
           filter_types:

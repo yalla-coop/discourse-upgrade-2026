@@ -152,6 +152,8 @@ lt:
             access_control: "Prieigos kontrolė"
             ui_settings: "Vartotojo sąsajos nustatymai"
             integrations: "Integracijos"
+        nav:
+          enabled: "Galimas"
         filters:
           all: "Visi"
           reset: "Atstatyti"
@@ -169,6 +171,9 @@ lt:
             model_settings: "Modelio nustatymai"
             related_topics: "Susijusios temos"
             semantic_search: "Semantinė paieška"
+        admin_dashboard:
+          setting_groups:
+            settings: "Pagrindiniai nustatymai"
         discord:
           setting_groups:
             settings: "Pagrindiniai nustatymai"
@@ -238,6 +243,9 @@ lt:
             few: "%{count} pranešimai"
             many: "%{count} pranešimų"
             other: "%{count} pranešimų"
+        theme_translations:
+          translate:
+            label: "Versti"
       spam:
         short_title: "Šlamštas"
         title: "Šlamšto tvarkymo konfigūravimas"
@@ -410,6 +418,7 @@ lt:
           today: "Šandien"
           last_7_days: "Paskutinės 7 dienos"
           last_30_days: "Paskutinės 30 dienų"
+          editing_post: "Redaguojamas įrašas"
       sentiments:
         sentiment_analysis:
           filter_types:

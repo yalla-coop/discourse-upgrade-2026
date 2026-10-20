@@ -53,6 +53,8 @@ class SiteSerializer < ApplicationSerializer
     :full_name_visible_in_signup,
     :admin_config_login_routes,
     :email_configured,
+    :upcoming_changes_with_css,
+    :access_control,
   )
 
   has_many :archetypes, embed: :objects, serializer: ArchetypeSerializer
@@ -130,6 +132,7 @@ class SiteSerializer < ApplicationSerializer
         .select(
           :id,
           :name,
+          :full_name,
           :flair_icon,
           :flair_upload_id,
           :flair_bg_color,
@@ -140,6 +143,7 @@ class SiteSerializer < ApplicationSerializer
           {
             id: g.id,
             name: g.name,
+            full_name: g.full_name.presence || g.name,
             flair_url: g.flair_url,
             flair_bg_color: g.flair_bg_color,
             flair_color: g.flair_color,
@@ -164,7 +168,7 @@ class SiteSerializer < ApplicationSerializer
             flags,
             each_serializer: FlagSerializer,
             target: :post_action,
-            used_flag_ids: self.used_flag_ids(flags.map(&:id)),
+            used_flag_ids: used_flag_ids(flags.map(&:id)),
           ).as_json
         end
       end
@@ -190,7 +194,7 @@ class SiteSerializer < ApplicationSerializer
             flags,
             each_serializer: FlagSerializer,
             target: :topic_flag,
-            used_flag_ids: self.used_flag_ids(flags.map(&:id)),
+            used_flag_ids: used_flag_ids(flags.map(&:id)),
           ).as_json
         end
       end
@@ -354,11 +358,10 @@ class SiteSerializer < ApplicationSerializer
   def anonymous_default_navigation_menu_tags
     @anonymous_default_navigation_menu_tags ||=
       begin
-        tag_names =
-          SiteSetting.default_navigation_menu_tags.split("|") -
-            DiscourseTagging.hidden_tag_names(scope)
+        tags = Tag.where(name: SiteSetting.default_navigation_menu_tags.split("|"))
+        tags = DiscourseTagging.filter_visible(tags, scope)
 
-        serialize_tags(Tag.where(name: tag_names).order(:name))
+        serialize_tags(tags.order(:name))
       end
   end
 
@@ -432,7 +435,7 @@ class SiteSerializer < ApplicationSerializer
     DiscoursePluginRegistry.admin_config_login_routes
   end
 
-  def include_admin_config_routes?
+  def include_admin_config_login_routes?
     scope.is_admin?
   end
 
@@ -446,6 +449,10 @@ class SiteSerializer < ApplicationSerializer
 
   def full_name_visible_in_signup
     Site.full_name_visible_in_signup
+  end
+
+  def upcoming_changes_with_css
+    UpcomingChanges.including_css
   end
 
   private

@@ -70,11 +70,15 @@ ur:
         expand_list:
           one: "(%{count} مزید)"
           other: "(%{count} مزید)"
+        nav:
+          enabled: "فعال شدہ"
         filters:
           all: "تمام"
           reset: "رِی سَیٹ"
         search:
           name: "تلاش کریں"
+        admin_dashboard:
+          highlights: "نمایاں نکات"
         ai_helper:
           setting_groups:
             automation: "آٹومیشن"
@@ -257,6 +261,8 @@ ur:
           today: "آج"
           last_7_days: "پچھلے 7 دن"
           last_30_days: "پچھلے 30 دن"
+          scroll_to_bottom: "نیچے تک سکرول کریں"
+          editing_post: "پوسٹ میں ترمیم جاری"
       sentiments:
         sentiment_analysis:
           filter_types:

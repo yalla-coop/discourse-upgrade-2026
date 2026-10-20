@@ -69,37 +69,33 @@ RSpec.describe StaticController do
     let(:site) { RailsMultisite::ConnectionManagement.current_db }
 
     it "can serve assets" do
-      begin
-        assets_path = Rails.public_path.join("assets")
+      assets_path = Rails.public_path.join("assets")
 
-        FileUtils.mkdir_p(assets_path)
+      FileUtils.mkdir_p(assets_path)
 
-        file_path = assets_path.join("test.js.br")
-        File.write(file_path, "fake brotli file")
+      file_path = assets_path.join("test.js.br")
+      File.write(file_path, "fake brotli file")
 
-        get "/cdn_asset/#{site}/test.js.br"
+      get "/cdn_asset/#{site}/test.js.br"
 
-        expect(response.status).to eq(200)
-        expect(response.headers["Cache-Control"]).to match(/public/)
-      ensure
-        File.delete(file_path)
-      end
+      expect(response.status).to eq(200)
+      expect(response.headers["Cache-Control"]).to match(/public/)
+    ensure
+      File.delete(file_path)
     end
 
     it "does not serve files outside the assets directory via path traversal" do
-      begin
-        secret_dir = Rails.public_path.join("assets-secret")
-        FileUtils.mkdir_p(secret_dir)
-        secret_file = secret_dir.join("leak.txt")
-        File.write(secret_file, "secret content")
+      secret_dir = Rails.public_path.join("assets-secret")
+      FileUtils.mkdir_p(secret_dir)
+      secret_file = secret_dir.join("leak.txt")
+      File.write(secret_file, "secret content")
 
-        get "/cdn_asset/#{site}/../assets-secret/leak.txt"
+      get "/cdn_asset/#{site}/../assets-secret/leak.txt"
 
-        expect(response.status).to eq(404)
-      ensure
-        File.delete(secret_file) if secret_file && File.exist?(secret_file)
-        FileUtils.rm_rf(secret_dir) if secret_dir && Dir.exist?(secret_dir)
-      end
+      expect(response.status).to eq(404)
+    ensure
+      File.delete(secret_file) if secret_file && File.exist?(secret_file)
+      FileUtils.rm_rf(secret_dir) if secret_dir && Dir.exist?(secret_dir)
     end
 
     context "with fallback_assets_path" do
@@ -162,9 +158,13 @@ RSpec.describe StaticController do
       it "should return the right response for /faq" do
         get "/faq"
 
+        expect(response).to redirect_to("/guidelines")
+
+        get "/guidelines"
+
         expect(response.status).to eq(200)
-        expect(response.body).to include(I18n.t("js.faq"))
-        expect(response.body).to include("<title>FAQ - Discourse</title>")
+        expect(response.body).to include(I18n.t("js.guidelines"))
+        expect(response.body).to include("<title>Guidelines - Discourse</title>")
       end
     end
 
@@ -191,6 +191,54 @@ RSpec.describe StaticController do
             expect(response).to redirect_to("http://example.com/page")
           end
         end
+      end
+    end
+
+    it "renders the localized guidelines post" do
+      SiteSetting.content_localization_enabled = true
+      SiteSetting.set_locale_from_param = true
+      post = create_post(raw: "Original guidelines body")
+      post.update!(locale: "en")
+      localization =
+        Fabricate(
+          :post_localization,
+          post:,
+          locale: "ja",
+          raw: "翻訳されたガイドライン本文",
+          cooked: "<p>翻訳されたガイドライン本文</p>",
+        )
+      SiteSetting.guidelines_topic_id = post.topic.id
+
+      get "/guidelines", params: { tl: "ja" }
+
+      aggregate_failures do
+        expect(response.status).to eq(200)
+        expect(response.body).to include(localization.cooked)
+        expect(response.body).not_to include(post.cooked)
+      end
+    end
+
+    it "renders the localized TOS post" do
+      SiteSetting.content_localization_enabled = true
+      SiteSetting.set_locale_from_param = true
+      post = create_post(raw: "Original TOS body")
+      post.update!(locale: "en")
+      localization =
+        Fabricate(
+          :post_localization,
+          post:,
+          locale: "ja",
+          raw: "翻訳された利用規約本文",
+          cooked: "<p>翻訳された利用規約本文</p>",
+        )
+      SiteSetting.tos_topic_id = post.topic.id
+
+      get "/tos", params: { tl: "ja" }
+
+      aggregate_failures do
+        expect(response.status).to eq(200)
+        expect(response.body).to include(localization.cooked)
+        expect(response.body).not_to include(post.cooked)
       end
     end
 
@@ -239,23 +287,33 @@ RSpec.describe StaticController do
           get "/#{page_name}"
           expect(response).to redirect_to "/login"
         end
+      end
 
-        it "#{page_name} page loads for logged in user" do
+      it "guidelines page loads for logged in user" do
+        sign_in(Fabricate(:user))
+
+        get "/guidelines"
+
+        expect(response.status).to eq(200)
+        expect(response.body).to include(I18n.t("js.guidelines"))
+      end
+
+      %w[faq rules conduct].each do |page_name|
+        it "#{page_name} page redirects to guidelines for logged in user" do
           sign_in(Fabricate(:user))
 
           get "/#{page_name}"
 
-          expect(response.status).to eq(200)
-          expect(response.body).to include(I18n.t("js.guidelines"))
+          expect(response).to redirect_to("/guidelines")
         end
       end
     end
 
     context "with crawler view" do
       it "should include correct title" do
-        get "/faq", headers: { "HTTP_USER_AGENT" => "Googlebot" }
+        get "/guidelines", headers: { "HTTP_USER_AGENT" => "Googlebot" }
         expect(response.status).to eq(200)
-        expect(response.body).to include("<title>FAQ - Discourse</title>")
+        expect(response.body).to include("<title>Guidelines - Discourse</title>")
       end
     end
 
@@ -293,13 +351,13 @@ RSpec.describe StaticController do
             current_user&.locale == "pl" ? "test_some_other_topic_id" : "test_some_topic_id"
           end
 
-        get "/faq"
+        get "/guidelines"
 
         expect(response.status).to eq(200)
         expect(response.body).to include("Regular FAQ")
 
         sign_in(Fabricate(:user, locale: "pl"))
-        get "/faq"
+        get "/guidelines"
 
         expect(response.status).to eq(200)
         expect(response.body).to include("Polish FAQ")

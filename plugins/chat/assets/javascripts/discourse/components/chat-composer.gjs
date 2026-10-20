@@ -17,13 +17,11 @@ import {
 } from "pretty-text/emoji";
 import { replacements, translations } from "pretty-text/emoji/data";
 import { Promise } from "rsvp";
-import DTextarea from "discourse/components/d-textarea";
 import EmojiAutocompleteResults from "discourse/components/emoji-autocomplete-results";
 import EmojiPickerDetached from "discourse/components/emoji-picker/detached";
 import UpsertHyperlink from "discourse/components/modal/upsert-hyperlink";
 import PluginOutlet from "discourse/components/plugin-outlet";
 import UserAutocompleteResults from "discourse/components/user-autocomplete-results";
-import concatClass from "discourse/helpers/concat-class";
 import lazyHash from "discourse/helpers/lazy-hash";
 import { hashtagAutocompleteOptions } from "discourse/lib/hashtag-autocomplete";
 import loadEmojiSearchAliases from "discourse/lib/load-emoji-search-aliases";
@@ -40,12 +38,12 @@ import {
 import { optionalRequire } from "discourse/lib/utilities";
 import virtualElementFromTextRange from "discourse/lib/virtual-element-from-text-range";
 import { waitForClosedKeyboard } from "discourse/lib/wait-for-keyboard";
-import DAutocompleteModifier, {
-  SKIP,
-} from "discourse/modifiers/d-autocomplete";
 import forceScrollingElementPosition from "discourse/modifiers/force-scrolling-element-position";
 import preventScrollOnFocus from "discourse/modifiers/prevent-scroll-on-focus";
 import { not, or } from "discourse/truth-helpers";
+import DTextarea from "discourse/ui-kit/d-textarea";
+import dConcatClass from "discourse/ui-kit/helpers/d-concat-class";
+import dAutocomplete, { SKIP } from "discourse/ui-kit/modifiers/d-autocomplete";
 import { i18n } from "discourse-i18n";
 import DButton from "discourse/plugins/chat/discourse/components/chat/composer/button";
 import ChatComposerDropdown from "discourse/plugins/chat/discourse/components/chat-composer-dropdown";
@@ -123,7 +121,7 @@ export default class ChatComposer extends Component {
 
   applyAutocomplete(textarea, options) {
     const autocompleteHandler = new TextareaAutocompleteHandler(textarea);
-    return DAutocompleteModifier.setupAutocomplete(
+    return dAutocomplete.setupAutocomplete(
       getOwner(this),
       textarea,
       autocompleteHandler,
@@ -175,6 +173,24 @@ export default class ChatComposer extends Component {
       !this.pane.sending &&
       !this.inProgressUploadsCount > 0
     );
+  }
+
+  get disabled() {
+    return !this.currentUser || this.args.disabled;
+  }
+
+  @action
+  focusOrPromptLogin() {
+    if (!this.currentUser) {
+      this.showLogin();
+      return;
+    }
+
+    this.composer.focus();
+  }
+
+  showLogin() {
+    getOwner(this).lookup("route:application").send("showLogin");
   }
 
   @action
@@ -246,18 +262,18 @@ export default class ChatComposer extends Component {
 
     this.inProgressUploadsCount = inProgressUploadsCount || 0;
 
+    this.composer.textarea?.focus();
+    this.reportReplyingPresence();
+
+    // Only persist once uploads settle.
     if (
       typeof uploads !== "undefined" &&
-      inProgressUploadsCount !== "undefined" &&
       inProgressUploadsCount === 0 &&
       this.draft
     ) {
       this.draft.uploads = cloneJSON(uploads);
+      this.persistDraft();
     }
-
-    this.composer.textarea?.focus();
-    this.reportReplyingPresence();
-    this.persistDraft();
   }
 
   @action
@@ -267,6 +283,11 @@ export default class ChatComposer extends Component {
 
   @action
   async onSend(event) {
+    if (!this.currentUser) {
+      this.showLogin();
+      return;
+    }
+
     if (!this.sendEnabled) {
       return;
     }
@@ -370,6 +391,11 @@ export default class ChatComposer extends Component {
 
   @action
   onTextareaFocusIn() {
+    if (!this.currentUser) {
+      this.showLogin();
+      return;
+    }
+
     this.forceScrollPosition();
     this.isFocused = true;
   }
@@ -427,12 +453,14 @@ export default class ChatComposer extends Component {
     }
 
     const selected = this.composer.textarea.getSelected("", { lineVal: true });
-    const linkText = selected?.value;
+    const hasSelection = !!selected && selected.start !== selected.end;
     this.modal.show(UpsertHyperlink, {
       model: {
-        linkText,
+        hasSelection,
         toolbarEvent: {
+          selected,
           addText: (text) => this.composer.textarea.addText(selected, text),
+          applyLink: (url) => this.composer.textarea.applyLink(url),
         },
       },
     });
@@ -442,7 +470,7 @@ export default class ChatComposer extends Component {
   onSelectEmoji(emoji, context = {}) {
     const textareaInteractor = this.composer.textarea;
 
-    if (context.emojiTermStart && context.emojiTermStart) {
+    if (context?.emojiTermStart != null) {
       const value = textareaInteractor.textarea.value;
       const valueUpToCursor = `${value.substring(0, context.emojiTermStart)}:${emoji}: `;
       const valueAfterCursor = value.substring(context.emojiTermEnd + 1);
@@ -582,7 +610,8 @@ export default class ChatComposer extends Component {
 
           if (currentValue && currentCaretPos !== undefined) {
             const textBeforeCursor = currentValue.substring(0, currentCaretPos);
-            const incompleteMatch = textBeforeCursor.match(/(:[\w-]+)$/);
+            const incompleteMatch =
+              textBeforeCursor.match(/(:[\p{L}\p{N}_-]+)$/u);
 
             if (incompleteMatch) {
               emojiContext = {
@@ -724,8 +753,8 @@ export default class ChatComposer extends Component {
   }
 
   <template>
-    {{! template-lint-disable no-pointer-down-event-binding }}
-    {{! template-lint-disable no-invalid-interactive }}
+    {{! eslint-disable ember/template-no-pointer-down-event-binding }}
+    {{! eslint-disable ember/template-no-invalid-interactive }}
 
     <div class="chat-composer__wrapper">
       {{#if this.shouldRenderMessageDetails}}
@@ -738,7 +767,7 @@ export default class ChatComposer extends Component {
       <div
         role="region"
         aria-label={{i18n "chat.aria_roles.composer"}}
-        class={{concatClass
+        class={{dConcatClass
           "chat-composer"
           (if this.isFocused "is-focused")
           (if this.pane.sending "is-sending")
@@ -770,7 +799,7 @@ export default class ChatComposer extends Component {
 
             <div
               class="chat-composer__input-container"
-              {{on "click" this.composer.focus}}
+              {{on "click" this.focusOrPromptLogin}}
             >
               <DTextarea
                 {{preventScrollOnFocus}}

@@ -16,6 +16,7 @@ module DiscoursePostEvent
       @events =
         DiscoursePostEvent::EventFinder.search(current_user, search_params).includes(
           :event_dates,
+          :image_upload,
           post: {
             topic: %i[tags category],
           },
@@ -23,6 +24,8 @@ module DiscoursePostEvent
 
       respond_to do |format|
         format.ics do
+          @calendar_name = calendar_name_for_ics
+
           after_time = filtered_events_params[:after]&.to_datetime || Time.current
           before_time = filtered_events_params[:before]&.to_datetime || 1.year.from_now
 
@@ -85,18 +88,16 @@ module DiscoursePostEvent
     end
 
     def invite
-      event = Event.find(params[:id])
-      guardian.ensure_can_act_on_discourse_post_event!(event)
-      invites = Array(params.permit(invites: [])[:invites])
-      users = User.real.where(username: invites)
-
-      users.each { |user| event.create_notification!(user, event.post) }
-
-      render json: success_json
+      Invite.call(service_params.deep_merge(params: { event_id: params[:id] })) do
+        on_success { render json: success_json }
+        on_model_not_found(:event) { raise Discourse::NotFound }
+        on_failed_policy(:can_act_on_event) { raise Discourse::InvalidAccess }
+        on_failed_contract { raise Discourse::InvalidParameters }
+      end
     end
 
     def show
-      event = Event.find(params[:id])
+      event = Event.includes(:image_upload).find(params[:id])
       guardian.ensure_can_see!(event.post)
 
       serializer = EventSerializer.new(event, scope: guardian)
@@ -104,84 +105,58 @@ module DiscoursePostEvent
     end
 
     def destroy
-      event = Event.find(params[:id])
-      guardian.ensure_can_act_on_discourse_post_event!(event)
-      event.publish_update!
-      payload = WebHook.build_calendar_event_payload(event)
-      event.destroy!
-      WebHook.enqueue_calendar_event_hooks(:calendar_event_destroyed, event, payload)
-      render json: success_json
+      DestroyEvent.call(service_params.deep_merge(params: { event_id: params[:id] })) do
+        on_success { render json: success_json }
+        on_model_not_found(:event) { raise Discourse::NotFound }
+        on_failed_policy(:can_act_on_event) { raise Discourse::InvalidAccess }
+        on_failed_contract { raise Discourse::InvalidParameters }
+      end
     end
 
     def csv_bulk_invite
-      require "csv"
-
-      event = Event.find(params[:id])
-      guardian.ensure_can_edit!(event.post)
-      guardian.ensure_can_create_discourse_post_event!
-
       file = params[:file] || (params[:files] || []).first
-      raise Discourse::InvalidParameters.new(:file) if file.blank?
 
+      # Render (don't raise) every outcome: exceptions raised inside `hijack`
+      # surface as a 500 instead of the intended status.
       hijack do
-        begin
-          invitees = []
-
-          CSV.foreach(file.tempfile) do |row|
-            invitees << { identifier: row[0], attendance: row[1] || "going" } if row[0].present?
+        CsvBulkInvite.call(
+          service_params.deep_merge(params: { event_id: params[:id], file: file }),
+        ) do
+          on_success { render json: success_json }
+          on_model_not_found(:event) { render json: failed_json, status: :not_found }
+          on_failed_policy(:can_edit_post) { render json: failed_json, status: :forbidden }
+          on_failed_policy(:can_create_event) { render json: failed_json, status: :forbidden }
+          on_failed_policy(:file_present) do
+            render json: failed_json.merge(error_type: "invalid_parameters"), status: :bad_request
           end
-
-          if invitees.present?
-            Jobs.enqueue(
-              :discourse_post_event_bulk_invite,
-              event_id: event.id,
-              invitees: invitees,
-              current_user_id: current_user.id,
-            )
-            render json: success_json
-          else
-            render json:
-                     failed_json.merge(
-                       errors: [I18n.t("discourse_post_event.errors.bulk_invite.error")],
-                     ),
-                   status: :unprocessable_entity
-          end
-        rescue StandardError
-          render json:
-                   failed_json.merge(
-                     errors: [I18n.t("discourse_post_event.errors.bulk_invite.error")],
-                   ),
-                 status: :unprocessable_entity
+          on_model_not_found(:invitees) { render_bulk_invite_error }
+          on_failed_contract { render_bulk_invite_error }
+          on_exceptions { render_bulk_invite_error }
+          on_failure { render_bulk_invite_error }
         end
       end
     end
 
     def bulk_invite
-      event = Event.find(params[:id])
-      guardian.ensure_can_edit!(event.post)
-      guardian.ensure_can_create_discourse_post_event!
-
-      invitees = Array(params[:invitees]).reject { |x| x.empty? }
-      raise Discourse::InvalidParameters.new(:invitees) if invitees.blank?
-
-      begin
-        Jobs.enqueue(
-          :discourse_post_event_bulk_invite,
-          event_id: event.id,
-          invitees: invitees.as_json,
-          current_user_id: current_user.id,
-        )
-        render json: success_json
-      rescue StandardError
-        render json:
-                 failed_json.merge(
-                   errors: [I18n.t("discourse_post_event.errors.bulk_invite.error")],
-                 ),
-               status: :unprocessable_entity
+      BulkInvite.call(service_params.deep_merge(params: { event_id: params[:id] })) do
+        on_success { render json: success_json }
+        on_model_not_found(:event) { raise Discourse::NotFound }
+        on_failed_policy(:can_edit_post) { raise Discourse::InvalidAccess }
+        on_failed_policy(:can_create_event) { raise Discourse::InvalidAccess }
+        on_failed_policy(:invitees_present) { raise Discourse::InvalidParameters.new(:invitees) }
+        on_failed_contract { raise Discourse::InvalidParameters }
+        on_exceptions { render_bulk_invite_error }
+        on_failure { render_bulk_invite_error }
       end
     end
 
     private
+
+    def render_bulk_invite_error
+      render json:
+               failed_json.merge(errors: [I18n.t("discourse_post_event.errors.bulk_invite.error")]),
+             status: :unprocessable_entity
+    end
 
     def ics_request?
       request.format.symbol == :ics
@@ -211,6 +186,21 @@ module DiscoursePostEvent
       else
         time.in_time_zone(event.timezone).iso8601(3)
       end
+    end
+
+    def calendar_name_for_ics
+      translation_key =
+        if filtered_events_params[:attending_user].present? &&
+             current_user&.username_lower == filtered_events_params[:attending_user].downcase
+          "my_events_feed_name"
+        else
+          "all_events_feed_name"
+        end
+
+      I18n.t(
+        "discourse_calendar.calendar_subscriptions.#{translation_key}",
+        site_title: SiteSetting.title,
+      )
     end
   end
 end

@@ -2,25 +2,34 @@
 
 discourse_path = File.expand_path(File.expand_path(File.dirname(__FILE__)) + "/../")
 enable_logstash_logger = ENV["ENABLE_LOGSTASH_LOGGER"] == "1"
-unicorn_stderr_path = "#{discourse_path}/log/unicorn.stderr.log"
+stderr_log_path = "#{discourse_path}/log/unicorn.stderr.log"
 
 if enable_logstash_logger
   require_relative "../lib/discourse_logstash_logger"
   require_relative "../lib/pitchfork_logstash_patch"
-  FileUtils.touch(unicorn_stderr_path) if !File.exist?(unicorn_stderr_path)
+  FileUtils.touch(stderr_log_path) if !File.exist?(stderr_log_path)
   logger DiscourseLogstashLogger.logger(
-           logdev: unicorn_stderr_path,
+           logdev: stderr_log_path,
            type: :unicorn,
            customize_event: lambda { |event| event["@timestamp"] = ::Time.now.utc },
          )
 else
-  logger Logger.new(STDOUT)
+  console_logger = Logger.new(STDOUT)
+  if ENV["RAILS_ENV"] != "production"
+    require_relative "../lib/dev_log_formatter"
+    console_logger.formatter = DevLogFormatter.new(color: ENV["NO_COLOR"].nil?)
+
+    # Drop per-worker spawn logs. Summary below covers that.
+    console_logger.level = Logger::WARN
+    STDOUT.puts "Starting Pitchfork..."
+  end
+  logger console_logger
 end
 
 worker_processes (ENV["UNICORN_WORKERS"] || 3).to_i
 
 # stree-ignore
-listen ENV["UNICORN_LISTENER"] || "#{(ENV["UNICORN_BIND_ALL"] ? "" : "127.0.0.1:")}#{(ENV["UNICORN_PORT"] || 3000).to_i}", reuseport: true
+listen ENV["UNICORN_LISTENER"] || "#{ENV["UNICORN_BIND_ALL"] ? "" : "127.0.0.1:"}#{(ENV["UNICORN_PORT"] || 3000).to_i}", reuseport: true
 
 if ENV["RAILS_ENV"] == "production"
   # nuke workers after 30 seconds instead of 20 seconds (the default)
@@ -77,6 +86,7 @@ oob_gc_enabled = ENV["DISCOURSE_DISABLE_MAJOR_GC_DURING_REQUESTS"] && RUBY_VERSI
 
 after_worker_fork do |server, worker|
   DiscourseEvent.trigger(:web_fork_started)
+  Discourse.apply_worker_db_variables_overrides
   Discourse.after_fork
   SignalTrapLogger.instance.after_fork
 
@@ -101,17 +111,17 @@ before_service_worker_ready do |server, service_worker|
 
     if Discourse.enable_sidekiq_logging?
       # Trap USR1, so we can re-issue to sidekiq workers
-      # but chain the default unicorn implementation as well
+      # but chain the default pitchfork implementation as well
       old_handler =
         Signal.trap("USR1") do
           old_handler.call
 
           # We have seen Sidekiq processes getting stuck in production sporadically when log rotation happens.
-          # The cause is currently unknown but we suspect that it is related to the Unicorn master process and
-          # Sidekiq demon processes reopening logs at the same time as we noticed that Unicorn worker processes only
-          # reopen logs after the Unicorn master process is done. To workaround the problem, we are adding an arbitrary
+          # The cause is currently unknown but we suspect that it is related to the master process and
+          # Sidekiq demon processes reopening logs at the same time as we noticed that worker processes only
+          # reopen logs after the master process is done. To workaround the problem, we are adding an arbitrary
           # delay of 1 second to Sidekiq's log reopening procedure. The 1 second delay should be
-          # more than enough for the Unicorn master process to finish reopening logs.
+          # more than enough for the master process to finish reopening logs.
           Demon::Sidekiq.kill("USR2")
         end
     end
@@ -122,8 +132,19 @@ before_service_worker_ready do |server, service_worker|
     demon_class.start(1, logger: server.logger)
   end
 
-  if Rails.env.development? && ENV["ROLLUP_PLUGIN_COMPILER"] != "0"
-    Demon::PluginJsWatcher.start(verbose: true)
+  if Rails.env.development? && !ENV["CI"]
+    Demon::PluginJsWatcher.start(verbose: false, logger: server.logger)
+  end
+
+  if Rails.env.development?
+    EmberAssets.watch!
+
+    workers = server.worker_processes
+    parts = ["#{workers} worker#{"s" if workers != 1}"]
+    parts << "#{sidekiqs} sidekiq#{"s" if sidekiqs != 1}" if sidekiqs > 0
+    parts.concat(DiscoursePluginRegistry.demon_processes.map(&:prefix))
+    parts << "plugin JS watcher" if !ENV["CI"]
+    STDOUT.puts "Pitchfork ready on http://localhost:#{ENV["UNICORN_PORT"] || 3000} (#{parts.join(", ")})"
   end
 
   Thread.new do
@@ -160,4 +181,5 @@ if RUBY_PLATFORM.include?("darwin") && ENV["RAILS_ENV"] != "production"
   # macOS doesn't support the default :SOCK_SEQPACKET
   # So we override it to avoid the warning
   Pitchfork.instance_variable_set(:@socket_type, :SOCK_STREAM)
+  require_relative "../lib/freedom_patches/pitchfork_sock_stream"
 end
