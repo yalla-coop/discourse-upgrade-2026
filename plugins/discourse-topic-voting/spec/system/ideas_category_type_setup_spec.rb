@@ -10,10 +10,7 @@ RSpec.describe "Ideas Category Type Setup" do
   let(:dialog) { PageObjects::Components::Dialog.new }
   let(:toast) { PageObjects::Components::Toasts.new }
 
-  before do
-    SiteSetting.enable_ideas_category_type_setup = true
-    sign_in(admin)
-  end
+  before { sign_in(admin) }
 
   it "works with correct defaults and configures site settings and category setting automatically" do
     visit("/new-category/setup")
@@ -57,22 +54,28 @@ RSpec.describe "Ideas Category Type Setup" do
     expect(Category.can_vote?(category.id)).to eq(false)
   end
 
-  context "when the ideas category type setup is disabled" do
-    before { SiteSetting.enable_ideas_category_type_setup = false }
+  context "when a related site setting has been customized" do
+    before { SiteSetting.topic_voting_tl0_vote_limit = 10 }
 
-    it "does not show the ideas category type" do
+    it "prefills the customized value and keeps it when creating an ideas category" do
       visit("/new-category/setup")
-      expect(page).to have_no_css(".category-type-cards__card.--category-type-ideas")
-    end
+      category_type_card.find_type_card("ideas").click
+      find(".edit-category-ideas").click
 
-    it "does not show the tab for the ideas category type when editing an existing category" do
-      ideas_category = Fabricate(:category, name: "Ideas")
-      DiscourseTopicVoting::Categories::Types::Ideas.configure_category(
-        ideas_category,
-        guardian: admin.guardian,
+      expect(form.field("category_type_site_settings.topic_voting_tl0_vote_limit").value).to eq(
+        "10",
       )
-      visit("/c/#{ideas_category.slug}/edit/ideas")
-      expect(page).to have_no_css(".d-nav-submenu__tabs .edit-category-ideas")
+
+      banner.click_save
+      expect(page).to have_content(I18n.t("js.category.edit_dialog_title", categoryName: "Ideas"))
+
+      expect(SiteSetting.topic_voting_tl0_vote_limit).to eq(10)
+      expect(
+        UserHistory.where(
+          action: UserHistory.actions[:change_site_setting],
+          subject: "topic_voting_tl0_vote_limit",
+        ),
+      ).to be_empty
     end
   end
 

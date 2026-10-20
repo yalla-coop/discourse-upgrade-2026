@@ -1,20 +1,23 @@
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
-import { fn } from "@ember/helper";
+import { fn, hash } from "@ember/helper";
 import { on } from "@ember/modifier";
-import { action } from "@ember/object";
+import { action, get } from "@ember/object";
 import { service } from "@ember/service";
 import { trustHTML } from "@ember/template";
 import AvatarUploader from "discourse/components/avatar-uploader";
 import { ajax } from "discourse/lib/ajax";
 import { popupAjaxError } from "discourse/lib/ajax-error";
 import { isTesting } from "discourse/lib/environment";
-import { allowsImages } from "discourse/lib/uploads";
+import { allowsImages, validateUploadedFile } from "discourse/lib/uploads";
+import { eq, or } from "discourse/truth-helpers";
 import DButton from "discourse/ui-kit/d-button";
 import DModal from "discourse/ui-kit/d-modal";
 import DModalCancel from "discourse/ui-kit/d-modal-cancel";
+import DPickFilesButton from "discourse/ui-kit/d-pick-files-button";
 import DRadioButton from "discourse/ui-kit/d-radio-button";
 import dBoundAvatarTemplate from "discourse/ui-kit/helpers/d-bound-avatar-template";
+import dIcon from "discourse/ui-kit/helpers/d-icon";
 import { i18n } from "discourse-i18n";
 
 export default class AvatarSelectorModal extends Component {
@@ -24,9 +27,25 @@ export default class AvatarSelectorModal extends Component {
   @tracked gravatarRefreshDisabled = false;
   @tracked gravatarFailed = false;
   @tracked _selected = null;
+  @tracked _pendingFile;
+  @tracked _filePreview;
 
-  get user() {
-    return this.args.model.user;
+  constructor() {
+    super(...arguments);
+    if (this.deferSave) {
+      const selection = this.args.model.selection;
+      this._pendingFile = selection?.file;
+      this._filePreview = this._pendingFile
+        ? URL.createObjectURL(this._pendingFile)
+        : null;
+      this._selected =
+        selection?.url || (this._pendingFile ? "custom" : "system");
+    }
+  }
+
+  willDestroy() {
+    super.willDestroy(...arguments);
+    this.#clearFilePreview();
   }
 
   get selected() {
@@ -37,14 +56,41 @@ export default class AvatarSelectorModal extends Component {
     this._selected = value;
   }
 
+  get deferSave() {
+    return this.args.model.deferSave;
+  }
+
+  get systemAvatarTemplate() {
+    return this.deferSave
+      ? this.args.model.avatarTemplate
+      : get(this.user, "system_avatar_template");
+  }
+
+  get customAvatarTemplate() {
+    return this.deferSave
+      ? this._filePreview
+      : get(this.user, "custom_avatar_template");
+  }
+
+  get user() {
+    return this.args.model.user;
+  }
+
   get submitDisabled() {
-    return this.selected === "logo";
+    return (
+      this.selected === "logo" ||
+      (this.deferSave && this.selected === "custom" && !this._pendingFile)
+    );
   }
 
   get selectableAvatars() {
     const mode = this.siteSettings.selectable_avatars_mode;
     const list = this.siteSettings.selectable_avatars;
-    return mode !== "disabled" ? (list ? list.split("|") : []) : null;
+    return mode !== "disabled"
+      ? Array.isArray(list)
+        ? list
+        : list?.split("|") || []
+      : null;
   }
 
   get showSelectableAvatars() {
@@ -53,6 +99,9 @@ export default class AvatarSelectorModal extends Component {
 
   get showCustomAvatarSelector() {
     const mode = this.siteSettings.selectable_avatars_mode;
+    const trustLevel = this.deferSave
+      ? this.args.model.trustLevel
+      : this.user?.trust_level;
     switch (mode) {
       case "no_one":
         return false;
@@ -62,12 +111,12 @@ export default class AvatarSelectorModal extends Component {
       case "tl4":
         const allowedTl = parseInt(mode.replace("tl", ""), 10);
         return (
-          this.user.admin ||
-          this.user.moderator ||
-          this.user.trust_level >= allowedTl
+          this.user?.admin ||
+          this.user?.moderator ||
+          (trustLevel ?? 0) >= allowedTl
         );
       case "staff":
-        return this.user.admin || this.user.moderator;
+        return this.user?.admin || this.user?.moderator;
       case "everyone":
       default:
         return true;
@@ -75,7 +124,9 @@ export default class AvatarSelectorModal extends Component {
   }
 
   get defaultSelection() {
-    if (this.user.use_logo_small_as_avatar) {
+    if (this.deferSave) {
+      return "system";
+    } else if (this.user.use_logo_small_as_avatar) {
       return "logo";
     } else if (this.user.avatar_template === this.user.system_avatar_template) {
       return "system";
@@ -101,8 +152,12 @@ export default class AvatarSelectorModal extends Component {
   }
 
   get allowAvatarUpload() {
-    // Falls back to the edited user when there is no current user yet, e.g.
-    // right after a passwordless signup before the app has rebooted.
+    if (this.deferSave) {
+      return (
+        this.args.model.canUploadAvatar &&
+        allowsImages(false, this.siteSettings)
+      );
+    }
     const user = this.currentUser ?? this.user;
     return (
       user.can_upload_avatar && allowsImages(user.staff, this.siteSettings)
@@ -110,7 +165,11 @@ export default class AvatarSelectorModal extends Component {
   }
 
   get allowGravatar() {
-    return this.allowAvatarUpload && this.siteSettings.gravatar_enabled;
+    return (
+      !this.deferSave &&
+      this.allowAvatarUpload &&
+      this.siteSettings.gravatar_enabled
+    );
   }
 
   @action
@@ -118,8 +177,6 @@ export default class AvatarSelectorModal extends Component {
     this.selected = value;
   }
 
-  // Callers that pass `model.onAvatarChange` (e.g. inline signup) handle the
-  // result themselves; otherwise we reload so the new avatar shows everywhere.
   afterAvatarSaved({ guardTesting = false } = {}) {
     if (this.args.model.onAvatarChange) {
       this.args.model.onAvatarChange();
@@ -132,12 +189,33 @@ export default class AvatarSelectorModal extends Component {
   @action
   async selectAvatar(url, event) {
     event?.preventDefault();
+    if (this.deferSave) {
+      this.selected = url;
+      return;
+    }
     try {
       await this.user.selectAvatar(url);
       this.afterAvatarSaved();
     } catch (error) {
       popupAjaxError(error);
     }
+  }
+
+  @action
+  filesPicked(files) {
+    const file = files[0];
+    if (
+      !validateUploadedFile(file, {
+        imagesOnly: true,
+        siteSettings: this.siteSettings,
+      })
+    ) {
+      return;
+    }
+    this.#clearFilePreview();
+    this._pendingFile = file;
+    this._filePreview = URL.createObjectURL(file);
+    this.selected = "custom";
   }
 
   @action
@@ -173,6 +251,17 @@ export default class AvatarSelectorModal extends Component {
 
   @action
   async saveAvatarSelection() {
+    if (this.deferSave) {
+      let selection = null;
+      if (this.selected === "custom") {
+        selection = { file: this._pendingFile };
+      } else if (this.selected !== "system") {
+        selection = { url: this.selected };
+      }
+      this.args.model.onSelect(selection);
+      this.args.closeModal();
+      return;
+    }
     try {
       await this.user.pickAvatar(this.selectedUploadId, this.selected);
       this.afterAvatarSaved({ guardTesting: true });
@@ -181,20 +270,28 @@ export default class AvatarSelectorModal extends Component {
     }
   }
 
+  #clearFilePreview() {
+    if (this._filePreview) {
+      URL.revokeObjectURL(this._filePreview);
+      this._filePreview = null;
+    }
+  }
+
   <template>
     <DModal
+      class="avatar-selector-modal"
       @bodyClass="avatar-selector"
       @closeModal={{@closeModal}}
       @title={{i18n "user.change_avatar.title"}}
-      class="avatar-selector-modal"
     >
       <:body>
         {{#if this.showSelectableAvatars}}
           <div class="selectable-avatars">
             {{#each this.selectableAvatars as |avatar|}}
               <a
-                href
+                aria-current={{if (eq this.selected avatar) "true"}}
                 class="selectable-avatar"
+                href
                 {{on "click" (fn this.selectAvatar avatar)}}
               >
                 {{dBoundAvatarTemplate avatar "huge"}}
@@ -211,9 +308,9 @@ export default class AvatarSelectorModal extends Component {
               <DRadioButton
                 @id="logo-small"
                 @name="logo"
-                @value="logo"
-                @selection={{this.selected}}
                 @onChange={{this.onSelectedChanged}}
+                @selection={{this.selected}}
+                @value="logo"
               />
               <label class="radio" for="logo-small">
                 {{dBoundAvatarTemplate
@@ -228,12 +325,18 @@ export default class AvatarSelectorModal extends Component {
             <DRadioButton
               @id="system-avatar"
               @name="avatar"
-              @value="system"
-              @selection={{this.selected}}
               @onChange={{this.onSelectedChanged}}
+              @selection={{this.selected}}
+              @value="system"
             />
             <label class="radio" for="system-avatar">
-              {{dBoundAvatarTemplate this.user.system_avatar_template "large"}}
+              {{#if this.systemAvatarTemplate}}
+                {{dBoundAvatarTemplate this.systemAvatarTemplate "large"}}
+              {{else}}
+                <span class="avatar-selector__placeholder">{{dIcon
+                    "user"
+                  }}</span>
+              {{/if}}
               {{i18n "user.change_avatar.letter_based"}}
             </label>
           </div>
@@ -242,9 +345,9 @@ export default class AvatarSelectorModal extends Component {
               <DRadioButton
                 @id="gravatar"
                 @name="avatar"
-                @value="gravatar"
-                @selection={{this.selected}}
                 @onChange={{this.onSelectedChanged}}
+                @selection={{this.selected}}
+                @value="gravatar"
               />
               <label class="radio" for="gravatar">
                 {{dBoundAvatarTemplate
@@ -265,14 +368,14 @@ export default class AvatarSelectorModal extends Component {
               </label>
 
               <DButton
+                class="btn-default avatar-selector-refresh-gravatar"
                 @action={{this.refreshGravatar}}
+                @disabled={{this.gravatarRefreshDisabled}}
+                @icon="arrows-rotate"
                 @translatedTitle={{i18n
                   "user.change_avatar.refresh_gravatar_title"
                   gravatarName=this.siteSettings.gravatar_name
                 }}
-                @disabled={{this.gravatarRefreshDisabled}}
-                @icon="arrows-rotate"
-                class="btn-default avatar-selector-refresh-gravatar"
               />
 
               {{#if this.gravatarFailed}}
@@ -290,41 +393,51 @@ export default class AvatarSelectorModal extends Component {
               <DRadioButton
                 @id="uploaded-avatar"
                 @name="avatar"
-                @value="custom"
-                @selection={{this.selected}}
                 @onChange={{this.onSelectedChanged}}
+                @selection={{this.selected}}
+                @value="custom"
               />
               <label class="radio" for="uploaded-avatar">
-                {{#if this.user.custom_avatar_template}}
-                  {{dBoundAvatarTemplate
-                    this.user.custom_avatar_template
-                    "large"
-                  }}
+                {{#if this.customAvatarTemplate}}
+                  {{dBoundAvatarTemplate this.customAvatarTemplate "large"}}
                   {{i18n "user.change_avatar.uploaded_avatar"}}
                 {{else}}
                   {{i18n "user.change_avatar.uploaded_avatar_empty"}}
                 {{/if}}
               </label>
-              <AvatarUploader
-                @user_id={{this.user.id}}
-                @uploadedAvatarTemplate={{this.user.custom_avatar_template}}
-                @uploadedAvatarId={{this.user.custom_avatar_upload_id}}
-                @id="avatar-uploader"
-                @done={{this.uploadComplete}}
-                class="avatar-uploader"
-              />
+              {{#if this.deferSave}}
+                <DPickFilesButton
+                  @acceptedFormatsOverride=".png,.jpg,.jpeg,.gif,.svg,.ico,.heic,.heif,.webp,.avif,.jxl"
+                  @currentUser={{hash staff=false}}
+                  @fileInputClass="hidden-upload-field"
+                  @fileInputId="deferred-avatar-upload"
+                  @icon="upload"
+                  @label="upload"
+                  @onFilesPicked={{this.filesPicked}}
+                  @showButton={{true}}
+                />
+              {{else}}
+                <AvatarUploader
+                  class="avatar-uploader"
+                  @done={{this.uploadComplete}}
+                  @id="avatar-uploader"
+                  @uploadedAvatarId={{this.user.custom_avatar_upload_id}}
+                  @uploadedAvatarTemplate={{this.user.custom_avatar_template}}
+                  @user_id={{this.user.id}}
+                />
+              {{/if}}
             </div>
           {{/if}}
         {{/if}}
       </:body>
 
       <:footer>
-        {{#if this.showCustomAvatarSelector}}
+        {{#if (or this.showCustomAvatarSelector this.deferSave)}}
           <DButton
+            class="btn-primary"
             @action={{this.saveAvatarSelection}}
             @disabled={{this.submitDisabled}}
             @label="save"
-            class="btn-primary"
           />
           <DModalCancel @close={{@closeModal}} />
         {{/if}}

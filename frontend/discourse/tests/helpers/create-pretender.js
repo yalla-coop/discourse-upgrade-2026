@@ -1,5 +1,6 @@
 import EmberObject from "@ember/object";
 import Pretender from "pretender";
+import { TOO_MANY_REQUESTS } from "discourse/lib/ajax-error";
 import getURL from "discourse/lib/get-url";
 import { cloneJSON } from "discourse/lib/object";
 import User from "discourse/models/user";
@@ -51,6 +52,45 @@ export function OK(resp = {}, headers = {}) {
   return [200, headers, resp];
 }
 
+export { TOO_MANY_REQUESTS };
+
+export function middlewareRateLimit(
+  retryAfterSeconds = 10,
+  errorCode = "user_10_secs_limit"
+) {
+  const headers = { "Content-Type": "text/plain" };
+
+  if (retryAfterSeconds !== null) {
+    headers["Retry-After"] = String(retryAfterSeconds);
+    headers["Discourse-Rate-Limit-Error-Code"] = errorCode;
+  }
+
+  return [
+    TOO_MANY_REQUESTS,
+    headers,
+    "Slow down, you're making too many requests.\n" +
+      `Please retry again in ${retryAfterSeconds} seconds.\n` +
+      `Error code: ${errorCode}.\n`,
+  ];
+}
+
+export function controllerRateLimit(waitSeconds = 10) {
+  const headers = {
+    "Content-Type": "application/json",
+    "Retry-After": String(waitSeconds),
+  };
+
+  return [
+    TOO_MANY_REQUESTS,
+    headers,
+    {
+      errors: ["You've performed this action too many times."],
+      error_type: "rate_limit",
+      extras: { wait_seconds: waitSeconds },
+    },
+  ];
+}
+
 const loggedIn = () => !!User.current();
 const helpers = { response, success, parsePostData };
 
@@ -88,9 +128,12 @@ export function pretenderHelpers() {
 }
 
 export function applyDefaultHandlers() {
-  const pretenderModules = import.meta.glob("./**/*-pretender.{js,gjs}", {
-    eager: true,
-  });
+  const pretenderModules = import.meta.glob(
+    "./**/*-pretender.{js,gjs,ts,gts}",
+    {
+      eager: true,
+    }
+  );
 
   Object.keys(requirejs.entries).forEach((entry) => {
     if (/^discourse\/plugins\/.*helpers\/[a-z-]+\-pretender$/.test(entry)) {

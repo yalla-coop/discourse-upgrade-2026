@@ -8,6 +8,7 @@ class AdminDashboardSiteTraffic
     anonymous: "page_view_anon_browser",
     embedded: "page_view_embed",
     crawlers: "page_view_crawler",
+    likely_crawlers: "page_view_likely_crawler",
   }.freeze
   private_constant :DEFAULT_RANGE_DAYS
   private_constant :TOP_CARD_LIMIT
@@ -39,12 +40,15 @@ class AdminDashboardSiteTraffic
       pageview_series: pageview_series(current_rows, include_embedded: include_embedded),
     }
 
-    if SiteSetting.persist_browser_pageview_events
+    if !SiteSetting.use_legacy_pageviews
       top_countries = fetch_card("top_countries_by_browser_pageviews")
       response[:top_countries] = top_countries if top_countries
 
       top_referrers = fetch_card("top_referrers_by_browser_pageviews")
       response[:top_referrers] = top_referrers if top_referrers
+
+      top_entry_urls = fetch_card("top_entry_urls")
+      response[:top_entry_urls] = top_entry_urls if top_entry_urls
     end
 
     response
@@ -75,7 +79,7 @@ class AdminDashboardSiteTraffic
     return { rows: [], error: "exception" } if report.nil?
 
     # Timeouts skip the cache so the next request retries instead of being
-    # pinned to the error for the full 35-minute TTL.
+    # pinned to the error for the full TTL.
     Report.cache(report) if report.error != :timeout
 
     return { rows: [], error: report.error.to_s } if report.error.present?
@@ -93,13 +97,18 @@ class AdminDashboardSiteTraffic
   def series_ids(include_embedded:)
     series = %i[logged_in]
 
-    return series if login_required?
-
-    series << :anonymous
-    series << :embedded if include_embedded
-    series << :crawlers
+    series << :anonymous if !login_required?
+    series << :embedded if !login_required? && include_embedded
+    series << :likely_crawlers if likely_crawlers_enabled?
+    series << :crawlers if !login_required?
 
     series
+  end
+
+  def likely_crawlers_enabled?
+    return @likely_crawlers_enabled if defined?(@likely_crawlers_enabled)
+
+    @likely_crawlers_enabled = CrawlerScorer.enabled?
   end
 
   def kpis(totals, prior_rows)
@@ -111,7 +120,49 @@ class AdminDashboardSiteTraffic
     direct_traffic = direct_traffic_value
     kpis[:direct_traffic] = { value: direct_traffic } if !direct_traffic.nil?
 
+    kpis[:bounce_rate] = { value: bounce_rate_value }
+    kpis[:average_session_duration_seconds] = { value: average_session_duration_value }
+
     kpis
+  end
+
+  def bounce_rate_value
+    sessions = session_engagement_totals[:sessions]
+    return nil if sessions.zero?
+
+    ((session_engagement_totals[:bounced].to_f / sessions) * 100).round
+  end
+
+  def average_session_duration_value
+    sessions = session_engagement_totals[:sessions]
+    return nil if sessions.zero?
+
+    (session_engagement_totals[:engaged_seconds_total].to_f / sessions).round
+  end
+
+  def session_engagement_totals
+    @session_engagement_totals ||=
+      DB
+        .query_hash(<<~SQL, start_date: start_date.to_date, end_date: end_date.to_date)
+          SELECT
+            COALESCE(SUM(#{human_column("sessions", "likely_crawler_sessions")}), 0)::bigint AS sessions,
+            COALESCE(SUM(#{human_column("bounced", "likely_crawler_bounced")}), 0)::bigint AS bounced,
+            COALESCE(
+              SUM(#{human_column("engaged_seconds_total", "likely_crawler_engaged_seconds_total")}),
+              0
+            )::bigint AS engaged_seconds_total
+          FROM browser_pageview_session_engagement_daily_rollups
+          WHERE date >= :start_date
+            AND date <= :end_date
+        SQL
+        .first
+        .symbolize_keys
+  end
+
+  def human_column(column, crawler_column)
+    return column if !likely_crawlers_enabled?
+
+    "GREATEST(#{column} - #{crawler_column}, 0)"
   end
 
   def browser_pageviews_kpi(totals, prior_rows)
@@ -130,14 +181,12 @@ class AdminDashboardSiteTraffic
   end
 
   def direct_traffic_value
-    return nil if !SiteSetting.persist_browser_pageview_events
-
-    count_column = login_required? ? "logged_in_count" : "count"
+    count_sql = BrowserPageviewEvent.rollup_count_sql
 
     row = DB.query(<<~SQL, start_date: start_date.to_date, end_date: end_date.to_date).first
           SELECT
-            COALESCE(SUM(#{count_column}), 0)::bigint AS total,
-            COALESCE(SUM(#{count_column}) FILTER (WHERE normalized_referrer IS NULL), 0)::bigint AS direct
+            COALESCE(SUM(#{count_sql}), 0)::bigint AS total,
+            COALESCE(SUM(#{count_sql}) FILTER (WHERE normalized_referrer IS NULL), 0)::bigint AS direct
           FROM browser_pageview_referrer_daily_rollups
           WHERE date >= :start_date
             AND date <= :end_date
@@ -164,7 +213,7 @@ class AdminDashboardSiteTraffic
   end
 
   def series_req(id)
-    selected_request_type_names.fetch(id)
+    selected_request_type_names.fetch(id) { series_label_req(id) }
   end
 
   def series_label(id)
@@ -200,9 +249,16 @@ class AdminDashboardSiteTraffic
 
     req_type_sql =
       if login_required?
-        "req_type = :logged_in_req_type"
+        "req_type IN (:logged_in_req_type, :logged_in_beacon_req_type)"
       else
-        "req_type IN (:logged_in_req_type, :anonymous_req_type)"
+        <<~SQL.squish
+          req_type IN (
+            :logged_in_req_type,
+            :anonymous_req_type,
+            :logged_in_beacon_req_type,
+            :anonymous_beacon_req_type
+          )
+        SQL
       end
 
     @prior_period_tracking_started =
@@ -217,6 +273,8 @@ class AdminDashboardSiteTraffic
         prior_start_date: prior_start_date,
         logged_in_req_type: selected_request_types[:logged_in],
         anonymous_req_type: selected_request_types[:anonymous],
+        logged_in_beacon_req_type: beacon_request_types[:logged_in],
+        anonymous_beacon_req_type: beacon_request_types[:anonymous],
       ).present?
   end
 
@@ -242,6 +300,38 @@ class AdminDashboardSiteTraffic
       end.merge(crawlers: "page_view_crawler", embedded: "page_view_embed")
   end
 
+  def beacon_request_types
+    @beacon_request_types ||= {
+      logged_in: ApplicationRequest.req_types["page_view_logged_in_browser_beacon"],
+      anonymous: ApplicationRequest.req_types["page_view_anon_browser_beacon"],
+    }
+  end
+
+  def human_pageviews_sql(range_start_date, range_end_date)
+    requests =
+      if SiteSetting.use_legacy_pageviews
+        ApplicationRequest.where(req_type: selected_request_types.values_at(:logged_in, :anonymous))
+      else
+        ApplicationRequest.browser_pageviews
+      end
+
+    <<~SQL
+      SELECT date,
+        COALESCE(SUM(count) FILTER (WHERE req_type IN (#{logged_in_req_types.join(",")})), 0)::bigint AS logged_in,
+        COALESCE(SUM(count) FILTER (WHERE req_type IN (#{anonymous_req_types.join(",")})), 0)::bigint AS anonymous
+      FROM (#{requests.where(date: range_start_date..range_end_date).to_sql}) requests
+      GROUP BY date
+    SQL
+  end
+
+  def logged_in_req_types
+    [selected_request_types[:logged_in], beacon_request_types[:logged_in]].compact
+  end
+
+  def anonymous_req_types
+    [selected_request_types[:anonymous], beacon_request_types[:anonymous]].compact
+  end
+
   def traffic_rows(range_start_date, range_end_date)
     DB.query(
       <<~SQL,
@@ -253,29 +343,50 @@ class AdminDashboardSiteTraffic
             CAST(:end_date AS date),
             INTERVAL '1 day'
           ) request_date
+        ),
+        likely_crawlers AS (
+          SELECT
+            date,
+            COALESCE(SUM(count) FILTER (WHERE logged_in), 0)::bigint AS logged_in,
+            COALESCE(SUM(count) FILTER (WHERE NOT logged_in), 0)::bigint AS anonymous
+          FROM browser_pageview_crawler_daily_rollups
+          WHERE :likely_crawlers_enabled
+            AND date >= CAST(:start_date AS date)
+            AND date <= CAST(:end_date AS date)
+          GROUP BY date
+        ),
+        human_pageviews AS (
+          #{human_pageviews_sql(range_start_date, range_end_date)}
         )
         SELECT
           dates.date,
-          COALESCE(SUM(CASE WHEN ar.req_type = :logged_in_req_type THEN ar.count ELSE 0 END), 0)::bigint AS logged_in,
-          COALESCE(SUM(CASE WHEN ar.req_type = :anonymous_req_type THEN ar.count ELSE 0 END), 0)::bigint AS anonymous,
+          GREATEST(
+            0,
+            COALESCE(MAX(hp.logged_in), 0) - COALESCE(MAX(lc.logged_in), 0)
+          )::bigint AS logged_in,
+          GREATEST(
+            0,
+            COALESCE(MAX(hp.anonymous), 0) - COALESCE(MAX(lc.anonymous), 0)
+          )::bigint AS anonymous,
           COALESCE(SUM(CASE WHEN ar.req_type = :crawler_req_type THEN ar.count ELSE 0 END), 0)::bigint AS crawlers,
-          COALESCE(SUM(CASE WHEN ar.req_type = :embedded_req_type THEN ar.count ELSE 0 END), 0)::bigint AS embedded
+          COALESCE(SUM(CASE WHEN ar.req_type = :embedded_req_type THEN ar.count ELSE 0 END), 0)::bigint AS embedded,
+          (
+            COALESCE(MAX(lc.logged_in), 0)
+            + CASE WHEN :login_required THEN 0 ELSE COALESCE(MAX(lc.anonymous), 0) END
+          )::bigint AS likely_crawlers
         FROM dates
         LEFT JOIN application_requests ar
           ON ar.date = dates.date
-          AND ar.req_type IN (
-            :logged_in_req_type,
-            :anonymous_req_type,
-            :crawler_req_type,
-            :embedded_req_type
-          )
+          AND ar.req_type IN (:crawler_req_type, :embedded_req_type)
+        LEFT JOIN human_pageviews hp ON hp.date = dates.date
+        LEFT JOIN likely_crawlers lc ON lc.date = dates.date
         GROUP BY dates.date
         ORDER BY dates.date ASC
       SQL
       start_date: range_start_date,
       end_date: range_end_date,
-      logged_in_req_type: selected_request_types[:logged_in],
-      anonymous_req_type: selected_request_types[:anonymous],
+      likely_crawlers_enabled: likely_crawlers_enabled?,
+      login_required: login_required?,
       crawler_req_type: selected_request_types[:crawlers],
       embedded_req_type: selected_request_types[:embedded],
     )
@@ -292,6 +403,7 @@ class AdminDashboardSiteTraffic
       anonymous: anonymous,
       embedded: embedded,
       crawlers: crawlers,
+      likely_crawlers: likely_crawlers_enabled? ? sum_rows(rows, :likely_crawlers) : 0,
       human: logged_in + anonymous,
     }
   end

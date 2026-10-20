@@ -14,7 +14,7 @@ RSpec.describe Group do
 
     describe "#grant_trust_level" do
       describe "when trust level is not valid" do
-        it "should not be valid" do
+        it "is invalid" do
           group.grant_trust_level = 123_456
 
           expect(group.valid?).to eq(false)
@@ -28,7 +28,7 @@ RSpec.describe Group do
 
     describe "#name" do
       context "when a user with a similar name exists" do
-        it "should not be valid" do
+        it "is invalid" do
           new_group = Fabricate.build(:group, name: admin.username.upcase)
 
           expect(new_group).to_not be_valid
@@ -40,7 +40,7 @@ RSpec.describe Group do
       end
 
       context "when a group with a similar name exists" do
-        it "should not be valid" do
+        it "is invalid" do
           new_group = Fabricate.build(:group, name: group.name.upcase)
 
           expect(new_group).to_not be_valid
@@ -52,7 +52,7 @@ RSpec.describe Group do
       end
 
       context "when a group with a reserved name is created" do
-        it "should not be valid" do
+        it "is invalid" do
           new_group = Fabricate.build(:group, name: "by-id")
           expect(new_group).to_not be_valid
 
@@ -174,13 +174,19 @@ RSpec.describe Group do
     end
 
     it "is invalid for poorly formatted domains" do
-      group.automatic_membership_email_domains = "wikipedia.org|*@example.com"
+      group.automatic_membership_email_domains = "wikipedia.org|not a domain"
       expect(group.valid?).to eq false
     end
 
     it "is valid for proper domains" do
       group.automatic_membership_email_domains = "discourse.org|wikipedia.org"
       expect(group.valid?).to eq true
+    end
+
+    it "normalizes domains that include an @ or surrounding whitespace" do
+      group.automatic_membership_email_domains = " @discourse.org | jane@wikipedia.org "
+      expect(group.valid?).to eq true
+      expect(group.automatic_membership_email_domains).to eq("discourse.org|wikipedia.org")
     end
 
     it "is invalid for too many domains" do
@@ -211,7 +217,7 @@ RSpec.describe Group do
 
     context "when a group has no owners" do
       describe "group has not been persisted" do
-        it "should not allow membership requests" do
+        it "does not allow membership requests" do
           group = Fabricate.build(:group, allow_membership_requests: true)
 
           expect(group.valid?).to eq(false)
@@ -226,7 +232,7 @@ RSpec.describe Group do
         end
       end
 
-      it "should not allow membership requests" do
+      it "does not allow membership requests" do
         group.allow_membership_requests = true
 
         expect(group.valid?).to eq(false)
@@ -243,6 +249,36 @@ RSpec.describe Group do
 
         expect(group.valid?).to eq(true)
       end
+    end
+  end
+
+  describe ".get_valid_email_domains" do
+    it "normalizes URLs, emails, ports, case, and surrounding whitespace to bare domains" do
+      expect(Group.get_valid_email_domains("HTTPS://Discourse.ORG/path")).to eq(["discourse.org"])
+      expect(Group.get_valid_email_domains("@discourse.org")).to eq(["discourse.org"])
+      expect(Group.get_valid_email_domains("jane@discourse.org")).to eq(["discourse.org"])
+      expect(Group.get_valid_email_domains("a@b@discourse.org")).to eq(["discourse.org"])
+      expect(Group.get_valid_email_domains("  discourse.org  ")).to eq(["discourse.org"])
+      expect(Group.get_valid_email_domains("discourse.org:8080")).to eq(["discourse.org"])
+    end
+
+    it "collapses entries that normalize to the same domain, ignoring case" do
+      expect(Group.get_valid_email_domains("sales@acme.io|support@acme.io")).to eq(["acme.io"])
+      expect(Group.get_valid_email_domains("Acme.io|acme.io")).to eq(["acme.io"])
+    end
+
+    it "skips blank entries left by stray pipes or a bare @" do
+      invalid = []
+      valid = Group.get_valid_email_domains("acme.io||jane@") { |d| invalid << d }
+      expect(valid).to eq(["acme.io"])
+      expect(invalid).to be_empty
+    end
+
+    it "yields the normalized value for genuinely invalid domains" do
+      invalid = []
+      valid = Group.get_valid_email_domains("@discourse.org|not a domain") { |d| invalid << d }
+      expect(valid).to eq(["discourse.org"])
+      expect(invalid).to eq(["not a domain"])
     end
   end
 
@@ -413,20 +449,20 @@ RSpec.describe Group do
       end
     end
 
-    it "makes sure the everyone group is not visible except to staff" do
+    it "makes sure the everyone group is visible to logged in users" do
       g = Group.refresh_automatic_group!(:everyone)
-      expect(g.visibility_level).to eq(Group.visibility_levels[:staff])
+      expect(g.visibility_level).to eq(Group.visibility_levels[:logged_on_users])
     end
 
-    it "makes sure the anonymous_users and logged_in_users pseudogroups are hidden and have no members" do
+    it "makes sure pseudogroups are visible and have no members" do
       anon = Group.refresh_automatic_group!(:anonymous_users)
       expect(anon.id).to eq(Group::AUTO_GROUPS[:anonymous_users])
-      expect(anon.visibility_level).to eq(Group.visibility_levels[:staff])
+      expect(anon.visibility_level).to eq(Group.visibility_levels[:logged_on_users])
       expect(GroupUser.where(group_id: anon.id).count).to eq(0)
 
       logged_in = Group.refresh_automatic_group!(:logged_in_users)
       expect(logged_in.id).to eq(Group::AUTO_GROUPS[:logged_in_users])
-      expect(logged_in.visibility_level).to eq(Group.visibility_levels[:staff])
+      expect(logged_in.visibility_level).to eq(Group.visibility_levels[:logged_on_users])
       expect(GroupUser.where(group_id: logged_in.id).count).to eq(0)
     end
 
@@ -656,6 +692,39 @@ RSpec.describe Group do
     expect(g.human_users).to contain_exactly(admin, other_admin, other_user)
   end
 
+  describe ".reset_user_count" do
+    fab!(:bot)
+    fab!(:group)
+
+    it "counts bots in automatic groups not created by core" do
+      group.update_columns(automatic: true)
+      group.add(bot)
+      group.update_columns(user_count: 0)
+
+      Group.reset_user_count(group)
+
+      expect(group.reload.user_count).to eq(1)
+    end
+
+    it "does not count bots in hand-managed groups" do
+      group.add(bot)
+      group.add(Fabricate(:user))
+      group.update_columns(user_count: 0)
+
+      Group.reset_user_count(group)
+
+      expect(group.reload.user_count).to eq(1)
+    end
+
+    it "resets groups without any counted members to zero" do
+      group.update_columns(user_count: 4)
+
+      Group.ensure_consistency!
+
+      expect(group.reload.user_count).to eq(0)
+    end
+  end
+
   it "can set members via usernames helper" do
     g = Fabricate(:group)
     u1 = Fabricate(:user)
@@ -695,7 +764,7 @@ RSpec.describe Group do
 
     before { group.add(user) }
 
-    it "it deleted correctly" do
+    it "deletes the group and its associations" do
       group.destroy!
       expect(User.where(id: user.id).count).to eq 1
       expect(GroupUser.where(group_id: group.id).count).to eq 0
@@ -785,6 +854,95 @@ RSpec.describe Group do
     expect(Group.desired_trust_level_groups(2)).to contain_exactly(10, 11, 12)
   end
 
+  describe ".refresh_automatic_groups_for_user!" do
+    def automatic_group_ids_for(user)
+      GroupUser.where(user:, group_id: Group.auto_groups_between(:admins, :trust_level_4)).pluck(
+        :group_id,
+      )
+    end
+
+    it "adds the cumulative trust level groups without materializing implicit pseudogroups" do
+      user = Fabricate(:user)
+      user.update_column(:trust_level, TrustLevel[3])
+
+      described_class.refresh_automatic_groups_for_user!(user)
+
+      expect(automatic_group_ids_for(user)).to contain_exactly(
+        *Group::AUTO_GROUPS.values_at(
+          :trust_level_0,
+          :trust_level_1,
+          :trust_level_2,
+          :trust_level_3,
+        ),
+      )
+      expect(
+        GroupUser.where(
+          user:,
+          group_id: Group::AUTO_GROUPS.values_at(:everyone, :anonymous_users, :logged_in_users),
+        ),
+      ).to be_empty
+    end
+
+    it "adds the automatic groups matching the user's staff roles" do
+      admin = Fabricate(:user)
+      admin.update_columns(admin: true, trust_level: TrustLevel[4])
+      moderator = Fabricate(:user)
+      moderator.update_column(:moderator, true)
+
+      described_class.refresh_automatic_groups_for_user!(admin)
+      described_class.refresh_automatic_groups_for_user!(moderator)
+
+      expect(automatic_group_ids_for(admin)).to contain_exactly(
+        *Group::AUTO_GROUPS.values_at(
+          :admins,
+          :staff,
+          :trust_level_0,
+          :trust_level_1,
+          :trust_level_2,
+          :trust_level_3,
+          :trust_level_4,
+        ),
+      )
+      expect(automatic_group_ids_for(moderator)).to contain_exactly(
+        *Group::AUTO_GROUPS.values_at(:moderators, :staff, :trust_level_0, :trust_level_1),
+      )
+    end
+
+    it "removes stale automatic memberships while preserving custom groups" do
+      user = Fabricate(:user)
+      custom_group = Fabricate(:group)
+      custom_group.add(user)
+      user.update_columns(admin: true, trust_level: TrustLevel[4])
+      described_class.refresh_automatic_groups_for_user!(user)
+
+      user.update_columns(admin: false, trust_level: TrustLevel[0])
+      described_class.refresh_automatic_groups_for_user!(user)
+      described_class.refresh_automatic_groups_for_user!(user)
+
+      expect(automatic_group_ids_for(user)).to contain_exactly(Group::AUTO_GROUPS[:trust_level_0])
+      expect(user.groups).to include(custom_group)
+    end
+
+    it "adds automatic memberships to staged users" do
+      user = Fabricate(:staged)
+      user.update_columns(admin: true, moderator: true, trust_level: TrustLevel[4])
+      described_class.refresh_automatic_groups_for_user!(user)
+
+      expect(automatic_group_ids_for(user)).to contain_exactly(
+        *Group::AUTO_GROUPS.values_at(
+          :admins,
+          :moderators,
+          :staff,
+          :trust_level_0,
+          :trust_level_1,
+          :trust_level_2,
+          :trust_level_3,
+          :trust_level_4,
+        ),
+      )
+    end
+  end
+
   it "correctly handles trust level changes" do
     user = Fabricate(:user, trust_level: 2)
     Group.user_trust_level_change!(user.id, 2)
@@ -858,7 +1016,7 @@ RSpec.describe Group do
 
       before { user.user_stat.update!(topics_entered: 999, posts_read_count: 999, time_read: 999) }
 
-      it "should not demote the user" do
+      it "does not demote the user" do
         group.add(user)
         group2.add(user)
 
@@ -909,7 +1067,7 @@ RSpec.describe Group do
     end
   end
 
-  it "should cook the bio" do
+  it "cooks the group biography" do
     group = Fabricate(:group)
     group.update!(bio_raw: "This is a group for :unicorn: lovers")
 
@@ -951,13 +1109,7 @@ RSpec.describe Group do
       ).to eq(false)
     end
 
-    it "includes logged_in_users, anonymous_users and everyone groups when include_pseudogroups is true" do
-      expect(
-        Group
-          .visible_groups(admin, [], include_pseudogroups: true)
-          .where(id: Group::AUTO_GROUPS[:everyone])
-          .exists?,
-      ).to eq(true)
+    it "includes logged_in_users and anonymous_users groups when include_pseudogroups is true, and everyone when that is also requested" do
       expect(
         Group
           .visible_groups(admin, [], include_pseudogroups: true)
@@ -970,6 +1122,44 @@ RSpec.describe Group do
           .where(id: Group::AUTO_GROUPS[:logged_in_users])
           .exists?,
       ).to eq(true)
+      expect(
+        Group
+          .visible_groups(admin, [], include_pseudogroups: true)
+          .where(id: Group::AUTO_GROUPS[:everyone])
+          .exists?,
+      ).to eq(false)
+      expect(
+        Group
+          .visible_groups(admin, [], include_pseudogroups: true, include_everyone: true)
+          .where(id: Group::AUTO_GROUPS[:everyone])
+          .exists?,
+      ).to eq(true)
+    end
+
+    it "includes pseudogroups for regular users when requested" do
+      regular_user = Fabricate(:user)
+      Group.refresh_automatic_groups!(:everyone, :anonymous_users, :logged_in_users)
+
+      visible_group_ids =
+        Group.visible_groups(regular_user, [], include_pseudogroups: true).pluck(:id)
+
+      expect(visible_group_ids).to include(
+        Group::AUTO_GROUPS[:anonymous_users],
+        Group::AUTO_GROUPS[:logged_in_users],
+      )
+      expect(visible_group_ids).to_not include(Group::AUTO_GROUPS[:everyone])
+      expect(
+        Group
+          .visible_groups(nil, [], include_pseudogroups: true)
+          .where(
+            id: [
+              Group::AUTO_GROUPS[:everyone],
+              Group::AUTO_GROUPS[:anonymous_users],
+              Group::AUTO_GROUPS[:logged_in_users],
+            ],
+          )
+          .exists?,
+      ).to eq(false)
     end
 
     it "does not include logged_in_users, anonymous_users and everyone groups by default" do
@@ -1144,6 +1334,20 @@ RSpec.describe Group do
       expect(events).to include(:user_removed_from_group)
     end
 
+    it "enqueues an inaccessible-notifications cleanup for each PM the removed user has notifications on" do
+      pm_topic1 = Fabricate(:private_message_topic)
+      pm_topic2 = Fabricate(:private_message_topic)
+      Fabricate(:topic_allowed_group, topic: pm_topic1, group: group)
+      Fabricate(:topic_allowed_group, topic: pm_topic2, group: group)
+      Fabricate(:notification, user: user, topic: pm_topic1)
+      Fabricate(:notification, user: user, topic: pm_topic2)
+
+      group.remove(user)
+
+      expect_job_enqueued(job: :delete_inaccessible_notifications, args: { topic_id: pm_topic1.id })
+      expect_job_enqueued(job: :delete_inaccessible_notifications, args: { topic_id: pm_topic2.id })
+    end
+
     describe "with webhook" do
       fab!(:group_user_web_hook)
 
@@ -1163,7 +1367,7 @@ RSpec.describe Group do
 
       before { group.update!(public_exit: true) }
 
-      it "should publish category removal when category is read-restricted to the group" do
+      it "publishes category removal when the group loses read access" do
         category.set_permissions(group => :full)
         category.save!
         group.update!(categories: [category])
@@ -1175,7 +1379,7 @@ RSpec.describe Group do
         expect(message.user_ids).to eq([user.id])
       end
 
-      it "should publish updated category permissions when category is readable by everyone" do
+      it "publishes updated permissions for a publicly readable category" do
         category.set_permissions(:everyone => :readonly, group => :full)
         category.save!
         group.update!(categories: [category])
@@ -1189,7 +1393,7 @@ RSpec.describe Group do
       end
 
       describe "when group belongs to more than #{Group::PUBLISH_CATEGORIES_LIMIT} categories" do
-        it "should publish a message to refresh the user's client" do
+        it "publishes a client refresh for the user" do
           group.categories += Fabricate.times(Group::PUBLISH_CATEGORIES_LIMIT + 1, :category)
 
           message = MessageBus.track_publish { group.remove(user) }.first
@@ -1258,7 +1462,7 @@ RSpec.describe Group do
     context "when adding a user into a public group" do
       fab!(:category)
 
-      it "should publish the group's categories to the client" do
+      it "publishes the group's categories to the client" do
         group.update!(public_admission: true, categories: [category])
 
         message = MessageBus.track_publish("/categories") { group.add(user) }.first
@@ -1269,7 +1473,7 @@ RSpec.describe Group do
       end
 
       describe "when group belongs to more than #{Group::PUBLISH_CATEGORIES_LIMIT} categories" do
-        it "should publish a message to refresh the user's client" do
+        it "publishes a client refresh for the user" do
           group.categories += Fabricate.times(Group::PUBLISH_CATEGORIES_LIMIT + 1, :category)
 
           message = MessageBus.track_publish { group.add(user) }.first
@@ -1287,7 +1491,7 @@ RSpec.describe Group do
       Group.search_groups(name, sort: :auto).map(&:name)
     end
 
-    it "should return the right groups" do
+    it "returns the matching groups" do
       Group.delete_all
 
       group_name =
@@ -1304,7 +1508,7 @@ RSpec.describe Group do
       expect(search_group_names("test2")).to eq([])
     end
 
-    it "should prioritize prefix matches on group's name or fullname" do
+    it "prioritizes prefix matches on the group's name or full name" do
       Fabricate(:group, name: "pears_11", full_name: "fred apple")
       Fabricate(:group, name: "apples", full_name: "jane orange")
       Fabricate(:group, name: "oranges2", full_name: "nothing")
@@ -1497,6 +1701,20 @@ RSpec.describe Group do
       expect(result).to contain_exactly(user.id, admin.id)
     end
 
+    it "enqueues an inaccessible-notifications cleanup for each PM a removed user has notifications on" do
+      pm_topic1 = Fabricate(:private_message_topic)
+      pm_topic2 = Fabricate(:private_message_topic)
+      Fabricate(:topic_allowed_group, topic: pm_topic1, group: group)
+      Fabricate(:topic_allowed_group, topic: pm_topic2, group: group)
+      Fabricate(:notification, user: user, topic: pm_topic1)
+      Fabricate(:notification, user: admin, topic: pm_topic2)
+
+      group.bulk_remove([user.id, admin.id])
+
+      expect_job_enqueued(job: :delete_inaccessible_notifications, args: { topic_id: pm_topic1.id })
+      expect_job_enqueued(job: :delete_inaccessible_notifications, args: { topic_id: pm_topic2.id })
+    end
+
     it "clears primary_group_id" do
       group.update!(primary_group: true)
       User.where(id: [user.id, admin.id]).update_all(primary_group_id: group.id)
@@ -1615,7 +1833,7 @@ RSpec.describe Group do
   describe "#automatic_group_membership" do
     let(:group) { Fabricate(:group, automatic_membership_email_domains: "example.com") }
 
-    it "should be triggered on create and update" do
+    it "runs on create and update" do
       expect { group }.to change { Jobs::AutomaticGroupMembership.jobs.size }.by(1)
 
       job = Jobs::AutomaticGroupMembership.jobs.last
@@ -1637,7 +1855,7 @@ RSpec.describe Group do
   describe "Unicode usernames and group names" do
     before { SiteSetting.unicode_usernames = true }
 
-    it "should normalize the name" do
+    it "normalizes the group name" do
       group = Fabricate(:group, name: "Bücherwurm") # NFD
       expect(group.name).to eq("Bücherwurm") # NFC
     end

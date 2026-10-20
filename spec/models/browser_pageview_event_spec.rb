@@ -17,6 +17,8 @@ RSpec.describe BrowserPageviewEvent do
         url: "a" * (described_class::MAX_URL_LENGTH + 1),
         referrer: "a" * (described_class::MAX_REFERRER_LENGTH + 1),
         user_agent: "a" * (described_class::MAX_USER_AGENT_LENGTH + 1),
+        language: "a" * (described_class::MAX_LANGUAGE_LENGTH + 1),
+        normalized_language: "a" * (described_class::MAX_NORMALIZED_LANGUAGE_LENGTH + 1),
         ip_address: "1.2.3.4",
         session_id: "a" * (described_class::MAX_SESSION_ID_LENGTH + 1),
         normalized_referrer: "a" * (described_class::MAX_NORMALIZED_REFERRER_LENGTH + 1),
@@ -25,6 +27,8 @@ RSpec.describe BrowserPageviewEvent do
     expect(event.url.length).to eq(described_class::MAX_URL_LENGTH)
     expect(event.referrer.length).to eq(described_class::MAX_REFERRER_LENGTH)
     expect(event.user_agent.length).to eq(described_class::MAX_USER_AGENT_LENGTH)
+    expect(event.language.length).to eq(described_class::MAX_LANGUAGE_LENGTH)
+    expect(event.normalized_language.length).to eq(described_class::MAX_NORMALIZED_LANGUAGE_LENGTH)
     expect(event.session_id.length).to eq(described_class::MAX_SESSION_ID_LENGTH)
     expect(event.normalized_referrer.length).to eq(described_class::MAX_NORMALIZED_REFERRER_LENGTH)
   end
@@ -39,10 +43,10 @@ RSpec.describe BrowserPageviewEvent do
         country_code: "AU",
         asn: 12_345,
         referrer: "https://www.example.com/path?utm_source=x",
-        user_agent: "Mozilla/5.0",
+        user_agent: "Mozilla/5.0 Chrome/124.0 Safari/537.36 Edg/124.0",
+        language: "en-AU",
         session_id: "xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx",
         topic_id: 123,
-        source: described_class::SOURCE_BEACON,
         occurred_at: occurred_at.iso8601(6),
       }
     end
@@ -66,9 +70,30 @@ RSpec.describe BrowserPageviewEvent do
       expect(event.url).to eq(payload[:url])
       expect(event.country_code).to eq("AU")
       expect(event.asn).to eq(12_345)
+      expect(event.normalized_url).to eq("/t/topic/1")
+      expect(event.normalized_url_version).to eq(
+        BrowserPageviewEventUrlNormalizer::SITE_PATH_VERSION,
+      )
       expect(event.normalized_referrer).to eq("example.com/path")
       expect(event.created_at).to eq_time(occurred_at)
-      expect(event.source).to eq("beacon")
+      expect(event.browser).to eq("edge")
+      expect(event.language).to eq("en-AU")
+      expect(event.normalized_language).to eq("en")
+      expect(described_class.queued_count).to eq(0)
+    end
+
+    it "discards queued piggyback events while preserving old and new beacon payloads" do
+      [1, 2].each do |source|
+        Discourse.redis.rpush(
+          described_class::REDIS_QUEUE_KEY,
+          JSON.generate(payload.merge(source: source, url: "/source-#{source}")),
+        )
+      end
+      queue_payload(payload)
+
+      expect(described_class.flush_queued!).to eq(3)
+
+      expect(described_class.pluck(:url)).to contain_exactly("/source-2", payload[:url])
       expect(described_class.queued_count).to eq(0)
     end
 

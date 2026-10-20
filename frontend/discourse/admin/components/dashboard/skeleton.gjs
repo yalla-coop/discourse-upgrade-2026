@@ -6,11 +6,11 @@ const TRAFFIC_LIST_ROWS = Array.from({ length: 5 });
 const METRICS = Array.from({ length: 3 });
 const ENGAGEMENT_ACTIVITY_ROWS = Array.from({ length: 4 });
 
-<template>
+export default <template>
   <div
+    aria-label={{i18n "admin.dashboard.loading"}}
     class="db-skeleton --animation"
     role="status"
-    aria-label={{i18n "admin.dashboard.loading"}}
   >
     <section class="db-skeleton__section db-skeleton__highlights">
       <div class="db-skeleton__section-header"></div>

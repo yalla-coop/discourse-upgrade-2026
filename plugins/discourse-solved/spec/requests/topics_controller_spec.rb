@@ -4,8 +4,11 @@ RSpec.describe TopicsController do
   let(:p1) { Fabricate(:post, like_count: 1) }
   let(:topic) { p1.topic }
   let(:p2) { Fabricate(:post, like_count: 2, topic:, user: Fabricate(:user)) }
+  let(:p2_single_answer_json) do
+    ',"acceptedAnswer":[%{answer_json}]' % { answer_json: solved_answer_json(post: p2) }
+  end
 
-  def answer_json(post)
+  def solved_answer_json(post:)
     '{"@type":"Answer","author":{"@type":"Person","name":"%{username2}","url":"%{user2_url}"},"dateModified":"%{answer_modified}","datePublished":"%{answered_at}","text":"%{answer_text}","upvoteCount":%{answer_likes},"url":"%{answer_url}"}' %
       {
         answer_text: post.excerpt,
@@ -18,41 +21,38 @@ RSpec.describe TopicsController do
       }
   end
 
-  def p2_single_answer_json
-    ',"acceptedAnswer":[%{answer_json}]' % { answer_json: answer_json(p2) }
-  end
-
-  def expected_schema_json(answer_json, answer_count = 1)
+  def solved_schema_json(topic:, first_post:, answers_json:, answer_count: 1)
     '<script type="application/ld+json">{"@context":"http://schema.org","@type":"QAPage","name":"%{title}","datePublished":"%{created_at}","mainEntity":{"@type":"Question","answerCount":%{answer_count},"author":{"@type":"Person","name":"%{username1}","url":"%{user1_url}"},"dateModified":"%{question_modified}","datePublished":"%{created_at}","name":"%{title}","text":"%{question_text}","upvoteCount":%{question_likes}%{answer_json}}}</script>' %
-      # rubocop:enable Layout/LineLength
       {
         answer_count:,
         title: topic.title,
-        question_text: p1.excerpt,
-        question_likes: p1.like_count,
+        question_text: first_post.excerpt,
+        question_likes: first_post.like_count,
         created_at: topic.created_at.as_json,
-        question_modified: (p1.last_version_at || p1.created_at).as_json,
+        question_modified: (first_post.last_version_at || first_post.created_at).as_json,
         username1: topic.user&.username,
         user1_url: topic.user&.full_url,
-        answer_json:,
+        answer_json: answers_json,
       }
   end
 
   context "with solved enabled on every topic" do
     before { SiteSetting.allow_solved_on_all_topics = true }
 
-    it "should not include schema information for single-post topics without answers" do
+    it "omits schema information for single-post topics without answers" do
       get "/t/#{topic.slug}/#{topic.id}"
 
       expect(response.body).not_to include("QAPage")
     end
 
-    it "should include correct schema information when topic has an accepted answer" do
+    it "includes schema information for the accepted answer" do
       Fabricate(:solved_topic, topic:, answer_post: p2)
 
       get "/t/#{topic.slug}/#{topic.id}"
 
-      expect(response.body).to include(expected_schema_json(p2_single_answer_json))
+      expect(response.body).to include(
+        solved_schema_json(topic:, first_post: p1, answers_json: p2_single_answer_json),
+      )
     end
 
     it "does not include first post text in schema information when the guardian cannot see it" do
@@ -74,7 +74,7 @@ RSpec.describe TopicsController do
       expect(schema_json).not_to include(hidden_text)
     end
 
-    it "should include quoted content in schema information" do
+    it "includes quoted content in schema information" do
       Fabricate(:solved_topic, topic:, answer_post: p2)
 
       post = topic.first_post
@@ -87,7 +87,7 @@ RSpec.describe TopicsController do
       expect(response.body).to include('"text":"This is a quoted text."')
     end
 
-    it "should include user name in output with the corresponding site setting" do
+    it "includes the user name when enabled in site settings" do
       SiteSetting.display_name_on_posts = true
       SiteSetting.show_who_marked_solved = true
       accepter = Fabricate(:user)
@@ -114,7 +114,7 @@ RSpec.describe TopicsController do
       expect(response.parsed_body["accepted_answers"][0]["accepter_name"]).to eq(nil)
     end
 
-    it "should not include user name when site setting is disabled" do
+    it "omits the user name when disabled in site settings" do
       SiteSetting.display_name_on_posts = false
       Fabricate(:solved_topic, topic:, answer_post: p2)
 
@@ -162,25 +162,24 @@ RSpec.describe TopicsController do
         let(:p3) { Fabricate(:post, topic:) }
         let(:p4) { Fabricate(:post, topic:) }
         let(:solved_topic) { Fabricate(:solved_topic, topic:) }
+        let!(:first_topic_answer) { Fabricate(:topic_answer, solved_topic:, post: p2) }
+        let!(:second_topic_answer) { Fabricate(:topic_answer, solved_topic:, post: p3) }
+        let!(:unaccepted_post) { p4 }
 
-        before do
-          Fabricate(:topic_answer, solved_topic:, post: p2)
-          Fabricate(:topic_answer, solved_topic:, post: p3)
-          p4
-        end
-
-        it "should include correct schema information " do
+        it "includes the expected schema information" do
           get "/t/#{topic.slug}/#{topic.id}"
 
           two_accepted_answers_json =
             ',"acceptedAnswer":[%{answer_p2},%{answer_p3}]' %
-              { answer_p2: answer_json(p2), answer_p3: answer_json(p3) }
+              { answer_p2: solved_answer_json(post: p2), answer_p3: solved_answer_json(post: p3) }
           suggested_answer_json =
-            ',"suggestedAnswer":[%{answer_p4}]' % { answer_p4: answer_json(p4) }
+            ',"suggestedAnswer":[%{answer_p4}]' % { answer_p4: solved_answer_json(post: p4) }
 
           answers_json = "#{two_accepted_answers_json}#{suggested_answer_json}"
 
-          expect(response.body).to include(expected_schema_json(answers_json, 3))
+          expect(response.body).to include(
+            solved_schema_json(topic:, first_post: p1, answers_json:, answer_count: 3),
+          )
         end
       end
     end
@@ -188,12 +187,9 @@ RSpec.describe TopicsController do
 
   describe "crawler schema modifiers" do
     let(:crawler_env) { { "HTTP_USER_AGENT" => "Googlebot" } }
+    let(:parsed_crawler_body) { Nokogiri::HTML5.fragment(response.body) }
 
     before { SiteSetting.allow_solved_on_all_topics = true }
-
-    def parsed_crawler_body
-      Nokogiri::HTML5.fragment(response.body)
-    end
 
     it "uses Question schema instead of DiscussionForumPosting when topic has replies" do
       Fabricate(:post, topic:, user: Fabricate(:user))
@@ -300,15 +296,13 @@ RSpec.describe TopicsController do
       let(:p3) { Fabricate(:post, topic:, cooked: "p3 cooked") }
       let(:p4) { Fabricate(:post, topic:, cooked: "p4 cooked") }
       let(:solved_topic) { Fabricate(:solved_topic, topic:) }
+      let!(:first_topic_answer) { Fabricate(:topic_answer, solved_topic:, post: p2) }
+      let!(:second_topic_answer) { Fabricate(:topic_answer, solved_topic:, post: p3) }
+      let!(:unaccepted_post) { p4 }
 
-      before do
-        SiteSetting.solved_allow_multiple_solutions = true
-        Fabricate(:topic_answer, solved_topic:, post: p2)
-        Fabricate(:topic_answer, solved_topic:, post: p3)
-        p4
-      end
+      before { SiteSetting.solved_allow_multiple_solutions = true }
 
-      it "should include two acceptedAnswers and a suggestedAnswer in qaschema" do
+      it "includes two acceptedAnswers and a suggestedAnswer in qaschema" do
         get "/t/#{topic.slug}/#{topic.id}", env: crawler_env
         doc = parsed_crawler_body
 
@@ -420,7 +414,9 @@ RSpec.describe TopicsController do
 
       get "/t/#{topic.slug}/#{topic.id}"
 
-      expect(response.body).to include(expected_schema_json(p2_single_answer_json))
+      expect(response.body).to include(
+        solved_schema_json(topic:, first_post: p1, answers_json: p2_single_answer_json),
+      )
     end
 
     it "doesn't include solved schema information when the topic has a different tag" do
@@ -431,7 +427,9 @@ RSpec.describe TopicsController do
 
       get "/t/#{topic.slug}/#{topic.id}"
 
-      expect(response.body).not_to include(expected_schema_json(p2_single_answer_json))
+      expect(response.body).not_to include(
+        solved_schema_json(topic:, first_post: p1, answers_json: p2_single_answer_json),
+      )
     end
   end
 end

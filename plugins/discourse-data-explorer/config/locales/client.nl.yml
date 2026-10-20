@@ -27,6 +27,7 @@ nl:
     explorer:
       default_query: "Standaard"
       default_query_notice: "Dit is een standaardquery, de SQL kan niet worden bewerkt. Maak een nieuwe query om de SQL te bewerken."
+      view_query: "Bekijken"
       queries: "Query's"
       query_created: "Query gemaakt!"
       mode:
@@ -122,7 +123,6 @@ nl:
       nodes:
         "action:sql": "Gegevensverkenner"
       sql:
-        queries: "Query's"
         query_id: "Query"
         add_param: "Parameter toevoegen"
         param_value: "Waarde"

@@ -226,7 +226,7 @@ RSpec.describe SearchController do
     end
 
     context "when searching by topic id" do
-      it "should not be restricted by minimum search term length" do
+      it "is not restricted by the minimum search-term length" do
         SiteSetting.min_search_term_length = 20_000
 
         get "/search/query.json",
@@ -242,7 +242,7 @@ RSpec.describe SearchController do
         expect(data["topics"][0]["id"]).to eq(awesome_post.topic_id)
       end
 
-      it "should return the right result" do
+      it "returns the topic matching the requested ID" do
         get "/search/query.json",
             params: {
               term: user_post.topic_id,
@@ -259,6 +259,25 @@ RSpec.describe SearchController do
   end
 
   describe "#query" do
+    context "when anonymous search is disabled" do
+      before { SiteSetting.allow_anonymous_search = false }
+
+      it "requires an anonymous user to log in" do
+        get "/search/query.json", params: { term: "wookie" }
+
+        expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body["error_type"]).to eq("not_logged_in")
+      end
+
+      it "allows a logged-in user" do
+        sign_in(user)
+
+        get "/search/query.json", params: { term: "wookie" }
+
+        expect(response).to have_http_status(:ok)
+      end
+    end
+
     it "logs the search term" do
       SiteSetting.log_search_queries = true
       get "/search/query.json", params: { term: "wookie" }
@@ -273,6 +292,22 @@ RSpec.describe SearchController do
       log = SearchLog.where(id: search_log_id).first
       expect(log).to be_present
       expect(log.term).to eq("wookie")
+    end
+
+    it "logs the pageview session the search was made from" do
+      SiteSetting.log_search_queries = true
+      session_id = SecureRandom.alphanumeric(32)
+
+      get "/search/query.json",
+          params: {
+            term: "wookie",
+          },
+          headers: {
+            "Discourse-Pageview-Session-Id" => session_id,
+          }
+
+      expect(response.status).to eq(200)
+      expect(SearchLog.find_by(term: "wookie").session_id).to eq(session_id)
     end
 
     it "doesn't log when disabled" do
@@ -387,6 +422,26 @@ RSpec.describe SearchController do
   end
 
   describe "#show" do
+    context "when an anonymous user cannot search" do
+      before { SiteSetting.allow_anonymous_search = false }
+
+      it "redirects an HTML request to login and preserves the destination" do
+        get "/search", params: { q: "猫" }
+
+        expect(response).to redirect_to("/login")
+        expect(URI.parse(response.cookies["destination_url"]).request_uri).to eq(
+          "/search?q=%E7%8C%AB",
+        )
+      end
+
+      it "rejects a JSON request" do
+        get "/search.json", params: { q: "wookie" }
+
+        expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body["error_type"]).to eq("not_logged_in")
+      end
+    end
+
     it "doesn't raise an error when search term not specified" do
       get "/search"
       expect(response.status).to eq(200)
@@ -597,7 +652,7 @@ RSpec.describe SearchController do
         end
       end
 
-      before { SiteSetting.lazy_load_categories_groups = "#{Group::AUTO_GROUPS[:everyone]}" }
+      before { SiteSetting.lazy_load_categories_groups = "#{Group::AUTO_GROUPS[:anonymous_users]}" }
 
       it "returns extra categories and parent categories" do
         get "/search.json", params: { q: "hello" }
@@ -637,8 +692,8 @@ RSpec.describe SearchController do
         end
       end
 
-      context "when show_original cookie is set" do
-        before { cookies[ContentLocalization::SHOW_ORIGINAL_COOKIE] = "true" }
+      context "when automatic translation is disabled by cookie" do
+        before { cookies[ContentLocalization::AUTOMATICALLY_TRANSLATE_COOKIE] = "false" }
 
         it "returns original blurb in search results" do
           with_search_indexer_enabled { SearchIndexer.index(localized_post.topic, force: true) }

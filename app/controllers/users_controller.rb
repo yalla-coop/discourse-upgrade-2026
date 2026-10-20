@@ -87,6 +87,7 @@ class UsersController < ApplicationController
                   update_security_key
                 ]
   before_action :respond_to_suspicious_request, only: [:create]
+  before_action :ensure_random_username_access, only: [:generate_random_username]
 
   # we need to allow account creation with bad CSRF tokens, if people are caching, the CSRF token on the
   #  page is going to be empty, this means that server will see an invalid CSRF and blow the session
@@ -109,6 +110,7 @@ class UsersController < ApplicationController
                        email_login
                        admin_login
                        confirm_admin
+                       generate_random_username
                      ]
   skip_before_action :redirect_to_profile_if_required, only: %i[show staff_info update]
 
@@ -116,6 +118,13 @@ class UsersController < ApplicationController
 
   allow_in_readonly_mode :admin_login
   allow_in_staff_writes_only_mode :email_login, :password_reset_update
+
+  allow_when_archived :email_login,
+                      :password_reset_update,
+                      :admin_login,
+                      :confirm_email_token,
+                      :perform_account_activation,
+                      :send_activation_email
 
   MAX_RECENT_SEARCHES = 5
 
@@ -324,8 +333,8 @@ class UsersController < ApplicationController
   def check_sso_email
     user = fetch_user_from_params(include_inactive: true)
 
-    unless user == current_user
-      guardian.ensure_can_check_sso_details!(user)
+    guardian.ensure_can_check_sso_email!(user)
+    if user != current_user
       StaffActionLogger.new(current_user).log_check_email(user, context: params[:context])
     end
 
@@ -340,7 +349,7 @@ class UsersController < ApplicationController
   def check_sso_payload
     user = fetch_user_from_params(include_inactive: true)
 
-    guardian.ensure_can_check_sso_details!(user)
+    guardian.ensure_can_check_sso_payload!(user)
     unless user == current_user
       StaffActionLogger.new(current_user).log_check_email(user, context: params[:context])
     end
@@ -375,7 +384,7 @@ class UsersController < ApplicationController
     User.transaction do
       old_primary.update!(primary: false)
       new_primary.update!(primary: true)
-      DiscourseEvent.trigger(:user_updated, user)
+      DiscourseEvent.trigger(:user_updated, user, %w[email])
 
       if current_user.staff? && current_user != user
         StaffActionLogger.new(current_user).log_update_email(user)
@@ -399,7 +408,7 @@ class UsersController < ApplicationController
       if change_requests = user.email_change_requests.where(new_email: params[:email]).presence
         change_requests.destroy_all
       elsif user.user_emails.where(email: params[:email], primary: false).destroy_all.present?
-        DiscourseEvent.trigger(:user_updated, user)
+        DiscourseEvent.trigger(:user_updated, user, %w[email])
       else
         return render json: failed_json, status: :precondition_required
       end
@@ -601,8 +610,10 @@ class UsersController < ApplicationController
     end
   end
 
-  def render_available_true
-    render(json: { available: true })
+  def render_available_true(username = nil)
+    result = { available: true }
+    result[:avatar_template] = User.default_template(username) if username
+    render json: result
   end
 
   def changing_case_of_own_username(target_user, username)
@@ -612,6 +623,21 @@ class UsersController < ApplicationController
   # Used for checking availability of a username and will return suggestions
   # if the username is not available.
   def check_username
+    # Anonymous callers are only ever running signup, so once local registration
+    # is closed the endpoint would just be a username-existence oracle.
+    if !current_user &&
+         (!SiteSetting.allow_new_registrations || SiteSetting.enable_discourse_connect)
+      raise Discourse::InvalidAccess
+    end
+
+    # The check is advisory and `create` re-validates, so a throttled caller gets
+    # an optimistic answer rather than an error that blocks the signup form.
+    begin
+      RateLimiter.new(current_user, "check-username-#{request.remote_ip}", 60, 1.minute).performed!
+    rescue RateLimiter::LimitExceeded
+      return render_available_true
+    end
+
     if !params[:username].present?
       params.require(:username) if !params[:email].present?
       return render(json: success_json)
@@ -621,19 +647,42 @@ class UsersController < ApplicationController
     target_user = user_from_params_or_current_user
 
     # The special case where someone is changing the case of their own username
-    return render_available_true if changing_case_of_own_username(target_user, username)
+    return render_available_true(username) if changing_case_of_own_username(target_user, username)
 
     checker = UsernameCheckerService.new(allow_reserved_username: current_user&.admin?)
     email = params[:email] || target_user.try(:email)
-    render json: checker.check_username(username, email)
+    result = checker.check_username(username, email)
+    result[:avatar_template] = User.default_template(username) if result[:available]
+    render json: result
+  end
+
+  def generate_random_username
+    RateLimiter.new(nil, "random-username-#{request.remote_ip}", 20, 1.minute).performed!
+
+    username = RandomUsernameGenerator.generate
+    # The word lists are admin-editable, so they can end up unusable (e.g. once
+    # unicode usernames are turned back off) while the feature is still on.
+    if username.blank?
+      return(
+        render json: failed_json.merge(errors: [I18n.t("random_username.unavailable")]),
+               status: :unprocessable_entity
+      )
+    end
+
+    # Keep a chosen avatar intact. Otherwise return the avatar derived from the
+    # suggestion so account-setup screens can update their preview immediately.
+    avatar_template =
+      if current_user&.uploaded_avatar_id
+        current_user.avatar_template
+      else
+        User.default_template(username)
+      end
+
+    render json: { username:, avatar_template: }
   end
 
   def check_email
-    begin
-      RateLimiter.new(nil, "check-email-#{request.remote_ip}", 10, 1.minute).performed!
-    rescue RateLimiter::LimitExceeded
-      return render json: success_json
-    end
+    RateLimiter.new(nil, "check-email-#{request.remote_ip}", 10, 1.minute).performed!
 
     email = Email.downcase((params[:email] || "").strip)
 
@@ -663,10 +712,17 @@ class UsersController < ApplicationController
   end
 
   def user_from_params_or_current_user
-    params[:for_user_id] ? User.find(params[:for_user_id]) : current_user
+    return current_user if !params[:for_user_id]
+    raise Discourse::InvalidAccess if !current_user
+
+    user = User.find(params[:for_user_id])
+    guardian.ensure_can_edit_username!(user)
+    user
   end
 
   def create
+    raise Discourse::InvalidAccess if current_user && !is_api?
+
     params.require(:email)
     params.require(:username)
     params.require(:invite_code) if SiteSetting.require_invite_code
@@ -680,6 +736,15 @@ class UsersController < ApplicationController
 
     if params[:password] && params[:password].length > User.max_password_length
       return fail_with("login.password_too_long")
+    end
+
+    if params[:username].length > UsernameValidator::MAX_CHARS * 3
+      message =
+        User.new.errors.full_message(
+          :username,
+          I18n.t("user.username.long", count: SiteSetting.max_username_length),
+        )
+      return render json: { success: false, message: message }
     end
 
     return fail_with("login.email_too_long") if params[:email].length > 254 + 1 + 253
@@ -700,7 +765,7 @@ class UsersController < ApplicationController
       if current_user&.admin? && is_api?
         user_params.except(:timezone)
       else
-        user_params.except(:timezone, :primary_group_id, :flair_group_id)
+        user_params.except(:timezone, :title, :primary_group_id, :flair_group_id)
       end
 
     user = User.where(staged: true).with_email(new_user_params[:email].strip.downcase).first
@@ -1205,11 +1270,15 @@ class UsersController < ApplicationController
     end
 
     User.transaction do
+      @user.lock!
+      revoke_approval = SiteSetting.must_approve_users? && @user.approved? && @user.email_confirmed?
+
       primary_email = @user.primary_email
       primary_email.email = params[:email]
       primary_email.skip_validate_email = false
 
       if primary_email.save
+        @user.revoke_approval! if revoke_approval
         @email_token =
           @user.email_tokens.create!(email: @user.email, scope: EmailToken.scopes[:signup])
         EmailToken.enqueue_signup_email(@email_token, to_address: @user.email)
@@ -1528,10 +1597,20 @@ class UsersController < ApplicationController
       query = query.where("created_at > ?", current_user.user_option.oldest_search_log_date)
     end
 
-    results =
-      query.group(:term).order("max(created_at) DESC").limit(MAX_RECENT_SEARCHES).pluck(:term)
+    rows =
+      query
+        .group(:term)
+        .order("max(created_at) DESC")
+        .limit(MAX_RECENT_SEARCHES)
+        .pluck(Arel.sql("term, MAX(created_at)"))
 
-    render json: success_json.merge(recent_searches: results)
+    render json:
+             success_json.merge(
+               recent_searches: rows.map(&:first),
+               # sent alongside the bare terms, which stay for existing callers,
+               # so a consumer can order these against a history of its own
+               recent_searches_detailed: rows.map { |term, at| { term: term, at: at&.iso8601 } },
+             )
   end
 
   def reset_recent_searches
@@ -1631,6 +1710,7 @@ class UsersController < ApplicationController
 
   def create_second_factor_totp
     require "rotp" if !defined?(ROTP)
+    require "rqrcode" if !defined?(RQRCode)
     totp_data = ROTP::Base32.random
     server_session["staged-totp-#{current_user.id}"] = totp_data
     qrcode_png =
@@ -2111,6 +2191,19 @@ class UsersController < ApplicationController
 
   private
 
+  def ensure_random_username_access
+    raise Discourse::NotFound if !SiteSetting.enable_random_usernames
+    return redirect_to_login_if_required if current_user
+    return if !SiteSetting.login_required?
+
+    signup_token = request.headers["X-Discourse-Signup-Token"].to_s
+    signup_proof =
+      if signup_token.match?(/\A[0-9a-f]{64}\z/)
+        server_session["#{SessionController::LOGIN_CODE_SIGNUP_KEY_PREFIX}#{signup_token}"]
+      end
+    raise Discourse::InvalidAccess if !signup_proof.is_a?(Hash)
+  end
+
   def assign_topic_post_count(user_serializer)
     topic_id = params[:include_post_count_for].to_i
     if topic_id != 0 && guardian.can_see?(Topic.find_by_id(topic_id))
@@ -2146,9 +2239,17 @@ class UsersController < ApplicationController
 
     if @user
       server_session["password-#{token}"] = @user.id
-    else
-      user_id = server_session["password-#{token}"].to_i
-      @user = User.find(user_id) if user_id > 0
+    elsif user_id = server_session["password-#{token}"].to_i
+      confirmed_token =
+        EmailToken
+          .active
+          .where(
+            token_hash: EmailToken.hash_token(token),
+            scope: [nil, EmailToken.scopes[:password_reset]],
+            confirmed: true,
+          )
+          .find_by(user_id: user_id)
+      @user = confirmed_token&.user
     end
 
     @error = I18n.t("password_reset.no_token", base_url: Discourse.base_url) if !@user
@@ -2200,7 +2301,12 @@ class UsersController < ApplicationController
 
     editable_custom_fields = User.editable_user_custom_fields(by_staff: current_user.try(:staff?))
     permitted << { custom_fields: editable_custom_fields } if editable_custom_fields.present?
-    permitted.concat UserUpdater::OPTION_ATTR
+    permitted.concat(
+      UserUpdater::OPTION_ATTR - %i[understood_languages hidden_composer_toolbar_buttons],
+    )
+    permitted << UserUpdater::LEGACY_SHOW_ORIGINAL_CONTENT_ATTR
+    permitted << { understood_languages: [] }
+    permitted << { hidden_composer_toolbar_buttons: [] }
     permitted.concat UserUpdater::CATEGORY_IDS.keys.map { |k| { k => [] } }
     permitted.concat UserUpdater::TAG_NAMES.keys
     permitted << UserUpdater::NOTIFICATION_SCHEDULE_ATTRS
@@ -2258,16 +2364,7 @@ class UsersController < ApplicationController
   end
 
   def clashing_with_existing_route?(username)
-    normalized_username = User.normalize_username(username)
-    http_verbs = %w[GET POST PUT DELETE PATCH]
-    allowed_actions = %w[show update destroy]
-
-    http_verbs.any? do |verb|
-      path = Rails.application.routes.recognize_path("/u/#{normalized_username}", method: verb)
-      allowed_actions.exclude?(path[:action])
-    rescue ActionController::RoutingError
-      false
-    end
+    UsernameValidator.clashing_with_existing_route?(username)
   end
 
   def confirm_server_session
@@ -2316,7 +2413,13 @@ class UsersController < ApplicationController
   end
 
   def summary_cache_key(user)
-    "user_summary:#{user.id}:#{current_user ? current_user.id : 0}:#{I18n.locale}"
+    [
+      "user_summary",
+      user.id,
+      current_user&.id.to_i,
+      I18n.locale,
+      ContentLocalization.automatically_translate?(guardian),
+    ].join(":")
   end
 
   def render_invite_error(message)

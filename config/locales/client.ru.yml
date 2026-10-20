@@ -418,6 +418,7 @@ ru:
     notifications_tracking:
       tooltip: "Уровень уведомлений: %{level}"
     back_button: "Назад"
+    confirm_button: "Подтвердить"
     welcome_banner:
       header:
         new_members: "Добро пожаловать в %{preferred_display_name}!"
@@ -554,19 +555,12 @@ ru:
       pill: "Похожие"
       pm_title: "Похожие сообщения"
     admin_onboarding_banner:
-      launch_in_easy_steps: "Запуск в %{step_count} простых шагах"
       congrats_onboarding_complete: "Поздравляем с завершением процесса адаптации!"
-      select_theme:
-        use_theme: "Использовать выбранную тему"
-        enabled: "Выбрано"
-        applying_theme: "Применение темы..."
       invite_collaborators:
         title: "Пригласить соавторов"
-        description: "Первые участники помогают оживить ваше сообщество."
         action: "Создать приглашение"
       start_posting:
         title: "Начать публикацию"
-        description: "Дайте людям тему для совместного обсуждения."
         action: "Посмотреть идеи"
         choose_option: "С чего бы вы хотели начать?"
         predefined_topics: "Шаблоны для начала разговора"
@@ -587,6 +581,28 @@ ru:
           what_is_your_favorite_food:
             title: "Какое ваше любимое блюдо?"
             body: "Поделитесь своими любимыми блюдами с сообществом! Я начну: я обожаю пиццу, особенно с большим количеством сыра и пепперони."
+    design_wizard:
+      back: "Назад"
+      next: "Далее"
+      sections:
+        theme: "тема"
+        fonts: "Шрифты"
+        homepage: "Главная страница"
+        welcome_banner: "Приветственный баннер"
+        search: "Искать"
+      theme:
+        selected: "Выбрано"
+      colors:
+        light: "Светлый"
+        dark: "Темная"
+      fonts:
+        base_font: "Базовый шрифт"
+        heading_font: "Шрифт заголовка"
+      homepage:
+        topics: "Новые темы"
+        categories: "Категории"
+        styles:
+          boxes: "Блоки"
     about:
       edit: "Отредактировать эту страницу"
       simple_title: "О форуме"
@@ -925,10 +941,6 @@ ru:
       stale_help: "Данная проблема решена пользователем <b>%{username}</b>."
       claim_help:
         optional: "Вы можете зарезервировать этот контент за собой, чтобы другие не могли заняться его модерацией."
-        required: "Вы должны зарезервировать контент за собой, прежде чем заняться его модерацией."
-        claimed_by_you: "Вы зарезервировали этот контент за собой и можете смело заняться его модерацией."
-        claimed_by_other: "Этот контент может быть отмодерирован только пользователем <b>%{username}</b>."
-        automatically_claimed_by: "Этот элемент сейчас проверяется пользователем <b>%{username}</b>."
       claim:
         title: "Заявить права на эту тему"
       awaiting_approval: "В ожидании подтверждения"
@@ -964,6 +976,8 @@ ru:
         email: "Эл. почта"
         name: "Имя"
         fields: "Поля"
+        silence_reason: "Причина заморозки"
+        penalty_forever: "Навсегда"
         reject_reason: "Причина"
         scrubbed_by: "Запись удалена пользователем"
         scrubbed_reason: "Причина"
@@ -1137,6 +1151,9 @@ ru:
         note_added: "Примечание модератора"
         note_added_by: "Примечание модератора %{username} · %{relativeDate}"
         no_events: "Событий в хронологии нет"
+      author_penalty:
+        toast:
+          undo: "Отменить"
       notes:
         add_note_description: "Добавьте примечание, чтобы предоставить контекст другим модераторам."
         add_note_button: "Добавить примечание"
@@ -1743,6 +1760,9 @@ ru:
       notifications: "Уведомления"
       statistics: "Статистика"
       desktop_notifications:
+        push_level:
+          none: "Отключен"
+          all: "Включено"
         not_supported: "Уведомления этим браузером не поддерживаются."
         perm_denied_expl: "Вы запретили уведомления в браузере. Разрешите уведомления в настройках браузера."
         enable: "Включить уведомления"
@@ -1799,7 +1819,6 @@ ru:
       external_links_in_new_tab: "Открывать все внешние ссылки в новой вкладке"
       enable_quoting: "Разрешить отвечать с цитированием выделенного текста"
       enable_smart_lists: "Включать умные списки при написании в редакторе"
-      enable_defer: "Включить функцию отметки тем как непрочитанных"
       enable_markdown_monospace_font: "Использовать моноширинный шрифт в режиме Markdown редактора"
       experimental_sidebar:
         enable: "Включить боковую панель"
@@ -1814,7 +1833,6 @@ ru:
       admin: "%{user} — администратор"
       moderator_tooltip: "Модератор"
       admin_tooltip: "Администратор"
-      silenced_tooltip: "Этот пользователь заморожен"
       suspended_notice: "Пользователь заблокирован до %{date}."
       suspended_permanently: "Этот пользователь заблокирован."
       suspended_reason: "Причина: "
@@ -1873,6 +1891,16 @@ ru:
       tracked_topics_link: "Показать"
       automatically_unpin_topics: "Автоматически откреплять темы после прочтения"
       apps: "Приложения"
+      mcp_authorizations:
+        endpoint: "Ресурс"
+        scopes: "Области действия ключа API"
+        details: "Детали"
+        last_used: "Последнее использование"
+        never: "Никогда"
+        status: "Статус"
+        statuses:
+          active: "Активна"
+          revoked: "Отозван"
       revoke_access: "Лишить прав доступа"
       undo_revoke_access: "Отменить лишение прав доступа"
       api_approved: "Подтверждено:"
@@ -2286,7 +2314,7 @@ ru:
         default: "(по умолчанию)"
         any: "любые"
       homepage:
-        default: "(по умолчанию)"
+        default: "Домашнюю страницу"
       password_confirmation:
         title: "Пароль ещё раз"
       invite_code:
@@ -2330,6 +2358,9 @@ ru:
         contextual: "Количество контента новой страницы"
       bookmark_after_notification:
         title: "После отправки напоминания о закладке:"
+      send_shortcut:
+        enter: "Enter"
+        meta_enter: "%{meta_key} + Enter"
       like_notification_frequency:
         title: "Уведомлять при получении лайка"
         always: "Всегда"
@@ -2385,7 +2416,6 @@ ru:
         watch_topic: "Наблюдать за темой"
         track_topic: "Отслеживать тему"
         do_nothing: "Ничего не делать"
-      topics_unread_when_closed: "Считать темы непрочитанными, если они закрыты"
       invited:
         title: "Приглашения"
         pending_tab: "В ожидании"
@@ -2495,6 +2525,33 @@ ru:
           create_link_and_send_email: "Создать ссылку и отправить электронное письмо"
           invite_saved_without_sending_email: "Приглашение сохранено. Скопируйте ссылку ниже и поделитесь ею, чтобы мгновенно предоставить доступ к этому сайту."
           invite_saved_with_sending_email: "Электронное письмо с приглашением отправлено. Вы также можете скопировать ссылку ниже и поделиться ею, чтобы мгновенно предоставить доступ к этому сайту."
+        invite_roles:
+          member_title: "Пригласите участников"
+          sent_title: "Приглашение отправлено"
+          member_tab: "Участники"
+          admin_tab: "Персонал"
+          staff_role_admin: "Администрирование"
+          staff_role_moderator: "Модератор"
+          admin_email_label: "Адрес электронной почты"
+          email_placeholder: "имя@пример.com"
+          invite_by_email: "Эл. почта"
+          restrict_domain: "Ограничить по домену"
+          domain_placeholder: "example.com"
+          create_and_send: "Отправить"
+          create_and_copy: "Копировать ссылку"
+          update: "Обновить"
+          summary:
+            role_member: "Участник"
+            role_admin: "Администрирование"
+            role_moderator: "Модератор"
+            method: "Распространение"
+            method_email: "Эл. почта"
+            restriction: "Ограничено"
+            uses: "Максимальное количество использований"
+            expires: "Срок действия"
+            topic: "Тема"
+            groups: "Группы"
+            edit: "Изменить"
         bulk_invite:
           none: "Нет приглашений для отображения на этой странице."
           text: "Массовое приглашение"
@@ -2867,7 +2924,6 @@ ru:
     created: "Создано"
     created_lowercase: "создано"
     trust_level: "Уровень доверия"
-    search_hint: "имя пользователя, эл. почта или IP-адрес"
     create_account:
       header_title: "Добро пожаловать!"
       disclaimer: "Регистрируясь, вы соглашаетесь с <a href='%{privacy_link}' target='blank'>политикой конфиденциальности</a> и <a href='%{tos_link}' target='blank'> условиями предоставления услуг</a>."
@@ -2915,6 +2971,7 @@ ru:
       email_label: "Эл. почта"
       continue_button: "Продолжить"
       verify_button: "Продолжить"
+      signup_title: "Создать аккаунт"
       account_ready_continue: "Продолжить"
       username_label: "Псевдоним"
     login:
@@ -3070,6 +3127,11 @@ ru:
       ctrl: "Ctrl"
       alt: "Alt"
       enter: "Enter"
+      option: "Вариант"
+      period: "Период"
+      tab: "Tab"
+      delete: "Удалить"
+      home: "Главная"
     conditional_loading_section:
       loading: Загрузка…
     category_row:
@@ -3078,6 +3140,7 @@ ru:
         few: "+%{count} подкатегории"
         many: "+%{count} подкатегорий"
         other: "+%{count} подкатегории"
+      subcategories: "+ Подкатегории"
       topic_count:
         one: "%{count} тема в этой категории"
         few: "%{count} темы в этой категории"
@@ -3153,8 +3216,11 @@ ru:
       default: Пользовательские эмодзи
     filter_input:
       clear: "Очистить фильтр"
+    filter_controls:
+      reset: "Сбросить"
     d_icon_grid_picker:
       select_icon: "Выбрать иконки"
+      search_label: "Искать иконки"
       search_placeholder: "Искать иконки..."
       no_results: "Иконки не найдены"
       favorites: "Избранное"
@@ -3278,12 +3344,12 @@ ru:
       create_whisper: "Скрытое сообщение"
       create_shared_draft: "Создать общий черновик"
       edit_shared_draft: "Редактировать общий черновик"
-      title: "Или нажмите %{modifier}Enter"
       save_and_close: "Сохранить и закрыть"
       discard: "Отменить"
       draft_saved: "Черновик сохранен!"
       users_placeholder: "Добавьте пользователей или группы"
       title_placeholder: "Название: суть темы коротким предложением"
+      title_placeholder_redesign: "Название"
       title_or_link_placeholder: "Введите название или вставьте здесь ссылку"
       edit_reason_placeholder: "Причина редактирования…"
       topic_featured_link_placeholder: "Введите ссылку с названием."
@@ -3309,7 +3375,6 @@ ru:
       italic_label: "К"
       italic_title: "Курсив"
       italic_text: "текст, выделенный курсивом"
-      heading_title: "Заголовки"
       heading_level_n: "Заголовок %{levelNumber}"
       heading_level_n_title: "Заголовок %{levelNumber}"
       heading_level_paragraph: "Абзац"
@@ -3523,7 +3588,6 @@ ru:
         other: "%{count} открытого запроса на вступление в группу «%{group_name}»"
       reaction: "<span>%{username}</span> %{description}"
       reaction_2: "<span>%{username}, %{username2}</span> %{description}"
-      votes_released: "%{description} — завершено"
       new_features: "Появились новые функции!"
       admin_problems: "Новый совет в панели управления сайта"
       upcoming_changes:
@@ -3662,10 +3726,10 @@ ru:
         search_field: "Поле поиска в заголовке сайта"
         search_icon: "Значок поиска рядом с аватаром профиля"
       type:
-        default: "По темам и сообщениям"
+        default: "Записи"
         users: "По пользователям"
         categories: "Категории"
-        categories_and_tags: "По категориям и тегам"
+        categories_and_tags: "Категории и теги"
       context:
         user: "Искать сообщения от @%{username}"
         category: "Искать в категории #%{category}"
@@ -3678,7 +3742,6 @@ ru:
         in: "Фильтр по метаданным (например, in:title, in:personal, in:pinned)"
         status: "Фильтр по статусу темы"
         full_search: "Запуск поиска по всей странице"
-        full_search_key: "%{modifier} + Enter"
         me: "показывает только ваши сообщения"
       advanced:
         title: Расширенный поиск
@@ -3967,7 +4030,6 @@ ru:
           title: "Заменить теги"
       delete_topics:
         name: "Удалить"
-        description: "Удалить выбранные темы безвозвратно. Это действие необратимо."
       update_category:
         name: "Обновить категорию"
         description: "Переместить все выбранные темы в следующую категорию:"
@@ -3991,6 +4053,7 @@ ru:
       sort:
         label: "Сортировать по"
         top: "Обсуждаемые"
+        hot: "Горячие"
         new: "Новое"
       load_more_children:
         one: "Ещё %{count} ответ"
@@ -4075,6 +4138,7 @@ ru:
       read_more_in_category: "Хотите почитать что-нибудь ещё? Можно просмотреть темы в категории %{categoryLink} или <a href='%{latestLink}'>ознакомиться с последними темами</a>."
       read_more: "Хотите почитать что-нибудь ещё? Можно <a href='%{categoryLink}'>просмотреть все категории</a> или <a href='%{latestLink}'>ознакомиться с последними темами</a>."
       unread_indicator: "Никто ещё не дочитал до конца этой темы."
+      sr_read: "чтение"
       participant_groups: "Группы участников"
       reply_count_link:
         one: "%{count} ответ, перейти к первой публикации"
@@ -4498,7 +4562,6 @@ ru:
       reply_as_new_private_message: "Ответить в новом сообщении тем же адресатам"
       continue_discussion: "Продолжая обсуждение из темы %{postLink}:"
       follow_quote: "перейти к цитируемому сообщению"
-      show_full: "Показать полный текст"
       show_hidden: "Просмотр игнорируемого контента."
       deleted_by_author_simple: "(сообщение удалено автором)"
       collapse: "свернуть"
@@ -4601,8 +4664,10 @@ ru:
           many: "Посмотреть %{count} переведенных локалей"
           other: "Посмотреть переведенные локали: %{count}"
         modal:
-          title: "Переводы для публикации"
+          title: "Переводы"
           confirm_delete: "Действительно удалить переводы для «%{languageCode}»?"
+          post_language: "Язык поста"
+          discard_language_change: "Отменить изменение"
         success: "Переводы успешно обновлены"
         post_language_selector:
           title: "Язык поста"
@@ -4753,7 +4818,6 @@ ru:
           many: "Действительно объединить %{count} сообщений?"
           other: "Действительно объединить %{count} сообщения?"
       revisions:
-        diff_too_complex: "Различия слишком сложны для отображения. Пожалуйста, попробуйте просмотреть отдельные, более мелкие изменения."
         locale:
           no_locale_set: "Язык не установлен"
           locale_removed: "Язык удален"
@@ -4889,7 +4953,6 @@ ru:
       save: "Сохранить категорию"
       unsaved_changes: "У вас есть несохраненные изменения"
       parent: "Родительская категория"
-      slug_placeholder: "(Необязат.) Слова для URL, разделённые дефисами"
       creation_error: При создании новой категории возникла ошибка.
       save_error: При сохранении категории возникла ошибка.
       errors:
@@ -4934,6 +4997,7 @@ ru:
       list: "Вывод списка категорий"
       no_description: "Добавьте описание для этой категории."
       change_in_category_topic: "Изменить описание"
+      latest_topics: "Последние темы"
       description_updated: "Описание обновлено"
       description_expand: "Развернуть"
       description_collapse: "Свернуть"
@@ -5238,6 +5302,7 @@ ru:
       with_category: "%{category} — %{filter} темы"
       filter:
         title: "Отфильтрованные результаты по «%{filter}»"
+        reset: "Сброс"
         button:
           label: "Фильтр"
       latest:
@@ -5362,12 +5427,8 @@ ru:
     invalid_video_url: Это видео невозможно воспроизвести, так как URL-адрес недействителен или недоступен.
     keyboard_shortcuts_help:
       search_placeholder: "Поиск сочетания клавиш по описанию или комбинации клавиш"
-      shortcut_key_delimiter_comma: ", "
-      shortcut_key_delimiter_plus: "+"
       shortcut_delimiter_or: "%{shortcut1} или %{shortcut2}"
       shortcut_delimiter_slash: "%{shortcut1}/%{shortcut2}"
-      shortcut_delimiter_space: "%{shortcut1} %{shortcut2}"
-      shortcut_delimiter_newline: "%{shortcut1}<br>%{shortcut2}"
       title: "Сочетания клавиш"
       short_title: "Сочетания клавиш"
       search_ctrl_f_tip: "Для поиска по всему форуму нажмите <kbd>/</kbd>"
@@ -5486,16 +5547,18 @@ ru:
       favorite_max_not_reached: "Добавить эту награду в избранное"
       favorite_count: "Награды (%{count} из %{max}) добавлены в избранное"
     download_calendar:
-      title: "Скачать календарь"
+      title: "Добавить в календарь"
+      calendar: "Календарь"
       save_ics: "Скачать .ics-файл"
       save_google: "Добавить в календарь Google"
       remember: "Больше не спрашивать"
-      remember_explanation: "(Вы можете изменить это значение в настройках пользователя)"
       download: "Скачать"
       default_calendar: "Стандартный календарь"
       default_calendar_instruction: "Определите календарь, используемый при сохранении дат"
       add_to_calendar: "Добавить в календарь"
       google: "Календарь Google"
+      outlook: "Microsoft Outlook"
+      apple: "Календарь Apple"
       ics: "ICS"
       default_title: "Запланированное мероприятие"
     tagging:
@@ -5505,7 +5568,6 @@ ru:
       selector_no_tags: "Без тегов"
       selector_remove_filter: "отменить фильтр"
       tags: "Теги"
-      choose_for_topic: "Выберите теги..."
       choose_for_topic_required:
         one: "Выберите минимум %{count} тег…"
         few: "Выберите минимум %{count} тега…"
@@ -5717,8 +5779,6 @@ ru:
       no_read_topics_body: "Когда вы начнете читать обсуждения, список читаемых тем появится здесь. Чтобы начать читать, поищите интересующие вас темы в разделе <a href='%{topUrl}'>Обсуждаемые</a>, в других <a href='%{categoriesUrl}'>категориях</a> форума либо выполните поиск по ключевому слову %{searchIcon}."
     no_group_messages_title: "Групповые сообщения не найдены"
     topic_entrance:
-      sr_jump_top_button: "Перейти к первой публикации — %{date}"
-      sr_jump_bottom_button: "Перейти к последней публикации — %{date}"
       jump_top_button_title: "Перейти к первой публикации"
       jump_bottom_button_title: "Перейти к последней публикации"
     fullscreen_table:
@@ -5776,6 +5836,10 @@ ru:
           public: "Видно всем"
           always_public: "Контент в этом разделе всегда публичный"
           more_menu: "Меню «Еще»"
+          localizations:
+            locale: "Язык"
+            title_label: "Заголовок раздела"
+            remove_language: "Отозвать"
           links:
             add: "Добавить еще ссылку"
             delete: "Удалить ссылку"
@@ -6109,7 +6173,6 @@ ru:
   admin_js:
     type_to_filter: "Фильтрация настроек…"
     settings: "Настройки"
-    reset_filter: "Сбросить фильтры"
     admin:
       title: "Администратор Discourse"
       moderator: "Модератор"
@@ -6124,11 +6187,17 @@ ru:
         title: "Список доступных отчётов"
         sidebar_title: "Отчеты"
         back: "Назад ко всем отчетам"
+        all_groups: "Все группы"
         group_traffic: "Трафик"
         group_members: "Участники"
         group_moderation_and_security: "Модерация и безопасность"
         group_other: "Разное"
         legacy_warning: "Это устаревший отчет. Он скоро будет удален. Если вам нужна помощь в поиске замены, обратитесь в службу поддержки."
+        related_items:
+          users:
+            title: "По пользователям"
+          labels:
+            user: "Пользователь"
       config_sections:
         account:
           title: "Аккаунт"
@@ -6221,6 +6290,74 @@ ru:
           header_description: "Предоставьте здесь информацию об этом сайте и вашей команде, чтобы люди могли узнать, что представляет собой ваше сообщество, кто за ним стоит и как с вами связаться в случае возникновения проблем. Отображается в разделе <a href='%{basePath}/about'>«О нас»</a> вашего сайта."
         developer:
           title: "Разработчикам"
+        mcp:
+          tabs:
+            access: "Доступ"
+            activity: "Активности"
+          overview:
+            status: "Статус"
+            tools: "Инструменты"
+          access:
+            title: "Доступ"
+            group: "Группа"
+            groups: "Группы"
+            actions: "Действия"
+            edit: "Изменить"
+            delete: "Удалить"
+          primitives:
+            group_by: "Группировать по"
+            group_by_options:
+              scope: "Область действия ключа API"
+              provider: "Поставщик"
+              kind: "Тип"
+            provider: "Поставщик"
+            kind: "Тип"
+            scope: "Область действия ключа API"
+            state: "Штат"
+            scopes: "Области действия ключа API"
+          clients:
+            actions: "Действия"
+            block: "Блокировка"
+            use_preset: "Настроить"
+            presets:
+              custom: "Другое"
+          authorizations:
+            user: "Пользователь"
+            last_used: "Последнее использование"
+            status: "Статус"
+            actions: "Действия"
+          activity:
+            rate_limits: "Ограничения"
+            outcome: "Результат"
+            time: "Время"
+            user: "Пользователь"
+            duration: "Период"
+          values:
+            server_status:
+              disabled: "Отключен"
+            client_trust:
+              approved: "Одобренные"
+            authorization_status:
+              active: "Активна"
+              revoked: "Отозван"
+            activity_outcome:
+              success: "Успех"
+              error: "Ошибка"
+            primitive_state:
+              enabled: "Включено"
+              disabled: "Отключен"
+            primitive_kind:
+              all: "Все типы"
+              tool: "Инструмент"
+              resource: "Ресурс"
+            primitive_risk:
+              read: "Только для чтения"
+              moderation: "Модерация"
+            filter:
+              all: "Все"
+          never: "Никогда"
+          actions:
+            revoke: "Отмена"
         experimental:
           title: "Экспериментальная функция"
           header_description: "Включайте и выключайте экспериментальные функции на вашем сайте, многие из них можно настроить для отдельных групп"
@@ -6315,7 +6452,6 @@ ru:
               description: "Скриншоты, демонстрирующие особенности и функциональные возможности приложения, отображаемые на странице с запросом на установку. Все изображения должны быть загружены локально и иметь одинаковые размеры."
             apple_touch_icon:
               description: "Значок, используемый для сенсорных устройств Apple. Если оставить поле пустым, будет использоваться значок large_icon."
-              help_text: "Рекомендуемый размер — 180 x 180 пикселей. Прозрачный фон не рекомендуется."
             digest_logo:
               title: "Логотип дайджеста"
               description: "Альтернативный логотип, используемый в верхней части страницы, отображающей письма со сводками. Если оставить поле пустым, будет использоваться логотип из настройки `logo`."
@@ -6424,7 +6560,6 @@ ru:
           header_description: "Настройте параметры поиска, включая ведение журнала и токенизацию для китайского и японского языков"
         search_everything:
           title: "Поиск"
-          header_description: "Найдите нужные настройки в интерфейсе администратора. Вы можете отфильтровать результаты ниже, и ваши предпочтения будут сохранены. Чтобы открыть этот поиск из любого места интерфейса администратора, нажмите %{shortcutHTML}."
         security:
           title: "Безопасность"
           header_description: "Настройте параметры безопасности, включая двухфакторную аутентификацию, привилегии модератора и политики безопасности контента"
@@ -6499,6 +6634,22 @@ ru:
               title: "Публикации и темы"
             stats_and_thresholds:
               title: "Статистика и пороговые значения"
+        category_management:
+          create_category: "Создать категорию"
+          tabs:
+            settings: "Настроек"
+          types:
+            all:
+              title: "Все разделы"
+          filter_placeholder: "Фильтрация категорий"
+          table:
+            category: "Категория"
+            visibility: "Видимость"
+            topics: "Новые темы"
+          visibility:
+            public: "Публичное"
+          visibility_filter:
+            all: "Все разделы"
         permalinks:
           title: "Постоянные ссылки"
           header_description: "Перенаправления для URL-адресов, неизвестных форуму"
@@ -6632,13 +6783,28 @@ ru:
       new_features:
         title: "Что нового?"
         check_for_updates: "Проверить обновления"
+      site_traffic_explorer:
+        metric_information: "Информация о %{metric}"
+        remove_filter_value: "Убрать %{value}"
+        clear_all: "Сбросить все"
+        apply: "Применить"
+        view_more: "Показать больше"
+        cards:
+          pages: "страниц"
+          visitors: "Посетители"
+        filters:
+          country: "Страна"
+          browser: "Браузер"
+          language: "Язык"
+          ip: "IP-адрес"
+        series:
+          anonymous_human: "Анонимные просмотры"
       dashboard:
         title: "Панель управления"
         last_updated: "Панель управления обновлена:"
         discourse_last_updated: "Discourse обновлён:"
         version: "Версия"
         up_to_date: "Обновлений нет"
-        critical_available: "Доступно критическое обновление."
         updates_available: "Доступны обновления."
         please_update: "Обновитесь!"
         no_check_performed: "Проверка обновлений не производится. Убедитесь, что запущен процесс sidekiq."
@@ -6708,8 +6874,9 @@ ru:
               posts: "Записи"
               share: "Поделиться"
             whos_posting:
-              all_categories: "Все разделы"
               staff: "Персонал"
+              modal:
+                apply: "Сохранить"
             trust_level_pipeline:
               trust_levels:
                 "0": "Новое"
@@ -6726,7 +6893,13 @@ ru:
             table:
               searches: "Поисковые запросы"
               status: "Статус"
+          system:
+            title: "Системные сообщения"
+            status: "Статус"
+            discourse_updated: "Discourse обновлён"
+            dashboard_updated: "Панель управления обновлена"
         reports_section:
+          header_action: "Управление"
           no_data: "Нет данных для отображения"
           modal:
             enabled_heading: "Включено"
@@ -6795,6 +6968,18 @@ ru:
           average_for_sample: "Среднее для выборки"
           total: "Всего за всё время"
           no_data: "Нет данных для отображения."
+          posters_by_member_type_members:
+            users_count:
+              one: "%{count} пользователь"
+              few: "%{count} пользователя"
+              many: "%{count} пользователей"
+              other: "%{count} пользователей"
+            posts_count:
+              one: "%{count} публикация"
+              few: "%{count} публикации"
+              many: "%{count} публикаций"
+              other: "%{count} публикаций"
+            deselect: "Отменить выбор пользователя %{name}"
           trending_search:
             more: '<a href="%{basePath}/admin/logs/search_logs">Журналы поиска</a>'
             disabled: 'Отчёт о поисковых запросах отключён. Включить <a href="%{basePath}/admin/site_settings/category/all_results?filter=log%20search%20queries">журнал поисковых запросов</a> для сбора данных.'
@@ -7465,6 +7650,8 @@ ru:
         sidebar: "Боковая панель"
         header_dropdown: "Выпадающий список заголовка"
         legacy: "Старая версия"
+      duplicate_topic_titles:
+        allowed: "Разрешённые"
       backups:
         title: "Резервные копии"
         files_title: "Резервные файлы"
@@ -7714,7 +7901,6 @@ ru:
           finish_install: "Завершить установку темы"
           last_attempt: "Процесс установки не завершен, последняя попытка:"
           remote_branch: "Имя ветки (необязательно)"
-          public_key: "Предоставьте доступ к репозиторию со следующим открытым ключом:"
           install: "Установить"
           installed: "Установленные"
           install_popular: "Популярные"
@@ -9130,11 +9316,16 @@ ru:
         uploading: "Загрузка…"
         name: "Название"
         group: "Группа"
+        all_groups: "Все группы"
         created_by: "Создано"
         image: "Изображение"
         alt: "предпросмотр пользовательских эмодзи"
         delete_confirm: "Действительно удалить эмодзи :%{name}:?"
         settings: "Настройки"
+        export: "Экспорт"
+        import: "Импорт"
+        import_category:
+          new: "Новое"
       embedding:
         get_started: "Для встраивания на другой сайт необходимо добавить соответствующий хост."
         delete: "Удалить"

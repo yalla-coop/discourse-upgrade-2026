@@ -12,6 +12,10 @@ class UserHistory < ActiveRecord::Base
   belongs_to :category
   belongs_to :reviewable, optional: true
 
+  # Subjects logged alongside the :admin_onboarding_step_completed action, one
+  # per step of the admin onboarding panel.
+  ADMIN_ONBOARDING_STEPS = %w[select_theme invite_collaborators start_posting].freeze
+
   # Each value in the context should be shorter than this
   MAX_CONTEXT_LENGTH = 50_000
 
@@ -170,6 +174,11 @@ class UserHistory < ActiveRecord::Base
         notified_about_composer_education: 125, # not used anymore
         recover_post: 126,
         change_access_control_list_permissions: 127,
+        admin_onboarding_step_completed: 128,
+        admin_onboarding_completed: 129,
+        admin_onboarding_dismissed: 130,
+        removed_avatar: 131,
+        create_group: 132,
       )
   end
 
@@ -301,6 +310,11 @@ class UserHistory < ActiveRecord::Base
       change_site_setting_groups
       upcoming_change_available
       change_access_control_list_permissions
+      admin_onboarding_step_completed
+      admin_onboarding_completed
+      admin_onboarding_dismissed
+      removed_avatar
+      create_group
     ]
   end
 

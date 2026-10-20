@@ -24,6 +24,21 @@ class Admin::BackupsController < Admin::AdminController
                          :abort_multipart,
                          :batch_presign_multipart_parts
 
+  # Backups are ops, not content — an archived site should still be
+  # backup-able, restorable, and downloadable.
+  allow_when_archived :create,
+                      :cancel,
+                      :email,
+                      :destroy,
+                      :restore,
+                      :rollback,
+                      :readonly,
+                      :upload_backup_chunk,
+                      :create_multipart,
+                      :complete_multipart,
+                      :abort_multipart,
+                      :batch_presign_multipart_parts
+
   def index
     respond_to do |format|
       format.html do
@@ -178,6 +193,7 @@ class Admin::BackupsController < Admin::AdminController
     current_chunk_size = params.fetch(:resumableCurrentChunkSize).to_i
 
     raise Discourse::InvalidParameters.new(:resumableIdentifier) unless valid_filename?(identifier)
+    raise Discourse::InvalidParameters.new(:resumableFilename) unless valid_filename?(filename)
 
     # path to chunk file
     chunk = BackupRestore::LocalBackupStore.chunk_path(identifier, filename, chunk_number)

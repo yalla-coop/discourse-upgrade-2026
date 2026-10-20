@@ -101,10 +101,6 @@ after_initialize do
         .each do |poll|
           html = +""
 
-          if title = poll.at_css(".poll-title")
-            html << title.to_html
-          end
-
           if container = poll.at_css(".poll-container")
             container.css("li").each { |li| li.remove_attribute("data-poll-option-id") }
             html << container.inner_html
@@ -274,5 +270,10 @@ after_initialize do
   rescue DiscoursePoll::Error
     # Expected business-logic failures (poll closed, group-restricted, etc.)
     # — silently drop. Unexpected exceptions still bubble to AnonymousAction.consume.
+  end
+
+  # Protect users who have cast poll votes from the inactive user cleanup job.
+  register_modifier(:clean_up_inactive_users_query) do |relation|
+    relation.where("NOT EXISTS (SELECT 1 FROM poll_votes WHERE poll_votes.user_id = users.id)")
   end
 end

@@ -20,7 +20,7 @@ class UserEmail < ActiveRecord::Base
   scope :secondary, -> { where(primary: false) }
 
   before_save -> { destroy_email_tokens(email_was) }, if: :will_save_change_to_email?
-
+  after_update -> { destroy_email_tokens(email) }, if: :saved_change_to_primary?
   after_destroy { destroy_email_tokens(email) }
   def self.ensure_consistency!
     user_ids_without_primary_email = DB.query_single <<~SQL
@@ -40,13 +40,22 @@ class UserEmail < ActiveRecord::Base
     end
   end
 
+  # Strips dots from the local part and everything between "+" and "@", so that
+  # aliases of the same address share a single normalized form.
+  def self.normalize(email)
+    local_part, domain = email.to_s.split("@", 2)
+    return if local_part.blank? || domain.blank?
+
+    "#{local_part.gsub(".", "").gsub(/\+.*/, "")}@#{domain}"
+  end
+
+  def self.find_by_normalized(email)
+    normalized = normalize(Email.downcase(email))
+    where("lower(normalized_email) = ?", normalized).first if normalized.present?
+  end
+
   def normalize_email
-    self.normalized_email =
-      if email.present?
-        username, domain = email.split("@", 2)
-        username = username.gsub(".", "").gsub(/\+.*/, "")
-        "#{username}@#{domain}"
-      end
+    self.normalized_email = self.class.normalize(email)
   end
 
   private

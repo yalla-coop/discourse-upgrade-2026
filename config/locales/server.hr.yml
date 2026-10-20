@@ -5,6 +5,32 @@
 # https://translate.discourse.org/
 
 hr:
+  markdown_endpoints:
+    latest: "Posljednje"
+    categories: "Kategorije"
+    tags: "Oznake"
+    previous_page: "Prethodna stranica"
+    next_page: "Slijedeća stranica"
+    replies: "Odgovori"
+    last_updated: "Posljednje ažuriranje"
+  mcp:
+    errors:
+      topic_not_found: "Tema nije pronađena"
+    oauth:
+      deny: "Odbiti"
+      approve: "Odobriti"
+  llms_txt:
+    sections:
+      optional: "Neobvezno"
+    links:
+      search:
+        label: "Pretraživanje"
+      categories:
+        label: "Kategorije"
+      about:
+        label: "O nama"
+      guidelines:
+        label: "Vodić za uporabu"
   dates:
     short_date_no_year: "D MMM"
     short_date: "D MMM, GGGG"
@@ -171,7 +197,6 @@ hr:
       exclusion: je rezervirano
       greater_than: mora biti veće od %{count}
       greater_than_or_equal_to: mora biti veće ili jednako %{count}
-      has_already_been_used: "je već korišteno"
       inclusion: nije na listi
       invalid: nije važeće
       is_invalid: "čini se nejasno, jeste li napisali potpunu rečenicu?"
@@ -698,16 +723,15 @@ hr:
   email_login:
     invalid_token: 'Ups! Link koji ste koristili više ne radi. Možete se <a href="%{base_url}/login">Prijaviti</a> sada. Ako ste zaboravili zaporku, možete <a href="%{base_url}/password-reset">zatražiti poveznicu</a> da je ponovo postavite.'
     title: "Prijava emailom"
+  browsers:
+    chrome: "Google Chrome"
+    discoursehub: "DiscourseHub aplikacija"
+    edge: "Microsoft Edge"
+    firefox: "Firefox"
+    ie: "Internet Explorer"
+    opera: "Opera"
+    safari: "Safari"
   user_auth_tokens:
-    browser:
-      chrome: "Google Chrome"
-      discoursehub: "DiscourseHub aplikacija"
-      edge: "Microsoft Edge"
-      firefox: "Firefox"
-      ie: "Internet Explorer"
-      opera: "Opera"
-      safari: "Safari"
-      unknown: "nepoznati preglednik"
     device:
       android: "Android uređaj"
       chromebook: "OS Chrome"
@@ -727,6 +751,10 @@ hr:
       macos: "macOS"
       windows: "Microsoft Windows"
       unknown: "nepoznati operacijski sustav"
+  admin_site_traffic_explorer:
+    unknown: "Nepoznato"
+    traffic_types:
+      anonymous: "Anonimno"
   change_email:
     error: "Dogodila se greška u promijeni tvog e-maila. Možda se ta adresa već koristi?"
     doesnt_exist: "Ta adresa e-pošte nije povezana s vašim računom."
@@ -821,7 +849,7 @@ hr:
     topic_description: "Za ponovno pretplatu na %{link}, upotrijebite kontrolu obavijesti pri dnu ili desno od teme."
     private_topic_description: "Da biste se ponovno pretplatili, koristite kontrolu obavijesti pri dnu ili desno od teme."
   unsubscribe:
-    title: "Odjava"
+    unsubscribe: "Odjava"
     stop_watching_topic: "Prestanite pratiti ovu temu, %{link}"
     mute_topic: "Prigušite sve obavijesti za ovu temu, %{link}"
     unwatch_category: "Prestani pratiti sve teme u %{category}"
@@ -942,11 +970,17 @@ hr:
         share: "Podijeli"
       types:
         staff: "Osoblje"
+    posters_by_member_type_members:
+      labels:
+        user: "Korisnik"
+        count: "Postovi"
+        share: "Podijeli"
     trust_level_pipeline:
       description_link: "https://blog.discourse.org/2018/06/understanding-discourse-trust-levels/"
       labels:
         count: "Članovi"
         share: "Podijeli"
+        signups: "Učlanjenja"
       levels:
         "0": "Novo"
         "1": "Osnovno"
@@ -1066,6 +1100,9 @@ hr:
         num_topics: "Teme"
       description: "Korisnici navedeni prema broju klikova na poveznice koje su podijelili."
     top_countries_by_browser_pageviews:
+      labels:
+        count: "Posjeta"
+    top_entry_urls:
       labels:
         count: "Posjeta"
     top_referrers_by_browser_pageviews:
@@ -1253,7 +1290,6 @@ hr:
     staff_edit_locks_post: "Postovi će biti zaključani za uređivanje ako ih uređuju članovi osoblja"
     post_edit_time_limit: "Tl0 ili tl1 autor može uređivati svoju objavu (n) minuta nakon objave. Postavite na 0 zauvijek."
     tl2_post_edit_time_limit: "Tl2+ autor može uređivati svoju objavu (n) minuta nakon objave. Postavite na 0 zauvijek."
-    edit_history_visible_to_public: "Dopustite svima da vide prethodne verzije uređenog posta. Kada je onemogućeno, samo članovi osoblja mogu vidjeti."
     delete_removed_posts_after: "Postovi koje je autor uklonio automatski će se izbrisati nakon (n) sati. Ako je postavljeno na 0, postovi će se odmah izbrisati."
     enable_chunked_encoding: "Omogući odgovore kodiranja u komadima od strane poslužitelja. Ova značajka radi na većini postavki, no neki proxyji mogu raditi u međuspremniku, uzrokujući kašnjenje odgovora"
     long_polling_base_url: "Osnovni URL koji se koristi za dugo ispitivanje (kada CDN poslužuje dinamički sadržaj, svakako ovo postavite na izvorno povlačenje), npr.: http://origin.site.com"
@@ -1264,8 +1300,6 @@ hr:
     silence_new_user_sensitivity: "Vjerojatnost da će novi korisnik biti ušutkan na temelju oznaka neželjene pošte"
     auto_close_topic_sensitivity: "Vjerojatnost da će označena tema biti automatski zatvorena"
     cooldown_minutes_after_hiding_posts: "Broj minuta koje korisnik mora čekati prije nego što može urediti post skriven putem označavanja zajednice"
-    max_topics_in_first_day: "Maksimalan broj tema koje korisnik smije kreirati u razdoblju od 24 sata nakon što je napravio svoju prvu objavu"
-    max_replies_in_first_day: "Maksimalan broj odgovora koje korisnik smije stvoriti u razdoblju od 24 sata nakon što je napravio svoju prvu objavu"
     tl2_additional_likes_per_day_multiplier: "Povećajte ograničenje lajkova po danu za tl2 (član) množenjem s ovim brojem"
     tl3_additional_likes_per_day_multiplier: "Povećajte ograničenje lajkova po danu za tl3 (regular) množenjem s ovim brojem"
     tl4_additional_likes_per_day_multiplier: "Povećajte ograničenje lajkova po danu za tl4 (voditelj) množenjem s ovim brojem"
@@ -1298,6 +1332,7 @@ hr:
     cors_origins: "Dopušteni izvori za zahtjeve s različitim izvorima (CORS). Svako podrijetlo mora sadržavati http:// ili https://. Varijabla env DISCOURSE_ENABLE_CORS mora biti postavljena na true da bi se omogućio CORS."
     blocked_ip_blocks: "Popis privatnih IP blokova koje Discourse nikada ne bi trebao indeksirati"
     allowed_internal_hosts: "Popis internih hostova koje diskurs može sigurno indeksirati za oneboxing i druge svrhe"
+    site_contact_group_name: "Grupa koja je pozvana na sve automatski poslane osobne poruke."
     version_checks: "Pingaj Discourse Hub za dostupna ažuriranja i prikaži obavijesti o novim verzijama na <a href='%{base_path}/admin' target='_blank'>/admin</a> nadzornoj ploči"
     min_username_length: "Minimalna duljina korisničkog imena u znakovima. UPOZORENJE: ako bilo koji postojeći korisnik ili grupa ima imena kraća od ovoga, vaša stranica će se pokvariti!"
     max_username_length: "Maksimalna duljina korisničkog imena u znakovima. UPOZORENJE: ako postojeći korisnici ili grupe imaju imena duža od ovog, vaša će stranica pokvariti!"
@@ -1413,7 +1448,6 @@ hr:
     user_profile_view_duration_hours: "Brojite prikaz profila novog korisnika jednom po IP-u/korisniku svakih N sati"
     levenshtein_distance_spammer_emails: "Prilikom uparivanja neželjene e-pošte, razlika u broju znakova koja će još uvijek omogućiti nejasno podudaranje."
     max_new_accounts_per_registration_ip: "Ako već postoji (n) računa razine povjerenja 0 s ovog IP-a (i nijedan nije član osoblja ili na TL2 ili višem), prestanite prihvaćati nove prijave s tog IP-a. Postavite na 0 da biste onemogućili ograničenje."
-    min_ban_entries_for_roll_up: "Kada se klikne gumb Skupi, stvorit će se novi unos zabrane podmreže ako postoji najmanje (N) unosa."
     max_age_unmatched_emails: "Izbrišite neusklađene pregledane unose e-pošte nakon (N) dana."
     max_age_unmatched_ips: "Izbrišite neusklađene zaštićene IP unose nakon (N) dana."
     num_flaggers_to_close_topic: "Minimalan broj jedinstvenih označavača koji je potreban za automatsko pauziranje teme radi intervencije"
@@ -1500,7 +1534,6 @@ hr:
     dashboard_general_tab_activity_metrics: "Odaberite izvješća koja će se prikazivati kao metrika aktivnosti na kartici općenito."
     share_quote_buttons: "Odredite koje se stavke pojavljuju u widgetu za dijeljenje ponuda i kojim redoslijedom."
     share_quote_visibility: "Odredite kada prikazati gumbe za dijeljenje ponuda: nikada, samo anonimnim korisnicima ili svim korisnicima. "
-    create_revision_on_bulk_topic_moves: "Napravite reviziju za prve postove kada se teme skupno premještaju u novu kategoriju."
     allow_changing_staged_user_tracking: "Dopustite korisniku administratoru da promijeni postavke obavijesti o kategorijama i oznakama postupnog korisnika."
     suggest_weekends_in_date_pickers: "Uključite vikende (subota i nedjelja) u prijedloge za odabir datuma (onemogućite ovo ako Discourse koristite samo radnim danima, od ponedjeljka do petka)."
     errors:
@@ -1508,7 +1541,6 @@ hr:
       invalid_email: "Nevažeća adresa e-pošte."
       invalid_username: "Ne postoji korisnik s tim korisničkim imenom."
       valid_username: "Postoji korisnik s tim korisničkim imenom."
-      invalid_group: "Ne postoji grupa s tim nazivom."
       invalid_integer_min_max: "Vrijednost mora biti između %{min} i %{max}."
       invalid_integer_min: "Vrijednost mora biti %{min} ili veća."
       invalid_integer_max: "Vrijednost ne može biti veća od %{max}."
@@ -1656,6 +1688,7 @@ hr:
     errors: "%{errors}"
     not_available: "Nije dostupno. Pokušajte %{suggestion}?"
     omniauth_confirm_button: "Nastavi"
+    missing_username: "Unesite korisničko ime"
     second_factor_title: "Dvofaktorska autentifikacija"
     second_factor_backup_description: "Unesite jedan od vaših rezervnih kodova:"
     second_factor_toggle:
@@ -2215,9 +2248,6 @@ hr:
     user_posted_pm_staged:
       title: "Korisnik je objavio PM"
       subject_template: "%{optional_re}%{topic_title}"
-      text_body_template: |2
-
-        %{message}
     account_suspended:
       title: "Korisnički račun je suspendiran"
       subject_template: "[%{email_prefix}] Vaš račun je suspendiran"
@@ -2397,7 +2427,7 @@ hr:
         Član osoblja odobrio je vaš korisnički račun na %{site_name}.
 
         Sada možete pristupiti svom novom korisničkom računu tako da se prijavite na:
-        %{base_url}
+        %{login_url}
 
         Ako gornju poveznicu ne možete kliknuti, pokušajte je kopirati i zalijepiti u adresnu traku vaš web preglednik.
 
@@ -2745,6 +2775,11 @@ hr:
       long_description: |
         Ova značka se dodjeljuje za posjet 100 uzastopnih dana. To je više od tri mjeseca!
     badge_title_metadata: "%{display_name} značka na %{site_title}"
+  watched_words:
+    upload_too_many_csv_entries:
+      one: "Previše unosa u CSV datoteci. Molimo vas da dostavite CSV datoteku s najviše %{count} unosom."
+      few: "Previše unosa u CSV datoteci. Molimo vas da dostavite CSV datoteku s najviše %{count} unosa."
+      other: "Previše unosa u CSV datoteci. Molimo vas da dostavite CSV datoteku s najviše %{count} unosa."
   tags:
     title: "Oznake"
   finish_installation:
@@ -2754,6 +2789,9 @@ hr:
       help: "Za početak registrirajte novi korisnički račun."
     resend_email:
       title: "Ponovno pošaljite e-poštu za aktivaciju"
+  design_wizard:
+    palette_pairs:
+      default: "Zadano"
   wizard:
     step:
       setup:
@@ -2805,6 +2843,11 @@ hr:
       low: "Nizak"
       medium: "Srednji"
       high: "Visok"
+    reasons:
+      fast_typer_time:
+        one: "%{count} sekunda"
+        few: "%{count} sekundi"
+        other: "%{count} sekundi"
     actions:
       agree:
         title: "Da"
@@ -2858,9 +2901,6 @@ hr:
         title: "Da"
       approve_and_unhide:
         title: "Da"
-      delete_post:
-        title: "Izbrišite objavu"
-        complete: "Post izbrisan"
       delete_user:
         complete: "Korisnik izbrisan"
   fallback_username: "korisnik"

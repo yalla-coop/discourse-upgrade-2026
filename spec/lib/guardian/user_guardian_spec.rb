@@ -39,12 +39,12 @@ RSpec.describe UserGuardian do
     context "with anon user" do
       let(:guardian) { Guardian.new }
 
-      it "should return the right value for non-automatic requests" do
+      it "returns the expected value for non-automatic requests" do
         SiteSetting.reviewable_claiming = "optional"
         expect(guardian.can_claim_reviewable_topic?(topic)).to eq(false)
       end
 
-      it "should return the right value for automatic requests" do
+      it "returns the expected value for automatic requests" do
         expect(guardian.can_claim_reviewable_topic?(topic, true)).to eq(false)
       end
     end
@@ -52,12 +52,12 @@ RSpec.describe UserGuardian do
     context "with current user" do
       let(:guardian) { Guardian.new(user) }
 
-      it "should return the right value for non-automatic requests" do
+      it "returns the expected value for non-automatic requests" do
         SiteSetting.reviewable_claiming = "optional"
         expect(guardian.can_claim_reviewable_topic?(topic)).to eq(false)
       end
 
-      it "should return the right value for automatic requests" do
+      it "returns the expected value for automatic requests" do
         expect(guardian.can_claim_reviewable_topic?(topic, true)).to eq(false)
       end
     end
@@ -65,12 +65,12 @@ RSpec.describe UserGuardian do
     context "with moderator" do
       let(:guardian) { Guardian.new(moderator) }
 
-      it "should return the right value for non-automatic requests" do
+      it "returns the expected value for non-automatic requests" do
         SiteSetting.reviewable_claiming = "optional"
         expect(guardian.can_claim_reviewable_topic?(topic)).to eq(true)
       end
 
-      it "should return the right value for automatic requests" do
+      it "returns the expected value for automatic requests" do
         expect(guardian.can_claim_reviewable_topic?(topic, true)).to eq(true)
       end
     end
@@ -78,12 +78,12 @@ RSpec.describe UserGuardian do
     context "with admin" do
       let(:guardian) { Guardian.new(admin) }
 
-      it "should return the right value for non-automatic requests" do
+      it "returns the expected value for non-automatic requests" do
         SiteSetting.reviewable_claiming = "optional"
         expect(guardian.can_claim_reviewable_topic?(topic)).to eq(true)
       end
 
-      it "should return the right value for automatic requests" do
+      it "returns the expected value for automatic requests" do
         expect(guardian.can_claim_reviewable_topic?(topic, true)).to eq(true)
       end
     end
@@ -145,7 +145,7 @@ RSpec.describe UserGuardian do
     context "with anon user" do
       let(:guardian) { Guardian.new }
 
-      it "should return the right value" do
+      it "returns the expected value" do
         expect(guardian.can_pick_avatar?(user_avatar, users_upload)).to eq(false)
       end
     end
@@ -231,6 +231,18 @@ RSpec.describe UserGuardian do
     fab!(:vip_tl2_user) { Fabricate(:user, trust_level: 2) }
 
     before { tl2_user.user_stat.update!(post_count: 1) }
+
+    context "when public profiles are hidden" do
+      before { SiteSetting.hide_user_profiles_from_public = true }
+
+      it "does not allow anonymous users to view profiles" do
+        expect(Guardian.new.can_see_profile?(tl2_user)).to eq(false)
+      end
+
+      it "allows logged-in users to view profiles" do
+        expect(Guardian.new(tl1_user).can_see_profile?(tl2_user)).to eq(true)
+      end
+    end
 
     context "when viewing the profile of a user with 0 posts" do
       before { user.user_stat.update!(post_count: 0) }
@@ -427,8 +439,8 @@ RSpec.describe UserGuardian do
   end
 
   describe "#can_see_user_actions?" do
-    it "is true by default" do
-      expect(Guardian.new.can_see_user_actions?(nil, [])).to eq(true)
+    it "defaults to no action types" do
+      expect(Guardian.new.can_see_user_actions?(nil)).to eq(true)
     end
 
     context "with 'hide_user_activity_tab' setting" do
@@ -523,6 +535,14 @@ RSpec.describe UserGuardian do
           expect(guardian.can_delete_user?(user)).to eq(true)
         end
       end
+    end
+
+    it "requires an admin to delete another moderator" do
+      another_moderator = Fabricate(:moderator)
+
+      expect(Guardian.new(moderator).can_delete_user?(another_moderator)).to eq(false)
+      expect(Guardian.new(admin).can_delete_user?(another_moderator)).to eq(true)
+      expect(Guardian.new(moderator).can_delete_user?(moderator)).to eq(true)
     end
 
     context "when deleting myself" do
@@ -653,12 +673,14 @@ RSpec.describe UserGuardian do
 
     context "for moderators" do
       let(:guardian) { Guardian.new(moderator) }
+
       include_examples "can_delete_user examples"
       include_examples "can_delete_user staff examples"
     end
 
     context "for admins" do
       let(:guardian) { Guardian.new(admin) }
+
       include_examples "can_delete_user examples"
       include_examples "can_delete_user staff examples"
     end
@@ -674,6 +696,7 @@ RSpec.describe UserGuardian do
 
     context "for moderators" do
       let(:guardian) { Guardian.new(moderator) }
+
       include_examples "can_merge_user examples"
 
       it "isn't allowed if current_user is not an admin" do
@@ -683,6 +706,7 @@ RSpec.describe UserGuardian do
 
     context "for admins" do
       let(:guardian) { Guardian.new(admin) }
+
       include_examples "can_merge_user examples"
     end
   end
@@ -823,6 +847,53 @@ RSpec.describe UserGuardian do
     it "is false if the user has been banned from external uploads for a time period" do
       ExternalUploadManager.ban_user_from_external_uploads!(user: user)
       expect(Guardian.new(user).can_upload_external?).to eq(false)
+    end
+  end
+
+  describe "#can_check_sso_details?" do
+    it "is always true for admins" do
+      expect(Guardian.new(admin).can_check_sso_details?(user)).to eq(true)
+    end
+
+    it "is false for moderators by default" do
+      expect(Guardian.new(moderator).can_check_sso_details?(user)).to eq(false)
+    end
+
+    it "is true for moderators when moderators_view_sso_details is enabled" do
+      SiteSetting.moderators_view_sso_details = true
+      expect(Guardian.new(moderator).can_check_sso_details?(user)).to eq(true)
+    end
+
+    it "is false for regular users" do
+      expect(Guardian.new(user).can_check_sso_details?(user)).to eq(false)
+    end
+
+    it "is false for anonymous users" do
+      expect(Guardian.new.can_check_sso_details?(user)).to eq(false)
+    end
+  end
+
+  describe "#can_check_sso_email?" do
+    it "is true for admins" do
+      expect(Guardian.new(admin).can_check_sso_email?(user)).to eq(true)
+    end
+
+    it "is false for moderators when moderators_view_sso_details is enabled" do
+      SiteSetting.moderators_view_sso_details = true
+
+      expect(Guardian.new(moderator).can_check_sso_email?(user)).to eq(false)
+    end
+  end
+
+  describe "#can_check_sso_payload?" do
+    it "is true for admins" do
+      expect(Guardian.new(admin).can_check_sso_payload?(user)).to eq(true)
+    end
+
+    it "is false for moderators when moderators_view_sso_details is enabled" do
+      SiteSetting.moderators_view_sso_details = true
+
+      expect(Guardian.new(moderator).can_check_sso_payload?(user)).to eq(false)
     end
   end
 end

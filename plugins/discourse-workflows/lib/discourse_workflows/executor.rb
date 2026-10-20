@@ -127,23 +127,12 @@ module DiscourseWorkflows
       return @store.create_rate_limited_execution unless rate_limiter.within_limits?
 
       execute_flow(:start_execution!) do
+        next prepare_step_flow! if step_mode?
+
         trigger_node = @snapshot.find_node(@trigger_node_id)
         raise "Trigger node #{@trigger_node_id} not found in workflow snapshot" if trigger_node.nil?
 
-        trigger_items =
-          pinned_items_for(trigger_node) ||
-            (
-              if @trigger_data.is_a?(Array)
-                @trigger_data.map { |data| Item.wrap(data) }
-              else
-                [Item.wrap(@trigger_data)]
-              end
-            )
-        ItemContract.validate_items!(trigger_items, source: "trigger:#{trigger_node.type}")
-        record_step(trigger_node, [], output: trigger_items, status: Step::SUCCESS)
-        @context.store_node_output(trigger_node, trigger_items)
-        @context.store_node_run(trigger_node, inputs: [], outputs: [trigger_items])
-        enqueue_downstream(trigger_node, 0, trigger_items)
+        seed_trigger_node!(trigger_node)
       end
     end
 
@@ -184,6 +173,7 @@ module DiscourseWorkflows
           step&.add_metadata("handled_error", error_metadata(error))
           step&.succeed!(output: all_items)
           step&.apply_updates!("error" => nil)
+          @store.publish_progress(step: step) if step
           @context.store_node_output(waiting_node, all_items)
           @context.store_node_run(
             waiting_node,
@@ -195,12 +185,64 @@ module DiscourseWorkflows
           route_downstream(waiting_node, handled_outputs)
         else
           step&.fail!(error.message)
+          @store.publish_progress(step: step) if step
           raise error
         end
       end
     end
 
     private
+
+    def step_mode?
+      @options.step_node_id.present?
+    end
+
+    def prepare_step_flow!
+      step_node = @snapshot.find_node(@options.step_node_id)
+      raise "Step node #{@options.step_node_id} not found in workflow snapshot" if step_node.nil?
+
+      @pin_data_by_node_name.delete(step_node.name.to_s)
+      @step_plan =
+        StepExecutionPlan.new(
+          snapshot: @snapshot,
+          target: step_node,
+          run_data: @store.existing_run_data,
+        )
+
+      if @step_plan.standalone_target?
+        @queue << [step_node, { 0 => [Item.wrap({})] }, {}]
+        return
+      end
+
+      @step_plan.cached_frontier.each { |node| emit_cached_node!(node) }
+      @step_plan.trigger_roots_to_run.each { |trigger_node| seed_trigger_node!(trigger_node) }
+    end
+
+    def emit_cached_node!(node)
+      output_groups = @step_plan.cached_outputs(node)
+      step = record_step(node, [])
+      step.succeed!(output: output_groups.flatten(1))
+      step.add_metadata("cached", true)
+      @store.publish_progress(step: step)
+      route_downstream(node, output_groups)
+    end
+
+    def seed_trigger_node!(trigger_node)
+      trigger_items =
+        pinned_items_for(trigger_node) ||
+          (
+            if @trigger_data.is_a?(Array)
+              @trigger_data.map { |data| Item.wrap(data) }
+            else
+              [Item.wrap(@trigger_data)]
+            end
+          )
+      ItemContract.validate_items!(trigger_items, source: "trigger:#{trigger_node.type}")
+      record_step(trigger_node, [], output: trigger_items, status: Step::SUCCESS)
+      @context.store_node_output(trigger_node, trigger_items)
+      @context.store_node_run(trigger_node, inputs: [], outputs: [trigger_items])
+      enqueue_downstream(trigger_node, 0, trigger_items)
+    end
 
     def normalized_workflow_call_stack
       stack = Array(@options.workflow_call_stack).map(&:to_s)
@@ -317,6 +359,10 @@ module DiscourseWorkflows
 
         wait_request = runtime_state.wait_request
         if wait_request
+          if step_mode?
+            raise StandardError, I18n.t("discourse_workflows.errors.step_execution.wait_requested")
+          end
+
           step.mark_waiting!
           @waiting_node = node
           @waiting_step = step
@@ -388,6 +434,7 @@ module DiscourseWorkflows
         js_elapsed = (sandbox_budget_tracker.current_elapsed_ms - js_elapsed_before).round(1)
         step.add_metadata("js_elapsed_ms", js_elapsed) if js_elapsed > 0
         runtime_state.step_metadata.each { |key, value| step.add_metadata(key, value) }
+        @store.publish_progress(step: step)
       end
     end
 
@@ -431,6 +478,7 @@ module DiscourseWorkflows
       )
       step = record_step(node, input_items)
       step.skip!(output: input_items, reason: reason)
+      @store.publish_progress(step: step)
       @context.store_node_output(node, input_items)
       @context.store_node_run(node, inputs: [input_items], outputs: [input_items])
       enqueue_downstream(node, 0, input_items)
@@ -440,6 +488,7 @@ module DiscourseWorkflows
       reason = issues.map { |i| "#{i[:path]}: #{i[:message]}" }.join(", ")
       step = record_step(node, input_items)
       step.skip!(output: input_items, reason: reason)
+      @store.publish_progress(step: step)
       @context.store_node_output(node, input_items)
       @context.store_node_run(node, inputs: [input_items], outputs: [input_items])
       enqueue_downstream(node, 0, input_items)
@@ -449,6 +498,7 @@ module DiscourseWorkflows
       step = record_step(node, input_items)
       step.succeed!(output: pinned_items)
       step.add_metadata("pinned", true)
+      @store.publish_progress(step: step)
       @context.store_node_output(node, pinned_items)
       @context.store_node_run(
         node,
@@ -517,6 +567,7 @@ module DiscourseWorkflows
         resolver: resolver,
         vars: preloaded_vars,
         workflow: @workflow,
+        workflow_version: @options.workflow_version,
         execution_id: @store.execution&.id,
         resume_token: @context.resume_token,
         node_id: node.id.to_s,
@@ -685,21 +736,24 @@ module DiscourseWorkflows
     end
 
     def enqueue_downstream(node, output_index, items)
+      return if step_mode? && node.id.to_s == @step_plan.target_id
+
       @snapshot
         .connections_from_output_index(node, output_index)
         .each do |conn|
           target = @snapshot.target_node(conn)
-          if target
-            enqueue_target(
-              target,
-              conn.target_input_index,
-              items,
-              source: {
-                "node_name" => node.name,
-                "output_index" => output_index,
-              },
-            )
-          end
+          next if target.nil?
+          next if step_mode? && !@step_plan.runnable?(target)
+
+          enqueue_target(
+            target,
+            conn.target_input_index,
+            items,
+            source: {
+              "node_name" => node.name,
+              "output_index" => output_index,
+            },
+          )
         end
     end
 
@@ -855,6 +909,7 @@ module DiscourseWorkflows
           error: error,
         )
       @steps << step
+      @store.publish_progress(step: step)
       step
     end
 
@@ -872,6 +927,7 @@ module DiscourseWorkflows
         "output" => response_items,
         "finished_at" => Time.current.iso8601,
       )
+      @store.publish_progress(step: step)
     end
 
     def begin_wait!(wait_request)
@@ -880,7 +936,7 @@ module DiscourseWorkflows
       if wait_request.workflow_call?
         begin_workflow_call_wait!(wait_request)
       else
-        begin_timed_wait!(wait_request.waiting_until)
+        begin_timed_wait!(wait_request.waiting_until, timeout_action: wait_request.timeout_action)
       end
     rescue => e
       @store.fail!(error: e, steps: @steps)
@@ -895,13 +951,18 @@ module DiscourseWorkflows
       @context.store_pending_queue(@queue.drop(@queue_index || 0))
     end
 
-    def begin_timed_wait!(waiting_until)
+    def begin_timed_wait!(waiting_until, timeout_action: nil)
       now = Time.current
       ceiling = now + MAX_WAIT_DURATION_SECONDS
       resolved = waiting_until.blank? ? ceiling : [waiting_until, ceiling].min
 
       execution =
-        @store.pause_waiting_execution!(node: @waiting_node, waiting_until: resolved, steps: @steps)
+        @store.pause_waiting_execution!(
+          node: @waiting_node,
+          waiting_until: resolved,
+          timeout_action: timeout_action,
+          steps: @steps,
+        )
 
       Jobs.enqueue_in(
         [resolved - now, 0].max,

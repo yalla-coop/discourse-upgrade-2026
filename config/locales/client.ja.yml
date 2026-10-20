@@ -308,6 +308,7 @@ ja:
       message: "このサイトを更新しました。スムーズに動作するように<span>更新してください</span>。"
       dismiss: "閉じる"
     back_button: "戻る"
+    confirm_button: "確認"
     welcome_banner:
       header:
         new_members: "%{preferred_display_name}、ようこそ！"
@@ -418,10 +419,30 @@ ja:
       pill: "提案"
       pm_title: "推奨メッセージ"
     admin_onboarding_banner:
-      select_theme:
-        enabled: "選択済み"
       start_posting:
         back: "戻る"
+    design_wizard:
+      back: "戻る"
+      next: "次へ"
+      sections:
+        theme: "テーマ"
+        fonts: "フォント"
+        homepage: "ホームページ"
+        welcome_banner: "ウェルカムバナー"
+        search: "検索"
+      theme:
+        selected: "選択済み"
+      colors:
+        light: "ライト"
+        dark: "ダーク"
+      fonts:
+        base_font: "ベースフォント"
+        heading_font: "見出しのフォント"
+      homepage:
+        topics: "トピック"
+        categories: "カテゴリ"
+        styles:
+          boxes: "ボックス"
     about:
       edit: "このページを編集"
       simple_title: "サイト情報"
@@ -670,10 +691,6 @@ ja:
         optional: "オプション"
       claim_help:
         optional: "この項目を自分に割り当ててほかのユーザーがレビューしないようにできます。"
-        required: "レビューする前に項目を自分に割り当てる必要があります。"
-        claimed_by_you: "この項目を自分に割り当てたため、レビューできます。"
-        claimed_by_other: "この項目は <b>%{username}</b> のみがレビューできます。"
-        automatically_claimed_by: "この項目は現在、<b>%{username}</b> がレビューしています。"
       claim:
         title: "このトピックを自分に割り当てる"
       unclaim:
@@ -709,6 +726,8 @@ ja:
         email: "メール"
         name: "名前"
         fields: "フィールド"
+        silence_reason: "投稿禁止の理由"
+        penalty_forever: "永遠"
         reject_reason: "理由"
         scrubbed_by: "レコードを削除したユーザー:"
         scrubbed_reason: "理由"
@@ -870,6 +889,9 @@ ja:
         note_added: "モデレーターのメモ"
         note_added_by: "%{username} のモデレーターメモ · %{relativeDate}"
         no_events: "表示するタイムラインイベントはありません"
+      author_penalty:
+        toast:
+          undo: "元に戻す"
       notes:
         add_note_description: "他のモデレーターに文脈を伝えるメモを追加してください。"
         add_note_button: "メモを追加"
@@ -1422,6 +1444,9 @@ ja:
       notifications: "通知"
       statistics: "統計"
       desktop_notifications:
+        push_level:
+          none: "無効"
+          all: "有効"
         not_supported: "このブラウザでは通知がサポートされていません。"
         perm_denied_expl: "通知へのアクセスが拒否されました。ブラウザの設定から通知を許可してください。"
         each_browser_note: "注意: 使用するすべてのブラウザでこの設定を変更する必要があります。ユーザーメニューから通知を一時停止にした場合、この設定に関係なくすべての通知が無効になります。"
@@ -1477,8 +1502,10 @@ ja:
       external_links_in_new_tab: "すべての外部リンクを新しいタブで開く"
       enable_quoting: "選択したテキストを引用して返信する"
       enable_smart_lists: "コンポーザーに書き込む際にスマートリストを有効にする"
-      enable_defer: "トピックを未読としてマークする"
       enable_markdown_monospace_font: "作成ツールの Markdown モードで等幅フォントを使用する"
+      automatically_translate: "ほかの言語で書かれたトピックや投稿を自動翻訳する"
+      content_languages:
+        understood: "理解できる言語"
       experimental_sidebar:
         enable: "サイドバーを有効にする"
         options: "オプション"
@@ -1492,7 +1519,6 @@ ja:
       admin: "%{user} は管理者です"
       moderator_tooltip: "このユーザーはモデレーターです"
       admin_tooltip: "このユーザーは管理者です"
-      silenced_tooltip: "このユーザーは投稿を禁止されています"
       suspended_notice: "このユーザーは %{date} まで凍結されています。"
       suspended_permanently: "このユーザーは凍結されています。"
       suspended_reason: "理由: "
@@ -1551,6 +1577,16 @@ ja:
       tracked_topics_link: "表示"
       automatically_unpin_topics: "最後に到達したら、自動的にトピックの固定表示を解除する"
       apps: "アプリ連携"
+      mcp_authorizations:
+        endpoint: "リソース"
+        scopes: "スコープ"
+        details: "詳細"
+        last_used: "最後の使用"
+        never: "送信しない"
+        status: "ステータス"
+        statuses:
+          active: "アクティブ"
+          revoked: "取り消し済み"
       revoke_access: "アクセスを取り消す"
       undo_revoke_access: "アクセスの取り消しを元に戻す"
       api_approved: "承認:"
@@ -1889,7 +1925,7 @@ ja:
         default: "(デフォルト)"
         any: "すべて"
       homepage:
-        default: "(デフォルト)"
+        default: "デフォルト"
       password_confirmation:
         title: "パスワードを再入力"
       invite_code:
@@ -1933,6 +1969,9 @@ ja:
         contextual: "新しいページのコンテンツ"
       bookmark_after_notification:
         title: "ブックマークのリマインダー通知が送信された後:"
+      send_shortcut:
+        enter: "Enter"
+        meta_enter: "%{meta_key} + Enter"
       like_notification_frequency:
         title: "「いいね！」された時に通知する"
         always: "常時"
@@ -1988,7 +2027,6 @@ ja:
         watch_topic: "トピックをウォッチ"
         track_topic: "トピックを追跡"
         do_nothing: "何もしない"
-      topics_unread_when_closed: "トピックが閉じられている場合は未読と見なす"
       invited:
         title: "招待"
         pending_tab: "保留中"
@@ -2087,6 +2125,31 @@ ja:
           create_link_and_send_email: "リンクを作成してメールを送信"
           invite_saved_without_sending_email: "招待が保存されました。以下のリンクをコピーして共有し、このサイトへのアクセスを即座に許可します。"
           invite_saved_with_sending_email: "招待メールが送信されました。このサイトへのアクセスを即座に許可するには、以下のリンクをコピーして共有することもできます。"
+        invite_roles:
+          member_title: "メンバーの招待"
+          member_tab: "メンバー"
+          admin_tab: "スタッフ"
+          staff_role_admin: "管理"
+          staff_role_moderator: "モデレーター"
+          admin_email_label: "メールアドレス"
+          email_placeholder: "name@example.com"
+          invite_by_email: "メールアドレス"
+          restrict_domain: "ドメインに制限"
+          domain_placeholder: "example.com"
+          create_and_send: "送信"
+          create_and_copy: "リンクをコピー"
+          update: "更新"
+          summary:
+            role_member: "メンバー"
+            role_admin: "管理"
+            role_moderator: "モデレーター"
+            method: "共有"
+            method_email: "メールアドレス"
+            uses: "最大使用回数"
+            expires: "有効期限"
+            topic: "トピック"
+            groups: "グループ"
+            edit: "編集"
         bulk_invite:
           none: "このページに表示する招待はありません。"
           text: "一括招待"
@@ -2377,7 +2440,6 @@ ja:
     created: "作成"
     created_lowercase: "作成"
     trust_level: "信頼レベル"
-    search_hint: "ユーザー名、メールアドレス、または IPアドレス"
     create_account:
       header_title: "ようこそ！"
       disclaimer: "登録すると、<a href='%{privacy_link}' target='blank'>プライバシーポリシー</a>と<a href='%{tos_link}' target='blank'>利用規約</a>に同意することになります。"
@@ -2425,6 +2487,7 @@ ja:
       email_label: "メールアドレス"
       continue_button: "続行"
       verify_button: "続行"
+      signup_title: "アカウントの作成"
       account_ready_continue: "続行"
       username_label: "ユーザー名"
     login:
@@ -2580,11 +2643,17 @@ ja:
       ctrl: "Ctrl"
       alt: "Alt"
       enter: "Enter"
+      option: "オプション"
+      period: "期間"
+      tab: "Tab"
+      delete: "削除"
+      home: "ホーム"
     conditional_loading_section:
       loading: 読み込み中…
     category_row:
       subcategory_count:
         other: "+%{count} 個のサブカテゴリ"
+      subcategories: "+ サブカテゴリ"
       topic_count:
         other: "このカテゴリの %{count} 件のトピック"
       read_only: "読み取り専用"
@@ -2642,6 +2711,9 @@ ja:
       default: カスタム絵文字
     filter_input:
       clear: "フィルタをクリア"
+    filter_controls:
+      reset: "リセット"
+      toggle: "ドロップダウンのフィルタを切り替える"
     shared_drafts:
       title: "共有の下書き"
       notice: "このトピックは、共有の下書きを公開できるユーザーのみに表示されます。"
@@ -2728,12 +2800,12 @@ ja:
       create_whisper: "ささやき"
       create_shared_draft: "共有の下書きを作成"
       edit_shared_draft: "共有の下書きを編集"
-      title: "または %{modifier}Enter キーを押します"
       save_and_close: "保存して閉じる"
       discard: "破棄"
       draft_saved: "下書きが保存されました！"
       users_placeholder: "ユーザーまたはグループを追加"
       title_placeholder: "トピックのタイトルを入力してください"
+      title_placeholder_redesign: "タイトル"
       title_or_link_placeholder: "タイトルを入力するか、リンクを貼り付けてください"
       edit_reason_placeholder: "編集する理由は？"
       topic_featured_link_placeholder: "タイトルに表示されるリンクを入力してください。"
@@ -2759,7 +2831,6 @@ ja:
       italic_label: "I"
       italic_title: "斜体"
       italic_text: "斜体テキスト"
-      heading_title: "見出し"
       heading_level_n: "見出し %{levelNumber}"
       heading_level_n_title: "見出し %{levelNumber}"
       heading_level_paragraph: "段落"
@@ -2945,7 +3016,6 @@ ja:
         other: "'%{group_name}' の %{count} 件のオープンメンバーシップリクエスト"
       reaction: "<span>%{username}</span> %{description}"
       reaction_2: "<span>%{username}、%{username2}</span> %{description}"
-      votes_released: "%{description} - 完了"
       new_features: "新機能が公開されました！"
       admin_problems: "サイトダッシュボードに関する新しいアドバイス"
       upcoming_changes:
@@ -3064,10 +3134,10 @@ ja:
         search_field: "サイトヘッダーの検索フィールド"
         search_icon: "プロファイルアバターの近くの検索アイコン"
       type:
-        default: "トピック/投稿"
+        default: "投稿"
         users: "ユーザー"
         categories: "カテゴリ"
-        categories_and_tags: "カテゴリ/タグ"
+        categories_and_tags: "カテゴリとタグ"
       context:
         user: "@%{username} の投稿を検索"
         category: "#%{category} カテゴリを検索"
@@ -3080,7 +3150,6 @@ ja:
         in: "メタデータでフィルタします (例: in:title、in:personal、in:pinned)"
         status: "トピックのステータスでフィルタします"
         full_search: "全ページ検索を開始します"
-        full_search_key: "%{modifier} + Enter"
         me: "自分の投稿のみを表示します"
       advanced:
         title: 高度なフィルタ
@@ -3307,6 +3376,7 @@ ja:
       sort:
         label: "並べ替え"
         top: "人気"
+        hot: "ホット"
         new: "新規"
       load_more_children:
         other: "他 %{count} 件の返信"
@@ -3366,6 +3436,7 @@ ja:
       read_more_in_category: "もっと読みますか？%{categoryLink} で他のトピックを閲覧するか、<a href='%{latestLink}'>最新のトピックを表示</a>してください。"
       read_more: "もっと読みますか？<a href='%{categoryLink}'>すべてのカテゴリを閲覧</a>するか、<a href='%{latestLink}'>最新のトピックを表示</a>してください。"
       unread_indicator: "このトピックの最後の投稿を読んだメンバーはまだいません。"
+      sr_read: "読了"
       participant_groups: "参加グループ"
       reply_count_link:
         other: "%{count} 件の返信、最初の投稿にジャンプ"
@@ -3746,7 +3817,6 @@ ja:
       reply_as_new_private_message: "同じ受信者に新規メッセージとして返信する"
       continue_discussion: "%{postLink} からディスカッションを続行:"
       follow_quote: "引用した投稿に移動"
-      show_full: "投稿全文を表示"
       show_hidden: "無視したコンテンツを表示します。"
       deleted_by_author_simple: "(作成者が削除した投稿)"
       collapse: "折りたたむ"
@@ -3810,7 +3880,7 @@ ja:
         view:
           other: "%{count} 個の翻訳済みロケールを表示"
         modal:
-          title: "投稿の翻訳"
+          title: "翻訳"
           confirm_delete: "'%{languageCode}' の翻訳を削除してもよろしいですか？"
         success: "翻訳は正しく更新されました"
         post_language_selector:
@@ -4007,6 +4077,12 @@ ja:
         instructions: "この投稿へのリンクを共有します:"
       original_language: "元の投稿は%{language}で書かれました"
       original_language_and_outdated: "元の投稿は%{language}で書かれています。翻訳は古い可能性があります"
+      originally_written_in: "元の言語: %{language}"
+      click_to_show_original: "クリックして原文を表示"
+      tap_to_show_original: "タップして原文を表示"
+      click_to_show_translation: "クリックして翻訳を表示"
+      tap_to_show_translation: "タップして翻訳を表示"
+      ai_translation_disclaimer: "AIによる翻訳は正確でない場合があります。"
     category:
       none: "(カテゴリなし)"
       all: "すべてのカテゴリ"
@@ -4056,7 +4132,6 @@ ja:
       unsaved_changes: "保存されていない変更があります"
       slug: "カテゴリのスラッグ"
       parent: "親カテゴリ"
-      slug_placeholder: "(オプション) URL 用のダッシュ区切りの語"
       creation_error: カテゴリを作成中にエラーが発生しました。
       save_error: カテゴリを保存中にエラーが発生しました。
       errors:
@@ -4099,6 +4174,7 @@ ja:
       list: "カテゴリをリスト表示"
       no_description: "このカテゴリの説明を追加してください。"
       change_in_category_topic: "説明を編集する"
+      latest_topics: "最新のトピック"
       description_expand: "もっと表示"
       description_collapse: "表示を減らす"
       already_used: "この色は他のカテゴリで使用されています。"
@@ -4366,6 +4442,7 @@ ja:
       with_category: "%{filter} %{category} トピック"
       filter:
         title: "%{filter} の絞り込み結果"
+        reset: "リセット"
         button:
           label: "フィルタ"
       latest:
@@ -4472,12 +4549,8 @@ ja:
     invalid_video_url: URL が無効であるか利用できないため、この動画を再生できません。
     keyboard_shortcuts_help:
       search_placeholder: "説明またはキーの組み合わせでショートカットを検索する"
-      shortcut_key_delimiter_comma: "、"
-      shortcut_key_delimiter_plus: "+"
       shortcut_delimiter_or: "%{shortcut1} または %{shortcut2}"
       shortcut_delimiter_slash: "%{shortcut1}/%{shortcut2}"
-      shortcut_delimiter_space: "%{shortcut1} %{shortcut2}"
-      shortcut_delimiter_newline: "%{shortcut1}<br>%{shortcut2}"
       title: "ショートカットキー"
       short_title: "ショートカット"
       search_ctrl_f_tip: "このフォーラム全体を検索するするには <kbd>/</kbd> を押します"
@@ -4571,11 +4644,11 @@ ja:
       favorite_max_not_reached: "このバッジをお気に入りにする"
       favorite_count: "%{count}/%{max} 個のバッジがお気に入りに登録されています"
     download_calendar:
-      title: "カレンダーをダウンロード"
+      title: "カレンダーに追加"
+      calendar: "カレンダー"
       save_ics: ".ics ファイルをダウンロード"
       save_google: "Google カレンダーに追加"
       remember: "今後表示しない"
-      remember_explanation: "(この設定はユーザー設定で変更できます)"
       download: "ダウンロード"
       default_calendar: "デフォルトのカレンダー"
       default_calendar_instruction: "日付を保存する際に、どのカレンダーを使用するかを決定します"
@@ -4590,7 +4663,6 @@ ja:
       selector_no_tags: "タグなし"
       selector_remove_filter: "フィルタを削除"
       tags: "タグ"
-      choose_for_topic: "オプションのタグ"
       choose_for_topic_required:
         other: "少なくとも %{count} 個のタグを選択してください…"
       choose_for_topic_required_group:
@@ -4769,8 +4841,6 @@ ja:
       no_read_topics_body: "ディスカッションを読み始めると、ここにリストが表示されます。読み始めるには、<a href='%{topUrl}'>トップ</a>または<a href='%{categoriesUrl}'>カテゴリ</a>で興味のあるトピックを探すか、キーワードで検索 %{searchIcon} してください。"
     no_group_messages_title: "グループメッセージが見つかりません"
     topic_entrance:
-      sr_jump_top_button: "最初の投稿にジャンプ - %{date}"
-      sr_jump_bottom_button: "最後の投稿にジャンプ - %{date}"
       jump_top_button_title: "最初の投稿に移動"
       jump_bottom_button_title: "最後の投稿に移動"
     fullscreen_table:
@@ -4822,6 +4892,10 @@ ja:
           public: "全員に表示"
           always_public: "このセクションのコンテンツは常に公開される"
           more_menu: "その他のメニュー"
+          localizations:
+            locale: "言語"
+            title_label: "セクションのタイトル"
+            remove_language: "削除"
           links:
             add: "別のリンクを追加する"
             delete: "リンクを削除する"
@@ -5125,7 +5199,6 @@ ja:
   admin_js:
     type_to_filter: "入力してフィルタ..."
     settings: "設定"
-    toggle_filters: "ドロップダウンのフィルタを切り替える"
     admin:
       title: "Discourse の管理者"
       moderator: "モデレーター"
@@ -5140,9 +5213,15 @@ ja:
         title: "使用可能なレポートのリスト"
         sidebar_title: "レポート"
         back: "すべてのレポートに戻る"
+        all_groups: "すべてのグループ"
         group_traffic: "トラフィック"
         group_members: "メンバー"
         group_other: "その他"
+        related_items:
+          users:
+            title: "ユーザー"
+          labels:
+            user: "ユーザー"
       config_sections:
         account:
           title: "アカウント"
@@ -5231,6 +5310,74 @@ ja:
           header_description: "コミュニティーの目的、運営者、および問題が発生した場合の連絡方法がわかるように、このサイトとチームに関する情報をここに入力します。サイトの<a href='%{basePath}/about'>情報ページ</a>に表示されます。"
         developer:
           title: "開発者"
+        mcp:
+          tabs:
+            access: "アクセス"
+            activity: "アクティビティ"
+          overview:
+            status: "ステータス"
+            tools: "ツール"
+          access:
+            title: "アクセス"
+            group: "グループ"
+            groups: "グループ"
+            actions: "アクション"
+            edit: "編集"
+            delete: "削除"
+          primitives:
+            group_by: "グループ化"
+            group_by_options:
+              scope: "範囲"
+              provider: "プロバイダー"
+              kind: "タイプ"
+            provider: "プロバイダー"
+            kind: "タイプ"
+            scope: "範囲"
+            state: "都道府県"
+            scopes: "スコープ"
+          clients:
+            actions: "アクション"
+            block: "ブロック"
+            use_preset: "セットアップ"
+            presets:
+              custom: "カスタム"
+          authorizations:
+            user: "ユーザー"
+            last_used: "最後の使用"
+            status: "ステータス"
+            actions: "アクション"
+          activity:
+            rate_limits: "レート制限"
+            outcome: "結果"
+            time: "時刻"
+            user: "ユーザー"
+            duration: "期間"
+          values:
+            server_status:
+              disabled: "無効"
+            client_trust:
+              approved: "承認済み"
+            authorization_status:
+              active: "アクティブ"
+              revoked: "取り消し済み"
+            activity_outcome:
+              success: "成功"
+              error: "エラー"
+            primitive_state:
+              enabled: "有効"
+              disabled: "無効"
+            primitive_kind:
+              all: "全タイプ"
+              tool: "ツール"
+              resource: "リソース"
+            primitive_risk:
+              read: "読み取り専用"
+              moderation: "モデレーション"
+            filter:
+              all: "すべて"
+          never: "送信しない"
+          actions:
+            revoke: "同意を取り消す"
         experimental:
           title: "実験的"
           header_description: "サイトの実験的機能をオンまたはオフに切り替えます。これらのほとんどは、グループ単位で制御できます。"
@@ -5331,7 +5478,6 @@ ja:
             apple_touch_icon:
               title: "Apple タッチアイコン"
               description: "Apple タッチデバイスで使用されるアイコン。空白の場合、large_icon が使用されます。"
-              help_text: "推奨サイズは 180 x 180 ピクセルです。透明な背景は推奨されません。"
             digest_logo:
               title: "ダイジェストロゴ"
               description: "サイトのメール要約の上部で使用されるロゴの代替画像です。空白のままにすると、`logo` で設定した画像が使用されます。"
@@ -5439,7 +5585,6 @@ ja:
           header_description: "ログ記録やトークン化など、中国語と日本語の検索設定を構成します"
         search_everything:
           title: "検索"
-          header_description: "ここで管理者インターフェースのあらゆる項目を検索できます。検索結果は以下で絞り込め、設定は記憶されます。この検索を管理者インターフェースの任意の場所で開くには、%{shortcutHTML} を押してください。"
         security:
           title: "セキュリティ"
           header_description: "二要素認証、モデレーター権限、コンテンツセキュリティポリシーなどのセキュリティ設定を構成します"
@@ -5515,6 +5660,21 @@ ja:
               title: "投稿とトピック"
             stats_and_thresholds:
               title: "統計としきい値"
+        category_management:
+          tabs:
+            settings: "設定"
+          types:
+            all:
+              title: "すべてのカテゴリ"
+          filter_placeholder: "カテゴリをフィルタする"
+          table:
+            category: "カテゴリ"
+            visibility: "表示状態"
+            topics: "トピック"
+          visibility:
+            public: "公開"
+          visibility_filter:
+            all: "すべてのカテゴリ"
         permalinks:
           title: "パーマリンク"
           header_description: "フォーラムが認識していない URL に適用するリダイレクト"
@@ -5645,13 +5805,28 @@ ja:
       new_features:
         title: "新機能"
         check_for_updates: "アップデートを確認"
+      site_traffic_explorer:
+        metric_information: "%{metric}について"
+        remove_filter_value: "%{value} を削除"
+        clear_all: "すべてクリア"
+        apply: "適用"
+        view_more: "さらに表示"
+        cards:
+          pages: "ページ"
+          visitors: "訪問者"
+        filters:
+          country: "国"
+          browser: "ブラウザ"
+          language: "言語"
+          ip: "IP アドレス"
+        series:
+          anonymous_human: "匿名ユーザー"
       dashboard:
         title: "ダッシュボード"
         last_updated: "ダッシュボードが更新されました:"
         discourse_last_updated: "Discourse が更新されました:"
         version: "バージョン"
         up_to_date: "最新のバージョンです!"
-        critical_available: "重大なアップデートがあります。"
         updates_available: "アップデートがあります。"
         please_update: "更新してください！"
         no_check_performed: "アップデートの確認が行われていません。sidekiq が起動していることを確認してください。"
@@ -5716,8 +5891,9 @@ ja:
               posts: "投稿"
               share: "共有"
             whos_posting:
-              all_categories: "すべてのカテゴリ"
               staff: "スタッフ"
+              modal:
+                apply: "保存"
             trust_level_pipeline:
               trust_levels:
                 "0": "新規"
@@ -5730,7 +5906,13 @@ ja:
             table:
               searches: "検索数"
               status: "ステータス"
+          system:
+            title: "システム"
+            status: "ステータス"
+            discourse_updated: "Discourse が更新されました"
+            dashboard_updated: "ダッシュボードが更新されました"
         reports_section:
+          header_action: "管理"
           modal:
             enabled_heading: "有効"
             all_heading: "すべてのレポート"
@@ -5778,6 +5960,12 @@ ja:
           average_for_sample: "サンプルの平均"
           total: "全期間合計"
           no_data: "表示するデータはありません。"
+          posters_by_member_type_members:
+            users_count:
+              other: "%{count} 人のユーザー"
+            posts_count:
+              other: "投稿 %{count} 件"
+            deselect: "%{name} を選択解除"
           trending_search:
             more: '<a href="%{basePath}/admin/logs/search_logs">検索ログ</a>'
             disabled: 'トレンド検索レポートは無効です。データを収集するには、<a href="%{basePath}/admin/site_settings/category/all_results?filter=log%20search%20queries">ログ検索クエリ</a>を有効にしてください。'
@@ -6431,6 +6619,8 @@ ja:
         sidebar: "サイドバー"
         header_dropdown: "ヘッダードロップダウン"
         legacy: "レガシー"
+      duplicate_topic_titles:
+        allowed: "許可"
       backups:
         title: "バックアップ"
         files_title: "バックアップファイル"
@@ -6668,7 +6858,6 @@ ja:
           finish_install: "テーマのインストールを終了"
           last_attempt: "インストールプロセスが終了しませんでした。最終試行:"
           remote_branch: "ブランチ名 (オプション)"
-          public_key: "次の公開鍵アクセスをリポジトリに許可する:"
           install: "インストール"
           installed: "インストール済み"
           install_popular: "人気"
@@ -7982,11 +8171,16 @@ ja:
         uploading: "アップロード中…"
         name: "名前"
         group: "グループ"
+        all_groups: "すべてのグループ"
         created_by: "作成者"
         image: "画像"
         alt: "カスタム絵文字のプレビュー"
         delete_confirm: ":%{name}: 絵文字を削除してもよろしいですか？"
         settings: "設定"
+        export: "エクスポート"
+        import: "インポート"
+        import_category:
+          new: "新規"
       embedding:
         get_started: "ほかのウェブサイトに Discourse を埋め込む場合は、まずホストを追加してください。"
         delete: "削除"

@@ -5,6 +5,32 @@
 # https://translate.discourse.org/
 
 da:
+  markdown_endpoints:
+    latest: "Seneste"
+    categories: "Kategorier"
+    tags: "Mærker"
+    previous_page: "Forrige side"
+    next_page: "Næste side"
+    replies: "Svar"
+    last_updated: "Sidst opdateret"
+  mcp:
+    errors:
+      topic_not_found: "Emne ikke fundet"
+    oauth:
+      deny: "Nægt"
+      approve: "Autoriser"
+  llms_txt:
+    sections:
+      optional: "Valgfri"
+    links:
+      search:
+        label: "Søg"
+      categories:
+        label: "Kategorier"
+      about:
+        label: "Om"
+      guidelines:
+        label: "Retningslinjer"
   dates:
     short_date_no_year: "D MMM"
     short_date: "D MMM, YYYY"
@@ -145,7 +171,6 @@ da:
       exclusion: er reserveret
       greater_than: skal være større end %{count}
       greater_than_or_equal_to: skal være større eller lig med %{count}
-      has_already_been_used: "er allerede blevet brugt"
       inclusion: er ikke inkluderet i listen
       invalid: er ugyldig
       is_invalid: "virker upræcis, er det en hel sætning?"
@@ -680,16 +705,15 @@ da:
     success_unapproved: "Din adgangskode er nu ændret."
   email_login:
     title: "E-mail login"
+  browsers:
+    chrome: "Google Chrome"
+    discoursehub: "DiscourseHub app"
+    edge: "Microsoft Edge"
+    firefox: "Firefox"
+    ie: "Internet Explorer"
+    opera: "Opera"
+    safari: "Safari"
   user_auth_tokens:
-    browser:
-      chrome: "Google Chrome"
-      discoursehub: "DiscourseHub app"
-      edge: "Microsoft Edge"
-      firefox: "Firefox"
-      ie: "Internet Explorer"
-      opera: "Opera"
-      safari: "Safari"
-      unknown: "ukendt browser"
     device:
       android: "Android-enhed"
       chromebook: "Chrome OS"
@@ -709,6 +733,10 @@ da:
       macos: "macOS"
       windows: "Microsoft Windows"
       unknown: "ukendt operativsystem"
+  admin_site_traffic_explorer:
+    unknown: "Ukendt"
+    traffic_types:
+      anonymous: "Anonym"
   change_email:
     error: "Der opstod en fejl under ændringen af din e-mail-adresse. Måske er adressen allerede i brug?"
     doesnt_exist: "Denne e-mailadresse er ikke knyttet til din konto."
@@ -843,7 +871,7 @@ da:
   uploads:
     marked_insecure_from_theme_component_reason: "overførsel anvendt i temakomponenten"
   unsubscribe:
-    title: "Frameld"
+    unsubscribe: "Frameld"
     stop_watching_topic: "Følg ikke længere dette emne, %{link}"
     mute_topic: "Tavshed fra alle notifikationer for dette emne/indlæg, %{link}"
     unwatch_category: "Følg ikke længere disse emner i %{category}"
@@ -968,12 +996,18 @@ da:
         share: "Del"
       types:
         staff: "Personale"
+    posters_by_member_type_members:
+      labels:
+        user: "Bruger"
+        count: "Indlæg"
+        share: "Del"
     trust_level_pipeline:
       description_link: "https://blog.discourse.org/2018/06/understanding-discourse-trust-levels/"
       labels:
         level: "Tillidsniveau"
         count: "Brugere"
         share: "Del"
+        signups: "Tilmeldinger"
       levels:
         "0": "Nye"
         "1": "Basis"
@@ -1126,6 +1160,9 @@ da:
         num_topics: "Emner"
       description: "Brugere opført efter antal klik på links, de har delt."
     top_countries_by_browser_pageviews:
+      labels:
+        count: "Besøg"
+    top_entry_urls:
       labels:
         count: "Besøg"
     top_referrers_by_browser_pageviews:
@@ -1288,12 +1325,6 @@ da:
       host_names: "Din config/database.yml fil bruger standardnavnet localhost som værtsnavn. Opdatér den med webstedets værtsnavn."
       queue_size: "Antallet af job i kø er %{queue_size}, hvilket er højt. Dette kunne indikere at der er et problem med Sidekiq processerne, eller at du kan være nødt til at tilføre flere Sidekiq arbejder-resurser."
       ram: "Din server kører med mindre end 1 GB samlet hukommelse. Det anbefales at have mindst 1 GB hukommelse."
-      google_oauth2_config: 'Serveren er konfigureret til at tillade tilmelding og login med Google OAuth2 (enable_google_oauth2_logins), men klient-id''et og klientens hemmelige værdier er ikke indstillet. Gå til <a href="%{base_path}/admin/site_settings">Webstedsindstillinger</a> og opdater indstillingerne. <a href="https://meta.discourse.org/t/configuring-google-login-for-discourse/15858" target="_blank">Se denne vejledning for at lære mere</a>.'
-      facebook_config: 'Serveren er konfigureret til at tillade tilmelding og login med Google OAuth2 (enable_facebook_logins), men app-id''et og den hemmelige værdi er ikke indstillet. Gå til <a href="%{base_path}/admin/site_settings">Webstedsindstillinger</a> og opdater indstillingerne. <a href="https://meta.discourse.org/t/configuring-facebook-login-for-discourse/13394" target="_blank">Se denne vejledning for at lære mere</a>.'
-      twitter_config: 'Serveren er konfigureret til at tillade tilmelding og login med Twitter (enable_twitter_logins), men nøgle- og hemmelige værdier er ikke indstillet. Gå til <a href="%{base_path}/admin/site_settings">Webstedsindstillinger</a> og opdater indstillingerne. <a href="https://meta.discourse.org/t/configuring-twitter-login-for-discourse/13395" target="_blank">Se denne vejledning for at lære mere</a>.'
-      github_config: 'Serveren er konfigureret til at tillade tilmelding og login med GitHub (enable_github_logins), men klient-id og hemmelig værdie er ikke indstillet. Gå til <a href="%{base_path}/admin/site_settings">Webstedsindstillinger</a> og opdater indstillingerne. <a href="https://meta.discourse.org/t/configuring-github-login-for-discourse/13745" target="_blank">Se denne vejledning for at lære mere</a>.'
-      s3_upload_config: 'Serveren er konfigureret til at overføre filer til S3, men mindst en af følgende indstillinger er ikke indstillet: s3_access_key_id, s3_secret_access_key, s3_use_iam_profile eller s3_upload_bucket. Gå til <a href="%{base_path}/admin/site_settings">Webstedsindstillinger</a> og opdater indstillingerne. <a href="https://meta.discourse.org/t/how-to-set-up-image-uploads-to-s3/7229" target="_blank">Se "Sådan konfigureres overførsel af billeder til S3?" for at lære mere</a>.'
-      s3_backup_config: 'Serveren er konfigureret til at overføre sikkerhedskopier til S3, men mindst en af følgende indstillinger er ikke indstillet: s3_access_key_id, s3_secret_access_key, s3_use_iam_profile eller s3_backup_bucket. Gå til <a href="%{base_path}/admin/site_settings">Webstedsindstillinger</a> og opdater indstillingerne. <a href="https://meta.discourse.org/t/how-to-set-up-image-uploads-to-s3/7229" target="_blank">Se "Sådan konfigureres overførsel af billeder til S3?" for at lære mere</a>.'
       s3_cdn: 'Serveren er konfigureret til at overføre filer til S3, men der er ingen S3 CDN konfigureret. Dette kan føre til dyre S3-omkostninger og langsommere webstedsydelse. <a href="https://meta.discourse.org/t/-/148916" target="_blank">Se "Brug af objektlagring til overførsler" for at lære mere</a>.'
       image_magick: 'Serveren er konfigureret til at oprette miniaturebilleder af store billeder, men ImageMagick er ikke installeret. Installer ImageMagick hjælp af din foretrukne pakkehåndtering eller <a href="https://www.imagemagick.org/script/download.php" target="_blank">hent den nyeste version</a>.'
       failing_emails: 'Der er %{num_failed_jobs} e-mail-job(s), der mislykkedes. Tjek din app.yml, og sørg for, at mailserverindstillingerne er korrekte. <a href="%{base_path}/sidekiq/retries" target="_blank">Se de mislykkede job i Sidekiq</a>.'
@@ -1339,7 +1370,6 @@ da:
     download_remote_images_threshold: "Minimum hukommelse påkrævet på drev for at downloade billeder lokalt (i procent)"
     editing_grace_period: "For (n) sekunder efter postering, vil redigering ikke skabe et nyt indlæg."
     staff_edit_locks_post: "Indlæg vil være låst fra redigering, hvis de redigeres af personalet"
-    edit_history_visible_to_public: "Tillad alle at se tidligere versioner af et redigeret indlæg. Når slået fra, kan kun administrator se dette."
     delete_removed_posts_after: "Indlæg, fjernet af forfatteren, vil blive automatisk slettet efter (n) hours. Såfremt værdien sat til 0 vil indlæg blive fjernet straks."
     fixed_category_positions: "Hvis afkrydset, vil du være i stand til at arrangere kategorier i en fast rækkefølge. Hvis ikke afkrydset vil de være listet i en rækkefølge baseret på aktivitet."
     add_rel_nofollow_to_user_content: 'Tilføj rel nofollow til alt indsendt brugerindhold, undtagen interne links (herunder overordnede domæner). Hvis du ændrer dette, skal du gen-bage alle indlæg med: "rake indlæg:rebake“'
@@ -1367,8 +1397,6 @@ da:
     hide_post_sensitivity: "Sandsynligheden for, at et anmeldt indlæg bliver skjult"
     auto_close_topic_sensitivity: "Sandsynligheden for at et anmeldt emne automatisk vil blive lukket"
     cooldown_minutes_after_hiding_posts: "Antal minutter en bruger må vente indtil de kan redigere et indlæg der er blevet skjult via fællesskabs-anmeldelse"
-    max_topics_in_first_day: "Det maksimale antal af emner en bruger må lave i en 24 timers periode efter at have skrevet det første indlæg"
-    max_replies_in_first_day: "Det maksimale antal af svar en bruger må foretage i 24 timers perioden efter at have skrevet deres første indlæg"
     tl2_additional_likes_per_day_multiplier: "Øg antallet af 'synes godt om' pr dag for tl2 (medlemmer) ved at gange med dette tal"
     tl3_additional_likes_per_day_multiplier: "Øg antallet af 'synes godt om' pr. dag for tl3 (regular) ved at gange med dette tal"
     tl4_additional_likes_per_day_multiplier: "Øg antallet af 'synes godt om' pr. dag for tl4 (leader) ved at gange med dette tal"
@@ -1600,7 +1628,6 @@ da:
     errors:
       invalid_email: "Ugyldig e-mail-adresse"
       invalid_username: "Der er ingen bruger med det brugernavn."
-      invalid_group: "Der er ingen gruppe med dette navn."
       invalid_integer_min_max: "Værdien skal være mellem %{min} og %{max}."
       invalid_integer_min: "Værdien skal være %{min} eller større."
       invalid_integer_max: "Værdien kan ikke være højere end %{max}."
@@ -1722,6 +1749,7 @@ da:
     password_too_long: "Kodeord er begrænset til 200 tegn."
     email_too_long: "Den mailadresse, du har opgivet, er for lang. Navnet i mailadressen må ikke overstige 254 tegn, og domænenavnet må ikke overstige 253 tegn."
     reserved_username: "Dette brugernavn er ikke tilladt."
+    missing_username: "Indtast venligst et brugernavn"
     auth_complete: "Godkendelsen er gennemført."
     click_to_continue: "Klik her for at fortsætte."
     second_factor_title: "To-faktor Godkendelse"
@@ -2552,9 +2580,6 @@ da:
         %{respond_instructions}
     user_posted_pm_staged:
       subject_template: "%{optional_re}%{topic_title}"
-      text_body_template: |2
-
-        %{message}
     account_suspended:
       title: "Konto Suspenderet"
       subject_template: "[%{email_prefix}] Din konto er blevet suspenderet"
@@ -2730,7 +2755,7 @@ da:
         En medarbejder godkendte din konto på %{site_name}..
 
         Du kan nu få adgang til din nye konto ved at logge ind på:
-        %{base_url}
+        %{login_url}
 
         Hvis ovenstående link ikke kan klikkes på, kan du prøve at kopiere og indsætte den i adresselinjen i din webbrowser.
 
@@ -3128,6 +3153,9 @@ da:
     title: "Gå ind i fejlsikret tilstand"
     enter: "Gå ind i fejlsikret tilstand"
     must_select: "Du skal vælge mindst én mulighed for at gå i fejlsikret tilstand."
+  design_wizard:
+    palette_pairs:
+      default: "Standard"
   wizard:
     title: "Discourse Opsætning"
     step:
@@ -3196,6 +3224,9 @@ da:
     missing_version: "Du skal angive en versionsparameter"
     conflict: "Der var en opdateringskonflikt, der forhindrede dig i at gøre dette."
     reasons:
+      fast_typer_time:
+        one: "%{count} sekund"
+        other: "%{count} sekunder"
       email_auth_res_enqueue: "Denne e-mail fejlede et DMARC tjek, den er højst sandsynligt ikke fra hvem den ser ud til at være fra. Tjek de rå e-mail-headere for mere information."
       queued_by_staff: "En medarbejder mener, at dette indlæg har brug for gennemgang. Den forbliver skjult indtil da."
     actions:
@@ -3248,7 +3279,6 @@ da:
           complete: "Bruger slettet."
         block:
           title: "Slet og Blokér Bruger"
-          description: "Brugeren vil blive slettet, og vi vil blokere deres IP og e-mail-adresse."
       confirm_spam:
         title: "Ja"
       not_spam:
@@ -3260,9 +3290,6 @@ da:
         title: "Ja"
       approve_and_unhide:
         title: "Ja"
-      delete_post:
-        title: "Slet indlæg"
-        complete: "Indlæg slettet"
       delete_user:
         title: "Slet bruger"
         complete: "Bruger slettet"

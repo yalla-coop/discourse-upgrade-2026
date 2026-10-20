@@ -4,7 +4,10 @@ import { action } from "@ember/object";
 import { eq } from "discourse/truth-helpers";
 import { i18n } from "discourse-i18n";
 import CONTROL_REGISTRY from "../../../lib/workflows/control-registry";
-import { resolveNodeTypeVersion } from "../../../lib/workflows/node-types";
+import {
+  resolveNodeTypeVersion,
+  typeVersionForNode,
+} from "../../../lib/workflows/node-types";
 import {
   credentialSlotAnchorField,
   credentialSlotVisible,
@@ -35,7 +38,10 @@ export default class PropertyEngineConfigurator extends Component {
       this.args.nodeDefinition ||
       findNodeType(this.args.nodeTypes, this.nodeType);
 
-    return resolveNodeTypeVersion(definition, this.args.node?.typeVersion);
+    return resolveNodeTypeVersion(
+      definition,
+      typeVersionForNode(this.args.node)
+    );
   }
 
   get metadata() {
@@ -77,31 +83,31 @@ export default class PropertyEngineConfigurator extends Component {
         {{#let (this.controlEntry field) as |entry|}}
           {{#if (eq entry.kind "structural")}}
             <entry.renderer
-              @form={{@form}}
-              @formApi={{@formApi}}
               @configuration={{@configuration}}
               @connections={{@connections}}
               @credentials={{@credentials}}
               @fieldName={{field.name}}
+              @form={{@form}}
+              @formApi={{@formApi}}
               @node={{@node}}
               @nodeDefinition={{this.nodeDefinition}}
               @nodeParameters={{this.nodeParameters}}
-              @nodeType={{this.nodeType}}
               @nodes={{@nodes}}
+              @nodeType={{this.nodeType}}
               @nodeTypes={{@nodeTypes}}
+              @onBeforeStartTestSession={{@onBeforeStartTestSession}}
+              @onChange={{@onChange}}
               @schema={{field}}
               @session={{@session}}
-              @onChange={{@onChange}}
-              @onBeforeStartTestSession={{@onBeforeStartTestSession}}
             />
           {{else}}
             <Field
-              @form={{@form}}
-              @formApi={{@formApi}}
               @configuration={{@configuration}}
               @connections={{@connections}}
               @credentials={{@credentials}}
               @fieldName={{field.name}}
+              @form={{@form}}
+              @formApi={{@formApi}}
               @metadata={{this.metadata}}
               @node={{@node}}
               @nodeDefinition={{this.nodeDefinition}}
@@ -109,9 +115,9 @@ export default class PropertyEngineConfigurator extends Component {
               @nodes={{@nodes}}
               @nodeType={{this.nodeType}}
               @nodeTypes={{@nodeTypes}}
+              @onBeforeStartTestSession={{@onBeforeStartTestSession}}
               @schema={{field}}
               @session={{@session}}
-              @onBeforeStartTestSession={{@onBeforeStartTestSession}}
             />
           {{/if}}
         {{/let}}

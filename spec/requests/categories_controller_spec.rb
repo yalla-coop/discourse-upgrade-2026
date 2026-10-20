@@ -3,6 +3,7 @@
 RSpec.describe CategoriesController do
   let!(:admin) { Fabricate(:admin) }
   let!(:category) { Fabricate(:category, user: admin) }
+
   fab!(:user)
 
   describe "#index" do
@@ -19,10 +20,22 @@ RSpec.describe CategoriesController do
       SiteSetting.categories_topics.times { Fabricate(:topic) }
       get "/categories"
 
-      expect(response.body).to have_tag("div#data-preloaded") do |element|
-        json = JSON.parse(element.current_scope.attribute("data-preloaded").value)
+      expect(response.body).to have_tag("script#data-preloaded") do |element|
+        json = JSON.parse(element.current_scope.text)
         expect(json["topic_list"]).to include(%{"more_topics_url":"/latest"})
       end
+    end
+
+    it "does not build a topic list for crawlers" do
+      SiteSetting.categories_topics = 5
+      SiteSetting.categories_topics.times { Fabricate(:topic) }
+
+      CategoriesController.any_instance.expects(:fetch_topic_list).never
+
+      get "/categories", headers: { "HTTP_USER_AGENT" => "Googlebot" }
+
+      expect(response.status).to eq(200)
+      expect(response.body).to have_tag("body.crawler")
     end
 
     it "Shows correct title if category list is set for homepage" do
@@ -49,6 +62,21 @@ RSpec.describe CategoriesController do
       get "/category/something"
       expect(response).to have_http_status(:moved_permanently)
       expect(response).to redirect_to(%r{/c/#{category.slug}})
+    end
+
+    it "does not disclose restricted topic titles through legacy category permalinks" do
+      group = Fabricate(:group)
+      private_category = Fabricate(:private_category, group: group)
+      private_topic =
+        Fabricate(:topic, category: private_category, title: "Restricted fallback topic title")
+      Permalink.create!(url: "category/old-category", topic: private_topic)
+
+      get "/category/old-category"
+
+      expect(response).to have_http_status(:found)
+      expect(response).to redirect_to("/c/old-category")
+      expect(response.headers["Location"]).not_to include(private_topic.title)
+      expect(response.body).not_to include(private_topic.title)
     end
 
     it "returns the right response for a normal user" do
@@ -430,6 +458,18 @@ RSpec.describe CategoriesController do
       ).not_to include(uncategorized.id)
     end
 
+    it "lists the subcategories of a parent that has no subcategory list style" do
+      category.update!(subcategory_list_style: nil)
+      subcategory = Fabricate(:category, user: admin, parent_category: category)
+
+      get "/categories.json", params: { parent_category_id: category.id }
+
+      expect(response.status).to eq(200)
+      expect(response.parsed_body["category_list"]["categories"].map { |c| c["id"] }).to eq(
+        [subcategory.id],
+      )
+    end
+
     describe "with page" do
       before { sign_in(admin) }
 
@@ -480,21 +520,21 @@ RSpec.describe CategoriesController do
   describe "extensibility event" do
     before { sign_in(admin) }
 
-    it "triggers a extensibility event" do
-      event =
-        DiscourseEvent
-          .track_events do
-            put "/categories/#{category.id}.json",
-                params: {
-                  name: "hello",
-                  color: "ff0",
-                  text_color: "fff",
-                }
-          end
-          .last
+    it "triggers the category updated event once" do
+      events =
+        DiscourseEvent.track_events do
+          put "/categories/#{category.id}.json",
+              params: {
+                name: "hello",
+                color: "ff0",
+                text_color: "fff",
+              }
+        end
 
-      expect(event[:event_name]).to eq(:category_updated)
-      expect(event[:params].first).to eq(category)
+      category_updated_events = events.select { |event| event[:event_name] == :category_updated }
+
+      expect(category_updated_events.size).to eq(1)
+      expect(category_updated_events.pluck(:params).map(&:first)).to all(eq(category))
     end
   end
 
@@ -580,7 +620,7 @@ RSpec.describe CategoriesController do
       end
 
       describe "success" do
-        it "works" do
+        it "creates the category with group permissions" do
           SiteSetting.enable_category_group_moderation = true
 
           readonly = CategoryGroup.permission_types[:readonly]
@@ -701,7 +741,7 @@ RSpec.describe CategoriesController do
             expect(SiteSetting.max_category_nesting).to eq(3)
           end
 
-          it "will set the schema value for site settings when overrides are not provided" do
+          it "uses the schema value when no site-setting override is provided" do
             SiteSetting.max_category_nesting = 3
             Categories::Types::Discussion.stubs(:configuration_schema).returns(
               { site_settings: { max_category_nesting: 2 } },
@@ -1026,6 +1066,76 @@ RSpec.describe CategoriesController do
           expect(category.topic_title_placeholder).to eq("test topic title placeholder")
         end
 
+        it "revokes anonymous access to existing uploads when a public category becomes private" do
+          setup_s3
+          SiteSetting.secure_uploads = true
+          topic = Fabricate(:topic, category: category)
+          post = Fabricate(:post, topic: topic)
+          upload = Fabricate(:upload_s3, access_control_post: post)
+          UploadReference.create!(upload: upload, target: post)
+          stub_upload(upload)
+
+          delete "/session/#{admin.username}.json"
+          get upload.short_path
+
+          expect(response).to redirect_to(upload.url)
+
+          sign_in(admin)
+          put "/categories/#{category.id}.json",
+              params: {
+                permissions: {
+                  "admins" => CategoryGroup.permission_types[:full],
+                },
+              }
+
+          expect(response).to have_http_status(:ok)
+          expect(response.parsed_body["category"]["read_restricted"]).to eq(true)
+
+          delete "/session/#{admin.username}.json"
+          get upload.short_path
+
+          expect(response).to have_http_status(:forbidden)
+          expect(response.body).to include(I18n.t("page_forbidden.title"))
+        end
+
+        it "revokes anonymous access to uploads retained in a deleted topic" do
+          setup_s3
+          SiteSetting.secure_uploads = true
+          topic = Fabricate(:topic, category: category)
+          post = Fabricate(:post, topic: topic)
+          upload = Fabricate(:upload_s3, access_control_post: post)
+          UploadReference.create!(upload: upload, target: post)
+          stub_upload(upload)
+
+          delete "/session/#{admin.username}.json"
+          get upload.short_path
+
+          expect(response).to redirect_to(upload.url)
+
+          sign_in(admin)
+          delete "/t/#{topic.id}.json"
+
+          expect(response).to have_http_status(:ok)
+          expect(Topic.with_deleted.find(topic.id)).to be_trashed
+          expect(Post.with_deleted.find(post.id)).to be_trashed
+
+          put "/categories/#{category.id}.json",
+              params: {
+                permissions: {
+                  "admins" => CategoryGroup.permission_types[:full],
+                },
+              }
+
+          expect(response).to have_http_status(:ok)
+          expect(response.parsed_body["category"]["read_restricted"]).to eq(true)
+
+          delete "/session/#{admin.username}.json"
+          get upload.short_path
+
+          expect(response).to have_http_status(:forbidden)
+          expect(response.body).to include(I18n.t("page_forbidden.title"))
+        end
+
         it "updates description and revises category topic OP to stay in sync" do
           cat = Fabricate(:category_with_definition, user: admin)
           raw_description = "New **markdown** description here"
@@ -1159,6 +1269,51 @@ RSpec.describe CategoriesController do
           cat_json = response.parsed_body["category"]
           expect(cat_json["has_children"]).to eq(false)
           expect(cat_json["subcategory_count"]).to eq(nil)
+        end
+
+        context "with appearance settings set" do
+          before do
+            category.update!(
+              sort_order: "likes",
+              sort_ascending: true,
+              default_view: "top",
+              default_top_period: "weekly",
+              default_list_filter: "none",
+            )
+          end
+
+          it "resets the appearance settings that are sent as null" do
+            put "/categories/#{category.id}.json",
+                params: {
+                  sort_order: nil,
+                  sort_ascending: nil,
+                  default_view: nil,
+                  default_top_period: nil,
+                  default_list_filter: nil,
+                },
+                as: :json
+
+            expect(response.status).to eq(200)
+            category.reload
+            expect(category.sort_order).to eq(nil)
+            expect(category.sort_ascending).to eq(nil)
+            expect(category.default_view).to eq(nil)
+            expect(category.default_top_period).to eq(nil)
+            expect(category.default_list_filter).to eq(nil)
+          end
+
+          it "keeps the appearance settings that are not sent at all" do
+            put "/categories/#{category.id}.json", params: { name: "hello" }, as: :json
+
+            expect(response.status).to eq(200)
+            category.reload
+            expect(category.name).to eq("hello")
+            expect(category.sort_order).to eq("likes")
+            expect(category.sort_ascending).to eq(true)
+            expect(category.default_view).to eq("top")
+            expect(category.default_top_period).to eq("weekly")
+            expect(category.default_list_filter).to eq("none")
+          end
         end
 
         it "does not update other fields" do
@@ -1311,8 +1466,43 @@ RSpec.describe CategoriesController do
           expect(category.reply_posting_review_group_ids).to contain_exactly(mod_group_3.id)
         end
 
+        it "returns 422 for invalid posting review modes" do
+          %w[topic_posting_review_mode reply_posting_review_mode].each do |review_mode|
+            expect do
+              put "/categories/#{category.id}.json",
+                  params: {
+                    category_setting_attributes: {
+                      review_mode => "invalid",
+                    },
+                  }
+            end.not_to raise_error
+
+            expect(response).to have_http_status(:unprocessable_entity)
+            expect(response.parsed_body["errors"].join(" ").downcase).to include(
+              review_mode.humanize.downcase,
+              "is not included in the list",
+            )
+            expect(category.reload.category_setting.public_send(review_mode)).to eq("no_one")
+          end
+        end
+
         it "can correctly convert blank strings to appropriate null values" do
           put "/categories/#{category.id}.json", params: { email_in: "", minimum_required_tags: "" }
+          expect(response.status).to eq(200)
+          expect(category.reload.email_in).to be_nil
+          expect(category.reload.minimum_required_tags).to eq(0)
+        end
+
+        it "can correctly convert explicit nulls to appropriate null values" do
+          category.update!(email_in: "ted@discourse.org", minimum_required_tags: 5)
+
+          put "/categories/#{category.id}.json",
+              params: {
+                email_in: nil,
+                minimum_required_tags: nil,
+              },
+              as: :json
+
           expect(response.status).to eq(200)
           expect(category.reload.email_in).to be_nil
           expect(category.reload.minimum_required_tags).to eq(0)
@@ -1706,6 +1896,51 @@ RSpec.describe CategoriesController do
     end
   end
 
+  describe "#convert_nested_replies" do
+    let!(:topic) { Fabricate(:topic, category: category) }
+
+    let(:url) { "/categories/#{category.id}/convert_nested_replies.json" }
+
+    before do
+      SiteSetting.nested_replies_enabled = true
+      category.category_setting.update!(nested_replies_default: true)
+    end
+
+    it "requires the user to be logged in" do
+      post url
+
+      expect(response.status).to eq(403)
+    end
+
+    it "converts topics in the category to nested replies" do
+      sign_in(admin)
+
+      expect { post url }.to change { NestedTopic.where(topic: topic).count }.from(0).to(1)
+
+      expect(response.status).to eq(200)
+      expect(response.parsed_body["converted_topic_count"]).to eq(1)
+      expect(response.parsed_body["nested_replies_conversion_completed"]).to eq(true)
+      expect(category.reload.nested_replies_conversion_completed?).to eq(true)
+    end
+
+    it "does not allow users who cannot edit the category" do
+      sign_in(user)
+
+      post url
+
+      expect(response.status).to eq(403)
+      expect(NestedTopic.where(topic: topic).exists?).to eq(false)
+    end
+
+    it "returns not found for a missing category" do
+      sign_in(admin)
+
+      post "/categories/0/convert_nested_replies.json"
+
+      expect(response.status).to eq(404)
+    end
+  end
+
   describe "#visible_groups" do
     fab!(:public_group) do
       Fabricate(:group, visibility_level: Group.visibility_levels[:public], name: "aaa")
@@ -1864,6 +2099,35 @@ RSpec.describe CategoriesController do
       expect(category["permission"]).to eq(CategoryGroup.permission_types[:full])
       expect(category["has_children"]).to eq(true)
       expect(category["subcategory_count"]).to eq(1)
+    end
+
+    it "returns preloaded custom fields" do
+      Site.preloaded_category_custom_fields << "bob"
+      category.upsert_custom_fields("bob" => "marley")
+
+      get "/categories/find.json", params: { slug_path_with_id: "#{category.slug}/#{category.id}" }
+
+      expect(response.parsed_body["categories"].first["custom_fields"]).to eq("bob" => "marley")
+    ensure
+      Site.reset_preloaded_category_custom_fields
+    end
+
+    it "returns all custom fields when permissions are included" do
+      Site.preloaded_category_custom_fields << "bob"
+      category.upsert_custom_fields("bob" => "marley", "tosh" => "peter")
+
+      get "/categories/find.json",
+          params: {
+            slug_path_with_id: "#{category.slug}/#{category.id}",
+            include_permissions: true,
+          }
+
+      expect(response.parsed_body["categories"].first["custom_fields"]).to eq(
+        "bob" => "marley",
+        "tosh" => "peter",
+      )
+    ensure
+      Site.reset_preloaded_category_custom_fields
     end
 
     context "with a read restricted child category" do
@@ -2197,7 +2461,7 @@ RSpec.describe CategoriesController do
     context "when in readonly mode" do
       before { Discourse.enable_readonly_mode }
 
-      it "works" do
+      it "returns category search results in read-only mode" do
         post "/categories/search.json", params: { term: "" }
 
         expect(response.status).to eq(200)

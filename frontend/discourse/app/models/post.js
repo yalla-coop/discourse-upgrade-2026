@@ -7,13 +7,17 @@ import { Promise } from "rsvp";
 import { resolveShareUrl } from "discourse/helpers/share-url";
 import { ajax } from "discourse/lib/ajax";
 import { popupAjaxError } from "discourse/lib/ajax-error";
+import {
+  clearModelFields,
+  modelFieldNames,
+  registerModelField,
+  stampModelClass,
+} from "discourse/lib/model-extensions";
 import { deepEqual } from "discourse/lib/object";
 import { cook } from "discourse/lib/text";
 import { fancyTitle } from "discourse/lib/topic-fancy-title";
-import {
-  defineTrackedProperty,
-  enumerateTrackedKeys,
-} from "discourse/lib/tracked-tools";
+import { enumerateTrackedKeys } from "discourse/lib/tracked-tools";
+import { applyValueTransformer } from "discourse/lib/transformer";
 import { userPath } from "discourse/lib/url";
 import { postUrl } from "discourse/lib/utilities";
 import ActionSummary from "discourse/models/action-summary";
@@ -24,8 +28,6 @@ import Site from "discourse/models/site";
 import User from "discourse/models/user";
 import { i18n } from "discourse-i18n";
 
-const pluginTrackedProperties = new Set();
-
 /**
  * @internal
  * Adds a tracked property to the post model.
@@ -35,7 +37,8 @@ const pluginTrackedProperties = new Set();
  * @param {string} propertyKey - The key of the property to track.
  */
 export function _addTrackedPostProperty(propertyKey) {
-  pluginTrackedProperties.add(propertyKey);
+  stampModelClass(Post, "post");
+  registerModelField("post", propertyKey);
 }
 
 /**
@@ -44,7 +47,7 @@ export function _addTrackedPostProperty(propertyKey) {
  * USE ONLY FOR TESTING PURPOSES.
  */
 export function clearAddedTrackedPostProperties() {
-  pluginTrackedProperties.clear();
+  clearModelFields("post");
 }
 
 export default class Post extends RestModel {
@@ -143,7 +146,6 @@ export default class Post extends RestModel {
   @tracked badges_granted;
   @tracked bookmarked;
   @tracked can_delete;
-  @tracked can_edit;
   @tracked can_permanently_delete;
   @tracked can_recover;
   @tracked can_see_hidden_post;
@@ -194,6 +196,7 @@ export default class Post extends RestModel {
   @tracked user_custom_fields;
   @tracked user_deleted;
   @tracked user_id;
+  @tracked user_locale;
   @tracked user_suspended;
   @tracked user_title;
   @tracked username;
@@ -201,18 +204,21 @@ export default class Post extends RestModel {
   @tracked via_email;
   @tracked wiki;
   @tracked yours;
+  @tracked _can_edit;
   // for compatibility with existing code
   // mark fist post as deleted if topic was deleted
   // post is either highlighted as deleted or hidden/removed from the post stream
   // post or content still can be recovered
 
-  constructor() {
-    super(...arguments);
-
-    // adds tracked properties defined by plugin to the instance
-    pluginTrackedProperties.forEach((propertyKey) => {
-      defineTrackedProperty(this, propertyKey);
+  @dependentKeyCompat
+  get can_edit() {
+    return applyValueTransformer("post-can-edit", this._can_edit, {
+      post: this,
     });
+  }
+
+  set can_edit(value) {
+    this._can_edit = value;
   }
 
   @dependentKeyCompat
@@ -222,6 +228,15 @@ export default class Post extends RestModel {
 
   set canEdit(value) {
     this.can_edit = value;
+  }
+
+  @computed("topic.details.created_by.id")
+  get topicCreatedById() {
+    return this.topic?.details?.created_by?.id;
+  }
+
+  set topicCreatedById(value) {
+    set(this, "topic.details.created_by.id", value);
   }
 
   @dependentKeyCompat
@@ -257,15 +272,6 @@ export default class Post extends RestModel {
   @computed("topic.details.created_by.id", "user_id")
   get topicOwner() {
     return deepEqual(this.topic?.details?.created_by?.id, this.user_id);
-  }
-
-  @computed("topic.details.created_by.id")
-  get topicCreatedById() {
-    return this.topic?.details?.created_by?.id;
-  }
-
-  set topicCreatedById(value) {
-    set(this, "topic.details.created_by.id", value);
   }
 
   get shareUrl() {
@@ -307,18 +313,6 @@ export default class Post extends RestModel {
   @computed("username")
   get usernameUrl() {
     return userPath(this.username);
-  }
-
-  updatePostField(field, value) {
-    const data = {};
-    data[field] = value;
-
-    return ajax(`/posts/${this.id}/${field}`, { type: "PUT", data })
-      .then((response) => {
-        this.set(field, value);
-        return response;
-      })
-      .catch(popupAjaxError);
   }
 
   get internalLinks() {
@@ -454,9 +448,11 @@ export default class Post extends RestModel {
   }
 
   get isSmallAction() {
-    return (
+    return applyValueTransformer(
+      "post-is-small-action",
       this.post_type === this.site.post_types.small_action ||
-      this.action_code === "split_topic"
+        this.action_code === "split_topic",
+      { post: this }
     );
   }
 
@@ -514,6 +510,7 @@ export default class Post extends RestModel {
       flair_group_id: this.flair_group_id,
       flair_name: this.flair_name,
       flair_url: this.flair_url,
+      locale: this.user_locale,
       moderator: this.moderator,
       primary_group_name: this.primary_group_name,
       status: this.user_status,
@@ -521,6 +518,77 @@ export default class Post extends RestModel {
       trust_level: this.trust_level,
       custom_fields: this.user_custom_fields,
     });
+  }
+
+  get topicNotificationLevel() {
+    return this.topic.details.notification_level;
+  }
+
+  get userBadges() {
+    if (!this.topic?.user_badges) {
+      return;
+    }
+    const badgeIds = this.topic.user_badges.users[this.user_id]?.badge_ids;
+    if (badgeIds) {
+      return badgeIds.map((badgeId) => this.topic.user_badges.badges[badgeId]);
+    }
+  }
+
+  @cached
+  get badgesGranted() {
+    return this.badges_granted?.map((json) => {
+      const badges = Badge.createFromJson(json);
+      return Array.isArray(badges) ? badges[0] : badges;
+    });
+  }
+
+  get requestedGroupName() {
+    return this.post_number === 1 ? this.topic?.requested_group_name : null;
+  }
+
+  get expandablePost() {
+    return this.post_number === 1 && !!this.topic?.expandable_first_post;
+  }
+
+  get topicUrl() {
+    return this.topic?.url;
+  }
+
+  @cached
+  get actionsSummary() {
+    return this.actions_summary
+      ?.filter((postAction) => {
+        return postAction.actionType.name_key !== "like" && postAction.acted;
+      })
+      ?.map((postAction) => {
+        return {
+          id: postAction.id,
+          postId: this.id,
+          action: postAction.actionType.name_key,
+          canUndo: postAction.can_undo,
+          description: postAction.actionType.translatedDescription,
+        };
+      });
+  }
+
+  get displayDate() {
+    if (this.wiki && this.last_wiki_edit) {
+      return this.last_wiki_edit;
+    } else {
+      return this.created_at;
+    }
+  }
+
+  updatePostField(field, value) {
+    const data = {};
+    data[field] = value;
+
+    return ajax(`/posts/${this.id}/${field}`, { type: "PUT", data })
+      .then((response) => {
+        this.set(field, value);
+        return response;
+      })
+      .catch(popupAjaxError);
   }
 
   afterUpdate(res) {
@@ -557,8 +625,13 @@ export default class Post extends RestModel {
 
   // Expands the first post's content, if embedded and shortened.
   async expand() {
-    const post = await ajax(`/posts/${this.id}/expand-embed`);
-    this.cooked = `<section class="expanded-embed">${post.cooked}</section>`;
+    try {
+      const post = await ajax(`/posts/${this.id}/expand-embed`);
+      this.cooked = `<section class="expanded-embed">${post.cooked}</section>`;
+    } catch (error) {
+      popupAjaxError.call(this, error);
+      throw error;
+    }
   }
 
   // Recover a deleted post
@@ -678,7 +751,7 @@ export default class Post extends RestModel {
     [
       ...Object.keys(otherPost),
       ...enumerateTrackedKeys(otherPost),
-      ...pluginTrackedProperties,
+      ...modelFieldNames("post"),
     ].forEach((key) => {
       let value = otherPost[key],
         oldValue = this[key];
@@ -823,64 +896,5 @@ export default class Post extends RestModel {
     return ajax(`/posts/${this.id}/revisions/${version}/revert`, {
       type: "PUT",
     });
-  }
-
-  get topicNotificationLevel() {
-    return this.topic.details.notification_level;
-  }
-
-  get userBadges() {
-    if (!this.topic?.user_badges) {
-      return;
-    }
-    const badgeIds = this.topic.user_badges.users[this.user_id]?.badge_ids;
-    if (badgeIds) {
-      return badgeIds.map((badgeId) => this.topic.user_badges.badges[badgeId]);
-    }
-  }
-
-  @cached
-  get badgesGranted() {
-    return this.badges_granted?.map((json) => {
-      const badges = Badge.createFromJson(json);
-      return Array.isArray(badges) ? badges[0] : badges;
-    });
-  }
-
-  get requestedGroupName() {
-    return this.post_number === 1 ? this.topic?.requested_group_name : null;
-  }
-
-  get expandablePost() {
-    return this.post_number === 1 && !!this.topic?.expandable_first_post;
-  }
-
-  get topicUrl() {
-    return this.topic?.url;
-  }
-
-  @cached
-  get actionsSummary() {
-    return this.actions_summary
-      ?.filter((postAction) => {
-        return postAction.actionType.name_key !== "like" && postAction.acted;
-      })
-      ?.map((postAction) => {
-        return {
-          id: postAction.id,
-          postId: this.id,
-          action: postAction.actionType.name_key,
-          canUndo: postAction.can_undo,
-          description: postAction.actionType.translatedDescription,
-        };
-      });
-  }
-
-  get displayDate() {
-    if (this.wiki && this.last_wiki_edit) {
-      return this.last_wiki_edit;
-    } else {
-      return this.created_at;
-    }
   }
 }

@@ -7,6 +7,7 @@ import { i18n } from "discourse-i18n";
 import {
   implicitValueFor,
   isSingleValueOperator,
+  operatorOptionsForType,
   operatorsForType,
 } from "../../../lib/workflows/condition-operators";
 import Collection from "./collection";
@@ -31,7 +32,7 @@ function conditionSchema(type) {
   return {
     type: "options",
     required: true,
-    options: operatorsForType(type, { context: "data_table" }),
+    options: operatorOptionsForType(type, { context: "data_table" }),
   };
 }
 
@@ -86,30 +87,6 @@ export default class DataTableConditionBuilder extends Component {
       required: true,
       options: this.fieldOptions.map((f) => ({ value: f.id, label: f.label })),
     };
-  }
-
-  #fieldTypeForColumn(columnName) {
-    const field = this.fieldOptions.find((f) => f.id === columnName);
-    return field?.type || "string";
-  }
-
-  #initSchemas() {
-    const items = this.args.formApi?.get(this.args.fieldName) || [];
-    return items.map((item) => this.#buildSchema(item));
-  }
-
-  #buildSchema(item) {
-    const fieldType = this.#fieldTypeForColumn(item?.columnName);
-    return {
-      conditionSchema: conditionSchema(fieldType),
-      singleValue: isSingleValueOperator(item?.operator?.operation),
-    };
-  }
-
-  #updateSchemaAt(index, schema) {
-    const updated = [...this.schemas];
-    updated[index] = schema;
-    this.schemas = updated;
   }
 
   @action
@@ -172,57 +149,81 @@ export default class DataTableConditionBuilder extends Component {
     });
   }
 
+  #fieldTypeForColumn(columnName) {
+    const field = this.fieldOptions.find((f) => f.id === columnName);
+    return field?.type || "string";
+  }
+
+  #initSchemas() {
+    const items = this.args.formApi?.get(this.args.fieldName) || [];
+    return items.map((item) => this.#buildSchema(item));
+  }
+
+  #buildSchema(item) {
+    const fieldType = this.#fieldTypeForColumn(item?.columnName);
+    return {
+      conditionSchema: conditionSchema(fieldType),
+      singleValue: isSingleValueOperator(item?.operator?.operation),
+    };
+  }
+
+  #updateSchemaAt(index, schema) {
+    const updated = [...this.schemas];
+    updated[index] = schema;
+    this.schemas = updated;
+  }
+
   <template>
     {{#if this.dataTable}}
       <Collection
-        @form={{@form}}
-        @formApi={{@formApi}}
-        @fieldName={{@fieldName}}
-        @label={{@label}}
         @addLabel={{i18n "discourse_workflows.if.add_condition"}}
         @emptyItem={{this.emptyItem}}
-        @onAdd={{this.onItemAdded}}
-        @onRemove={{this.onItemRemoved}}
-        @session={{@session}}
         @emptyStateDescription={{i18n
           "discourse_workflows.if.no_conditions_body"
         }}
+        @fieldName={{@fieldName}}
+        @form={{@form}}
+        @formApi={{@formApi}}
+        @label={{@label}}
+        @onAdd={{this.onItemAdded}}
+        @onRemove={{this.onItemRemoved}}
+        @session={{@session}}
         as |ctx|
       >
         <Field
-          @form={{ctx.object}}
-          @formApi={{@formApi}}
           @configuration={{ctx.item}}
           @fieldName="columnName"
-          @schema={{this.columnSchema}}
+          @form={{ctx.object}}
+          @formApi={{@formApi}}
           @label={{i18n "discourse_workflows.if.column"}}
-          @session={{@session}}
           @onSet={{fn this.handleColumnChange ctx.index}}
+          @schema={{this.columnSchema}}
+          @session={{@session}}
         />
 
         {{#let (get this.schemas ctx.index) as |schemas|}}
           {{#if schemas}}
             <ctx.object.Object @name="operator" as |operator|>
               <Field
-                @form={{operator}}
-                @formApi={{@formApi}}
                 @configuration={{ctx.item.operator}}
                 @fieldName="operation"
-                @schema={{schemas.conditionSchema}}
+                @form={{operator}}
+                @formApi={{@formApi}}
                 @label={{i18n "discourse_workflows.if.operator"}}
-                @session={{@session}}
                 @onSet={{fn this.handleConditionChange ctx.index}}
+                @schema={{schemas.conditionSchema}}
+                @session={{@session}}
               />
             </ctx.object.Object>
 
             {{#unless schemas.singleValue}}
               <Field
-                @form={{ctx.object}}
-                @formApi={{@formApi}}
                 @configuration={{ctx.item}}
                 @fieldName="value"
-                @schema={{VALUE_SCHEMA}}
+                @form={{ctx.object}}
+                @formApi={{@formApi}}
                 @label={{i18n "discourse_workflows.if.value"}}
+                @schema={{VALUE_SCHEMA}}
                 @session={{@session}}
               />
             {{/unless}}

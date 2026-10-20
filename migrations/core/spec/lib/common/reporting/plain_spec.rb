@@ -22,7 +22,7 @@ RSpec.describe Migrations::Reporting::Plain do
     expect(lines.last).to match(/\A✓ Categories 4,281 \(0:12\)\z/)
   end
 
-  it "prints notices indented and attributed to their step" do
+  it "prints notices indented under their step" do
     step = reporter.start_step("Posts")
     step.notice("Calculating items took 6 seconds")
     expect(lines).to include("    Posts Calculating items took 6 seconds")
@@ -105,5 +105,13 @@ RSpec.describe Migrations::Reporting::Plain do
     end
 
     expect(lines).to include("    Users 100% (800/800)")
+  end
+
+  it "prints a finishing-up line and a run summary" do
+    reporter.finalizing { nil }
+    reporter.report_summary(runtime: 138.0, total: 24, failed: 2, skipped: 1)
+
+    expect(lines).to include("Finishing up…")
+    expect(lines.last).to eq("Total: 24 steps, 2 failed, 1 skipped (2:18)")
   end
 end

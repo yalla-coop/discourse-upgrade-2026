@@ -37,6 +37,7 @@ class Group < ActiveRecord::Base
   has_many :group_requests, dependent: :destroy
   has_many :group_mentions, dependent: :destroy
   has_many :group_associated_groups, dependent: :destroy
+  has_many :mcp_group_scopes, dependent: :destroy
 
   has_many :group_archived_messages, dependent: :destroy
 
@@ -89,7 +90,6 @@ class Group < ActiveRecord::Base
     SvgSprite.expire_cache
   end
 
-  # TODO (martin) Also do this for User when following up access_control_list
   def clear_acls
     Jobs.enqueue(:cleanup_acls_for_deleted, group_id: id)
   end
@@ -143,7 +143,7 @@ class Group < ActiveRecord::Base
     everyone: 99,
   }
 
-  VALID_DOMAIN_REGEX = /\A[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,24}(:[0-9]{1,5})?(\/.*)?\Z/i
+  VALID_DOMAIN_REGEX = /\A[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,24}\Z/i
 
   def self.visibility_levels
     @visibility_levels = Enum.new(public: 0, logged_on_users: 1, members: 2, staff: 3, owners: 4)
@@ -190,6 +190,8 @@ class Group < ActiveRecord::Base
                 "groups.id NOT IN (:ids)",
                 ids: [Group::AUTO_GROUPS[:anonymous_users], Group::AUTO_GROUPS[:logged_in_users]],
               )
+          else
+            groups = groups.where("groups.id > 0") unless opts[:include_everyone]
           end
 
           if !user&.admin
@@ -254,6 +256,8 @@ class Group < ActiveRecord::Base
                 "groups.id NOT IN (:ids)",
                 ids: [Group::AUTO_GROUPS[:anonymous_users], Group::AUTO_GROUPS[:logged_in_users]],
               )
+          else
+            groups = groups.where("groups.id > 0") unless opts[:include_everyone]
           end
 
           if !user&.admin
@@ -390,6 +394,17 @@ class Group < ActiveRecord::Base
     else
       self.bio_cooked = nil
     end
+  end
+
+  def bio_summary
+    PrettyText.excerpt(
+      bio_cooked,
+      300,
+      strip_links: true,
+      strip_images: true,
+      text_entities: true,
+      plain_hashtags: true,
+    ).presence
   end
 
   def record_email_setting_changes!(user)
@@ -565,12 +580,12 @@ class Group < ActiveRecord::Base
     group.full_name =
       I18n.t("groups.default_full_names.#{name}", locale: SiteSetting.default_locale)
 
-    # the everyone, anonymous_users, and logged_in_users groups are special — they
+    # the everyone, anonymous_users, and logged_in_users groups are special - they
     # represent implicit populations (unauthenticated visitors, or all logged-in
     # users) that cannot be enumerated via group_users rows.
     case name
     when :everyone, :anonymous_users, :logged_in_users
-      group.visibility_level = Group.visibility_levels[:staff]
+      group.visibility_level = Group.visibility_levels[:logged_on_users]
       group.save!
       return group
     when :moderators
@@ -639,21 +654,20 @@ class Group < ActiveRecord::Base
   end
 
   def self.reset_groups_user_count!(only_group_ids: [])
-    where_sql =
-      if only_group_ids.present?
-        "WHERE group_id IN (#{only_group_ids.map(&:to_i).join(",")}) AND user_id > 0"
-      else
-        "WHERE user_id > 0"
-      end
+    params = { auto_group_ids: AUTO_GROUP_IDS.keys }
+    params[:only_group_ids] = only_group_ids.map(&:to_i) if only_group_ids.present?
 
-    DB.exec <<-SQL
+    DB.exec(<<~SQL, params)
       WITH tally AS (
         SELECT
-          group_id,
-          COUNT(user_id) users
-        FROM group_users
-        #{where_sql}
-        GROUP BY group_id
+          g.id AS group_id,
+          COUNT(gu.user_id) AS users
+        FROM groups g
+        LEFT JOIN group_users gu
+          ON gu.group_id = g.id
+         AND (gu.user_id > 0 OR (g.automatic AND g.id NOT IN (:auto_group_ids)))
+        #{"WHERE g.id IN (:only_group_ids)" if params[:only_group_ids]}
+        GROUP BY g.id
       )
       UPDATE groups
          SET user_count = tally.users
@@ -762,6 +776,14 @@ class Group < ActiveRecord::Base
     relation
   end
 
+  def self.find_by_id_or_name(value)
+    value = value.to_s.strip
+    return if value.blank?
+    return find_by(id: value) if value.match?(/\A\d+\z/)
+
+    find_by("lower(name) = ?", value.downcase)
+  end
+
   def self.lookup_group(name)
     if id = AUTO_GROUPS[name]
       Group.find_by(id: id)
@@ -790,6 +812,32 @@ class Group < ActiveRecord::Base
 
   def self.desired_trust_level_groups(trust_level)
     trust_group_ids.keep_if { |id| id == AUTO_GROUPS[:trust_level_0] || (trust_level + 10) >= id }
+  end
+
+  def self.refresh_automatic_groups_for_user!(user)
+    automatic_group_ids = auto_groups_between(:admins, :trust_level_4)
+    groups_by_id = automatic_group_ids.index_with { |group_id| self[AUTO_GROUP_IDS[group_id]] }
+
+    desired_group_ids = desired_trust_level_groups(user.trust_level)
+    desired_group_ids << AUTO_GROUPS[:admins] if user.admin?
+    desired_group_ids << AUTO_GROUPS[:moderators] if user.moderator?
+    desired_group_ids << AUTO_GROUPS[:staff] if user.staff?
+
+    current_group_ids =
+      GroupUser.where(user_id: user.id, group_id: automatic_group_ids).pluck(:group_id)
+
+    Group.transaction do
+      (current_group_ids - desired_group_ids).each do |group_id|
+        GroupUser.find_by!(user_id: user.id, group_id:).destroy!
+        groups_by_id[group_id].trigger_user_removed_event(user)
+      end
+      (desired_group_ids - current_group_ids).each do |group_id|
+        groups_by_id[group_id].group_users.create!(user:)
+        groups_by_id[group_id].trigger_user_added_event(user, true)
+      end
+    end
+
+    user.reload
   end
 
   def self.user_trust_level_change!(user_id, trust_level)
@@ -902,16 +950,18 @@ class Group < ActiveRecord::Base
     GroupManager.new(self).remove(user_ids)
   end
 
+  # Bots in built-in and hand-managed groups are incidental (e.g. the system user
+  # as owner), but automatic groups maintained elsewhere may exist to hold bots.
+  def hides_bot_members?
+    !automatic || AUTO_GROUP_IDS.key?(id)
+  end
+
+  def listed_users
+    hides_bot_members? ? human_users : users
+  end
+
   def recalculate_user_count
-    DB.exec <<~SQL
-      UPDATE groups g
-      SET user_count =
-        (SELECT COUNT(gu.user_id)
-         FROM group_users gu
-         WHERE gu.group_id = g.id
-         AND gu.user_id > 0)
-      WHERE g.id = #{id};
-    SQL
+    Group.reset_user_count(self)
   end
 
   def add_automatically(user, subject: nil)
@@ -1185,8 +1235,16 @@ class Group < ActiveRecord::Base
     value
       .split("|")
       .each do |domain|
-        domain.sub!(%r{\Ahttps?://}, "")
-        domain.sub!(%r{/.*\z}, "")
+        domain =
+          domain
+            .strip
+            .downcase
+            .sub(%r{\Ahttps?://}, "")
+            .sub(%r{/.*\z}, "")
+            .sub(/\A.*@/, "")
+            .sub(/:\d+\z/, "")
+
+        next if domain.blank?
 
         if domain =~ Group::VALID_DOMAIN_REGEX
           valid_domains << domain
@@ -1195,7 +1253,7 @@ class Group < ActiveRecord::Base
         end
       end
 
-    valid_domains
+    valid_domains.uniq
   end
 
   private

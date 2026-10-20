@@ -43,8 +43,9 @@ describe DiscourseAi::Automation::LlmTriage do
     expect(post.topic.reload.visible).to eq(false)
   end
 
-  it "can categorize topics on triage" do
+  it "can categorize topics on triage without bumping the topic" do
     category = Fabricate(:category)
+    bumped_at = post.topic.bumped_at
 
     DiscourseAi::Completions::Llm.with_prepared_responses(["bad"]) do
       triage(
@@ -57,6 +58,7 @@ describe DiscourseAi::Automation::LlmTriage do
     end
 
     expect(post.topic.reload.category_id).to eq(category.id)
+    expect(post.topic.bumped_at).to eq_time(bumped_at)
   end
 
   it "can reply to topics on triage" do
@@ -96,6 +98,69 @@ describe DiscourseAi::Automation::LlmTriage do
     expect(reviewable.reviewable_scores.first.reason).to eq(
       I18n.t("discourse_ai.ai_bot.flag_post.reason", reason: "bad"),
     )
+    expect(reviewable.reviewable_scores.first.context).to be_nil
+  end
+
+  it "records the automation on the reviewable score for review flags" do
+    automation = Fabricate(:automation, script: "llm_triage")
+
+    DiscourseAi::Completions::Llm.with_prepared_responses(["bad"]) do
+      triage(
+        post: post,
+        triage_agent_id: ai_agent.id,
+        search_for_text: "bad",
+        flag_post: true,
+        automation: automation,
+      )
+    end
+
+    score = ReviewablePost.last.reviewable_scores.first
+    expect(score.context).to eq("discourse_ai:triage_automation:#{automation.id}")
+  end
+
+  it "records the automation on the reviewable score for spam flags" do
+    automation = Fabricate(:automation, script: "llm_triage")
+
+    DiscourseAi::Completions::Llm.with_prepared_responses(["bad"]) do
+      triage(
+        post: post,
+        triage_agent_id: ai_agent.id,
+        search_for_text: "bad",
+        flag_post: true,
+        flag_type: :spam,
+        automation: automation,
+      )
+    end
+
+    score = ReviewableFlaggedPost.last.reviewable_scores.first
+    expect(score.context).to eq("discourse_ai:triage_automation:#{automation.id}")
+  end
+
+  it "records the automation on the reviewable score when flagged via the flag_post tool" do
+    automation = Fabricate(:automation, script: "llm_triage")
+    ai_agent.update!(tools: ["FlagPost"])
+    tool_call =
+      DiscourseAi::Completions::ToolCall.new(
+        name: "flag_post",
+        parameters: {
+          flag_post: true,
+          reason: "Looks unsafe",
+        },
+        id: "tool_call_1",
+      )
+
+    DiscourseAi::Completions::Llm.with_prepared_responses([tool_call, "all good"]) do
+      triage(
+        post: post,
+        triage_agent_id: ai_agent.id,
+        search_for_text: "bad",
+        flag_post: true,
+        automation: automation,
+      )
+    end
+
+    score = ReviewablePost.last.reviewable_scores.first
+    expect(score.context).to eq("discourse_ai:triage_automation:#{automation.id}")
   end
 
   it "flags via tool call when the agent invokes flag_post" do
@@ -513,11 +578,11 @@ describe DiscourseAi::Automation::LlmTriage do
     expect(reviewable.target_id).to eq(post.id)
     expect(reviewable.target_type).to eq("Post")
     expect(reviewable.reviewable_scores.first.reason).to include(
-      "<a href=\"#{Discourse.base_path}/admin/plugins/automation/",
+      "<a href=\"#{Discourse.base_path}/admin/plugins/automation/automation/",
     )
   end
 
-  it "escapes llm response and automation name in the flagged post message" do
+  it "sanitizes the llm response and renders the automation name literally" do
     automation = Fabricate(:automation, script: "llm_triage", name: %(rule"><img src=x onerror=1>))
 
     DiscourseAi::Completions::Llm.with_prepared_responses(["<img src=x onerror=alert(1)>"]) do
@@ -530,12 +595,22 @@ describe DiscourseAi::Automation::LlmTriage do
       )
     end
 
-    score_reason = ReviewablePost.last.reviewable_scores.first.reason
+    score = ReviewablePost.last.reviewable_scores.first
+    serialized =
+      ReviewableScoreSerializer.new(score, scope: Discourse.system_user.guardian, root: nil)
 
-    expect(score_reason).to include("&lt;img src=x onerror=alert(1)&gt;")
-    expect(score_reason).to include("rule&quot;&gt;&lt;img src=x onerror=1&gt;")
-    expect(score_reason).not_to include("<img src=x onerror=alert(1)>")
-    expect(score_reason).not_to include(%(rule"><img src=x onerror=1>))
+    expect(serialized.reason).to match_html(<<~HTML)
+      <p>
+        <b>
+          Triggered by the
+          <a href="/admin/plugins/automation/automation/#{automation.id}">
+            #{CGI.escapeHTML(automation.name)}
+          </a>
+          rule.
+        </b>
+      </p>
+      <p>Response from the model: <img src=""></p>
+    HTML
   end
 
   it "only sends one PM when multiple rules flag the same post" do

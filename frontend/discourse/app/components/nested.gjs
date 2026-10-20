@@ -39,6 +39,9 @@ const postExcerpt = helper(([post]) => {
 const MOBILE_ROOT_VIEW_COLLAPSE_DEPTH = 3;
 const STORED_SCROLL_ANCHORS = Object.create(null);
 
+// Exported so system specs can wait out the full restoration window.
+export const SCROLL_RESTORE_WINDOW_MS = 1250;
+
 export default class Nested extends Component {
   @service appEvents;
   @service currentUser;
@@ -62,21 +65,57 @@ export default class Nested extends Component {
   #retryTimer = null;
   #highlightTimer = null;
   #lastScrollKey = null;
+  #lastRestoredScrollY = null;
+  #activeScrollAnchorKey = null;
+  #cancelledScrollAnchorKey = null;
   #restoringStoredScroll = false;
+  #scrollRestoreCompletionTimer = null;
+  #scrollRestoreTimers = [];
   #onPopstate = () => {
     this.#restoringStoredScroll = true;
     next(this, this.syncFocusFromURL);
   };
-  #onScroll = () => this.persistScrollAnchor();
+  #onScroll = () => this.#handleScroll();
+  #onUserScrollIntent = () => this.#cancelUserScrollRestoration();
+  #onUserScrollKey = (event) => {
+    if (
+      [
+        "ArrowDown",
+        "ArrowUp",
+        "End",
+        "Home",
+        "PageDown",
+        "PageUp",
+        " ",
+      ].includes(event.key)
+    ) {
+      this.#cancelUserScrollRestoration();
+    }
+  };
   #onPageHide = () => this.persistScrollAnchor();
 
   constructor() {
     super(...arguments);
-    this.#restoringStoredScroll = Boolean(this.#loadStoredScrollAnchor());
+    this.#restoringStoredScroll = Boolean(
+      this.args.scrollAnchor || this.#loadStoredScrollAnchor()
+    );
     this.applyInitialFocusedPath();
     window.addEventListener("popstate", this.#onPopstate);
     window.addEventListener("scroll", this.#onScroll, { passive: true });
+    window.addEventListener("touchmove", this.#onUserScrollIntent, {
+      passive: true,
+    });
+    window.addEventListener("wheel", this.#onUserScrollIntent, {
+      passive: true,
+    });
+    window.addEventListener("keydown", this.#onUserScrollKey);
     document.addEventListener("scroll", this.#onScroll, { passive: true });
+    document.addEventListener("touchmove", this.#onUserScrollIntent, {
+      passive: true,
+    });
+    document.addEventListener("wheel", this.#onUserScrollIntent, {
+      passive: true,
+    });
     window.addEventListener("pagehide", this.#onPageHide);
     this.router.on("routeWillChange", this.persistScrollAnchor);
     this.appEvents.on("keyboard:move-selection", this, this.maybeLoadMoreRoots);
@@ -111,24 +150,20 @@ export default class Nested extends Component {
     );
     cancel(this.#nextTimer);
     cancel(this.#retryTimer);
+    this.#cancelScrollRestoration();
     clearTimeout(this.#highlightTimer);
     this.persistScrollAnchor();
     window.removeEventListener("popstate", this.#onPopstate);
     window.removeEventListener("scroll", this.#onScroll);
+    window.removeEventListener("touchmove", this.#onUserScrollIntent);
+    window.removeEventListener("wheel", this.#onUserScrollIntent);
+    window.removeEventListener("keydown", this.#onUserScrollKey);
     document.removeEventListener("scroll", this.#onScroll);
+    document.removeEventListener("touchmove", this.#onUserScrollIntent);
+    document.removeEventListener("wheel", this.#onUserScrollIntent);
     window.removeEventListener("pagehide", this.#onPageHide);
     this.router.off("routeWillChange", this.persistScrollAnchor);
     this.viewportTracker.destroy();
-  }
-
-  @action
-  maybeLoadMoreRoots({ selectedArticle, articles }) {
-    if (!this.args.hasMoreRoots || this.args.loadingMore) {
-      return;
-    }
-    if (selectedArticle === articles[articles.length - 1]) {
-      this.args.loadMoreRoots?.();
-    }
   }
 
   get emptyPath() {
@@ -188,6 +223,14 @@ export default class Nested extends Component {
     return this.mobileReturnAnchor || this.args.scrollAnchor;
   }
 
+  get rootPostScrollAnchor() {
+    return this.postLevelScrollAnchor(this.rootScrollAnchor);
+  }
+
+  get focusedPostScrollAnchor() {
+    return this.postLevelScrollAnchor(this.args.scrollAnchor);
+  }
+
   get focusedNode() {
     return this.focusedPath.at(-1);
   }
@@ -206,6 +249,24 @@ export default class Nested extends Component {
 
   get targetScrollKey() {
     return `${this.args.targetPostNumber}:${this.args.rootNodes?.[0]?._renderKey}`;
+  }
+
+  get #storedScrollAnchors() {
+    return STORED_SCROLL_ANCHORS;
+  }
+
+  @action
+  maybeLoadMoreRoots({ selectedArticle, articles }) {
+    if (!this.args.hasMoreRoots || this.args.loadingMore) {
+      return;
+    }
+    if (selectedArticle === articles[articles.length - 1]) {
+      this.args.loadMoreRoots?.();
+    }
+  }
+
+  postLevelScrollAnchor(anchor) {
+    return Number.isFinite(anchor?.scrollY) ? null : anchor;
   }
 
   @action
@@ -267,7 +328,7 @@ export default class Nested extends Component {
 
   @action
   persistScrollAnchor() {
-    if (this.isDestroying || this.isDestroyed || this.#restoringStoredScroll) {
+    if (this.isDestroying || this.#restoringStoredScroll) {
       return;
     }
 
@@ -288,78 +349,22 @@ export default class Nested extends Component {
       return;
     }
 
+    this.#cancelledScrollAnchorKey = null;
     this.#restoreScrollAnchorAfterRender(anchor);
   }
 
-  #restoreScrollAnchorAfterRender(anchor) {
-    this.#restoringStoredScroll = true;
-    schedule("afterRender", () => {
-      this.#restoreScrollAnchor(anchor);
-      for (const delay of [50, 150, 300, 600, 1000]) {
-        setTimeout(() => this.#restoreScrollAnchor(anchor), delay);
-      }
-      setTimeout(() => (this.#restoringStoredScroll = false), 1250);
-    });
-  }
-
-  #restoreScrollAnchor(anchor) {
-    if (Number.isFinite(anchor.scrollY)) {
-      window.scrollTo(0, anchor.scrollY);
+  @action
+  restoreUpdatedScrollAnchor() {
+    if (!this.args.scrollAnchor) {
       return;
     }
 
-    const article = document.querySelector(
-      `.nested-post [data-post-number="${anchor.postNumber}"]`
-    );
-    const element = article?.closest(".nested-post") || article;
-    if (element) {
-      const rect = element.getBoundingClientRect();
-      window.scrollTo(0, window.scrollY + rect.top - anchor.offsetFromTop);
-    }
-  }
-
-  #saveStoredScrollAnchor(anchor, postNumber = this.args.postNumber) {
-    const key = this.#scrollAnchorKey(postNumber);
-    this.#storedScrollAnchors[key] = anchor;
-
-    try {
-      sessionStorage.setItem(key, JSON.stringify(anchor));
-    } catch {
-      // Ignore storage failures; module-level in-memory cache still works.
-    }
-  }
-
-  #loadStoredScrollAnchor(postNumber = this.args.postNumber) {
-    const key = this.#scrollAnchorKey(postNumber);
-    const cached = this.#storedScrollAnchors[key];
-    if (cached) {
-      return cached;
+    const anchorKey = this.#scrollAnchorRestoreKey(this.args.scrollAnchor);
+    if (anchorKey && anchorKey === this.#cancelledScrollAnchorKey) {
+      return;
     }
 
-    try {
-      const value = sessionStorage.getItem(key);
-      return value ? JSON.parse(value) : null;
-    } catch {
-      return null;
-    }
-  }
-
-  get #storedScrollAnchors() {
-    return STORED_SCROLL_ANCHORS;
-  }
-
-  #scrollAnchorKey(postNumber = this.args.postNumber) {
-    const parts = [this.args.topic.id];
-    if (this.args.sort) {
-      parts.push(`s=${this.args.sort}`);
-    }
-    if (postNumber) {
-      parts.push(`p=${postNumber}`);
-    }
-    if (this.args.contextNoAncestors) {
-      parts.push("c=0");
-    }
-    return `nested-view-scroll:${parts.join(":")}`;
+    this.#restoreScrollAnchorAfterRender(this.args.scrollAnchor);
   }
 
   findScrollAnchor() {
@@ -410,7 +415,7 @@ export default class Nested extends Component {
 
   @action
   scrollMobileFocusIntoContext(element) {
-    if (!this.isMobileFocused || this.isDestroying || this.isDestroyed) {
+    if (!this.isMobileFocused || this.isDestroying) {
       return;
     }
 
@@ -429,11 +434,6 @@ export default class Nested extends Component {
       top: window.scrollY + rect.top - this.#stickyHeaderBottom(),
       behavior: "auto",
     });
-  }
-
-  #stickyHeaderBottom() {
-    const headerWrap = document.querySelector(".d-header-wrap");
-    return Math.max(0, headerWrap?.getBoundingClientRect().bottom || 0);
   }
 
   @action
@@ -463,15 +463,9 @@ export default class Nested extends Component {
     this.#registerFocusedPath(this.focusedPath);
   }
 
-  #focusedPathKey(path) {
-    return (path || [])
-      .map((node) => `${node._renderKey || node.post?.id}:${node.post?.id}`)
-      .join(":");
-  }
-
   @action
   syncFocusFromURL() {
-    if (this.isDestroying || this.isDestroyed || !this.site.mobileView) {
+    if (this.isDestroying || !this.site.mobileView) {
       return;
     }
 
@@ -515,6 +509,181 @@ export default class Nested extends Component {
       path.length >= this.focusedPath.length ? "forward" : "back";
     this.focusedPath = path;
     this.#restoringStoredScroll = false;
+  }
+
+  @action
+  scheduleTargetScroll() {
+    this.#scheduleTargetScroll();
+  }
+
+  @action
+  forceScheduleTargetScroll() {
+    this.#scheduleTargetScroll({ force: true });
+  }
+
+  #handleScroll() {
+    if (!this.#restoringStoredScroll) {
+      this.persistScrollAnchor();
+      return;
+    }
+
+    if (this.#isRestoredScrollEcho()) {
+      return;
+    }
+
+    this.#cancelledScrollAnchorKey =
+      this.#activeScrollAnchorKey ||
+      this.#scrollAnchorRestoreKey(this.args.scrollAnchor);
+    this.#cancelScrollRestoration({ clearAnchor: true });
+    this.persistScrollAnchor();
+  }
+
+  #isRestoredScrollEcho() {
+    return (
+      this.#lastRestoredScrollY != null &&
+      Math.abs(window.scrollY - this.#lastRestoredScrollY) <= 2
+    );
+  }
+
+  #cancelUserScrollRestoration() {
+    if (!this.#restoringStoredScroll && !this.args.scrollAnchor) {
+      return;
+    }
+
+    this.#cancelledScrollAnchorKey =
+      this.#activeScrollAnchorKey ||
+      this.#scrollAnchorRestoreKey(this.args.scrollAnchor);
+    this.#cancelScrollRestoration({ clearAnchor: true });
+    this.persistScrollAnchor();
+  }
+
+  #cancelScrollRestoration({ clearAnchor = false } = {}) {
+    for (const timer of this.#scrollRestoreTimers) {
+      clearTimeout(timer);
+    }
+    this.#scrollRestoreTimers = [];
+
+    clearTimeout(this.#scrollRestoreCompletionTimer);
+    this.#scrollRestoreCompletionTimer = null;
+    if (clearAnchor) {
+      this.args.clearScrollAnchor?.();
+    }
+    this.#activeScrollAnchorKey = null;
+    this.#lastRestoredScrollY = null;
+    this.#restoringStoredScroll = false;
+  }
+
+  #restoreScrollAnchorAfterRender(anchor) {
+    this.#cancelScrollRestoration();
+    this.#activeScrollAnchorKey = this.#scrollAnchorRestoreKey(anchor);
+    this.#restoringStoredScroll = true;
+
+    const initialScrollY = window.scrollY;
+
+    schedule("afterRender", () => {
+      if (!this.#restoringStoredScroll) {
+        return;
+      }
+
+      if (Math.abs(window.scrollY - initialScrollY) > 2) {
+        this.#cancelScrollRestoration({ clearAnchor: true });
+        return;
+      }
+
+      this.#restoreScrollAnchor(anchor);
+      for (const delay of [50, 150, 300, 600, 1000]) {
+        const timer = setTimeout(() => {
+          if (this.#restoringStoredScroll) {
+            this.#restoreScrollAnchor(anchor);
+          }
+        }, delay);
+        this.#scrollRestoreTimers.push(timer);
+      }
+      this.#scrollRestoreCompletionTimer = setTimeout(() => {
+        this.#cancelScrollRestoration({ clearAnchor: true });
+      }, SCROLL_RESTORE_WINDOW_MS);
+    });
+  }
+
+  #restoreScrollAnchor(anchor) {
+    if (Number.isFinite(anchor.scrollY)) {
+      window.scrollTo(0, anchor.scrollY);
+      this.#lastRestoredScrollY = window.scrollY;
+      return;
+    }
+
+    const article = document.querySelector(
+      `.nested-post [data-post-number="${anchor.postNumber}"]`
+    );
+    const element = article?.closest(".nested-post") || article;
+    if (element) {
+      const rect = element.getBoundingClientRect();
+      window.scrollTo(0, window.scrollY + rect.top - anchor.offsetFromTop);
+      this.#lastRestoredScrollY = window.scrollY;
+    }
+  }
+
+  #scrollAnchorRestoreKey(anchor) {
+    if (!anchor) {
+      return null;
+    }
+
+    return [
+      anchor.postNumber,
+      anchor.scrollY ?? "",
+      anchor.offsetFromTop ?? "",
+    ].join(":");
+  }
+
+  #saveStoredScrollAnchor(anchor, postNumber = this.args.postNumber) {
+    const key = this.#scrollAnchorKey(postNumber);
+    this.#storedScrollAnchors[key] = anchor;
+
+    try {
+      sessionStorage.setItem(key, JSON.stringify(anchor));
+    } catch {
+      // Ignore storage failures; module-level in-memory cache still works.
+    }
+  }
+
+  #loadStoredScrollAnchor(postNumber = this.args.postNumber) {
+    const key = this.#scrollAnchorKey(postNumber);
+    const cached = this.#storedScrollAnchors[key];
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const value = sessionStorage.getItem(key);
+      return value ? JSON.parse(value) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  #scrollAnchorKey(postNumber = this.args.postNumber) {
+    const parts = [this.args.topic.id];
+    if (this.args.sort) {
+      parts.push(`s=${this.args.sort}`);
+    }
+    if (postNumber) {
+      parts.push(`p=${postNumber}`);
+    }
+    if (this.args.contextNoAncestors) {
+      parts.push("c=0");
+    }
+    return `nested-view-scroll:${parts.join(":")}`;
+  }
+
+  #stickyHeaderBottom() {
+    const headerWrap = document.querySelector(".d-header-wrap");
+    return Math.max(0, headerWrap?.getBoundingClientRect().bottom || 0);
+  }
+
+  #focusedPathKey(path) {
+    return (path || [])
+      .map((node) => `${node._renderKey || node.post?.id}:${node.post?.id}`)
+      .join(":");
   }
 
   #pushURLForFocusedPath(path) {
@@ -572,16 +741,6 @@ export default class Nested extends Component {
     return current === target;
   }
 
-  @action
-  scheduleTargetScroll() {
-    this.#scheduleTargetScroll();
-  }
-
-  @action
-  forceScheduleTargetScroll() {
-    this.#scheduleTargetScroll({ force: true });
-  }
-
   #scheduleTargetScroll({ force = false } = {}) {
     if (!this.args.targetPostNumber || this.isMobileFocused) {
       return;
@@ -601,7 +760,7 @@ export default class Nested extends Component {
   }
 
   #scrollToTarget() {
-    if (this.isDestroying || this.isDestroyed) {
+    if (this.isDestroying) {
       return;
     }
 
@@ -664,10 +823,13 @@ export default class Nested extends Component {
   <template>
     <div
       class={{this.viewClass}}
+      data-topic-id={{@topic.id}}
+      id="topic"
       {{didInsert this.scheduleTargetScroll}}
       {{didInsert this.restoreStoredScrollAnchor}}
       {{didUpdate this.scheduleTargetScroll @targetPostNumber @rootNodes}}
-      {{didUpdate this.restoreStoredScrollAnchor @scrollAnchor}}
+      {{didUpdate this.restoreUpdatedScrollAnchor @scrollAnchor}}
+      {{didUpdate this.restoreUpdatedScrollAnchor @rootNodes}}
       {{didUpdate this.applyInitialFocusedPath @initialFocusedPath}}
       {{this.viewportTracker.setup
         eyeline=false
@@ -678,22 +840,22 @@ export default class Nested extends Component {
       }}
     >
       <NestedHeader
-        @topic={{@topic}}
-        @editingTopic={{@editingTopic}}
         @buffered={{@buffered}}
-        @showCategoryChooser={{@showCategoryChooser}}
-        @canEditTags={{@canEditTags}}
-        @minimumRequiredTags={{@minimumRequiredTags}}
-        @finishedEditingTopic={{@finishedEditingTopic}}
         @cancelEditingTopic={{@cancelEditingTopic}}
+        @canEditTags={{@canEditTags}}
+        @editingTopic={{@editingTopic}}
+        @finishedEditingTopic={{@finishedEditingTopic}}
+        @minimumRequiredTags={{@minimumRequiredTags}}
+        @showCategoryChooser={{@showCategoryChooser}}
+        @startEditingTopic={{@startEditingTopic}}
+        @topic={{@topic}}
         @topicCategoryChanged={{@topicCategoryChanged}}
         @topicTagsChanged={{@topicTagsChanged}}
-        @startEditingTopic={{@startEditingTopic}}
       />
 
       <PluginOutlet
-        @name="topic-above-post-stream"
         @connectorTagName="div"
+        @name="topic-above-post-stream"
         @outletArgs={{lazyHash model=@topic}}
       />
 
@@ -704,8 +866,8 @@ export default class Nested extends Component {
           {{didUpdate this.scrollMobileFocusIntoContext this.focusedPath}}
         >
           <button
-            type="button"
             class="nested-view__mobile-focus-back"
+            type="button"
             {{on "click" this.clearFocus}}
           >
             {{dIcon "chevron-left"}}
@@ -714,24 +876,24 @@ export default class Nested extends Component {
 
           {{#if this.ancestorPath.length}}
             <nav
-              class="nested-view__mobile-ancestors"
               aria-label={{i18n "nested_replies.focused_path"}}
+              class="nested-view__mobile-ancestors"
             >
               {{#each this.ancestorPath as |ancestorNode index|}}
                 <button
-                  type="button"
-                  class="nested-view__mobile-ancestor"
-                  data-test-nested-mobile-ancestor={{ancestorNode.post.post_number}}
                   aria-label={{i18n
                     "nested_replies.return_to_branch"
                     username=ancestorNode.post.username
                   }}
+                  class="nested-view__mobile-ancestor"
+                  data-test-nested-mobile-ancestor={{ancestorNode.post.post_number}}
+                  type="button"
                   {{on "click" (fn this.returnToAncestor index)}}
                 >
                   {{dIcon "chevron-left"}}
                   <span
-                    class="nested-view__mobile-ancestor-avatar"
                     aria-hidden="true"
+                    class="nested-view__mobile-ancestor-avatar"
                   >
                     {{! PostAvatar renders a user link; keep this avatar non-interactive inside the ancestor button. }}
                     {{dAvatar
@@ -756,74 +918,77 @@ export default class Nested extends Component {
           {{#each this.focusedNodes key="post.id" as |focusedNode|}}
             <div class="nested-view__mobile-focused-branch">
               <NestedPost
-                @post={{focusedNode.post}}
-                @children={{focusedNode.children}}
-                @topic={{@topic}}
-                @depth={{0}}
-                @path={{this.ancestorPath}}
-                @sort={{@sort}}
-                @replyToPost={{@replyToPost}}
-                @editPost={{@editPost}}
-                @deletePost={{@deletePost}}
-                @recoverPost={{@recoverPost}}
-                @showFlags={{@showFlags}}
-                @showHistory={{@showHistory}}
+                @captureScrollAnchor={{this.captureScrollAnchor}}
                 @changeNotice={{@changeNotice}}
                 @changePostOwner={{@changePostOwner}}
-                @grantBadge={{@grantBadge}}
-                @lockPost={{@lockPost}}
-                @unlockPost={{@unlockPost}}
-                @permanentlyDeletePost={{@permanentlyDeletePost}}
-                @rebakePost={{@rebakePost}}
-                @showPagePublish={{@showPagePublish}}
-                @togglePostType={{@togglePostType}}
-                @toggleWiki={{@toggleWiki}}
-                @unhidePost={{@unhidePost}}
-                @expansionState={{@expansionState}}
-                @fetchedChildrenCache={{@fetchedChildrenCache}}
-                @scrollAnchor={{@scrollAnchor}}
-                @registerPost={{this.viewportTracker.registerPost}}
-                @getCloakingData={{this.viewportTracker.getCloakingData}}
+                @children={{focusedNode.children}}
                 @cloakAbove={{this.cloakAbove}}
                 @cloakBelow={{this.cloakBelow}}
                 @collapseFromDepth={{this.collapseFromDepth}}
+                @deletePost={{@deletePost}}
+                @depth={{0}}
+                @editPost={{@editPost}}
+                @expansionState={{@expansionState}}
+                @fetchedChildrenCache={{@fetchedChildrenCache}}
                 @focusPost={{this.focusPath}}
-                @captureScrollAnchor={{this.captureScrollAnchor}}
                 @forceExpanded={{true}}
+                @getCloakingData={{this.viewportTracker.getCloakingData}}
+                @grantBadge={{@grantBadge}}
+                @lockPost={{@lockPost}}
                 @multiSelect={{@multiSelect}}
-                @togglePostSelection={{@togglePostSelection}}
-                @selectReplies={{@selectReplies}}
-                @selectBelow={{@selectBelow}}
+                @path={{this.ancestorPath}}
+                @permanentlyDeletePost={{@permanentlyDeletePost}}
+                @post={{focusedNode.post}}
                 @postSelected={{@postSelected}}
+                @rebakePost={{@rebakePost}}
+                @recoverPost={{@recoverPost}}
+                @registerPost={{this.viewportTracker.registerPost}}
+                @replyToPost={{@replyToPost}}
+                @scrollAnchor={{this.focusedPostScrollAnchor}}
+                @selectBelow={{@selectBelow}}
+                @selectReplies={{@selectReplies}}
+                @showFlags={{@showFlags}}
+                @showHistory={{@showHistory}}
+                @showPagePublish={{@showPagePublish}}
+                @sort={{@effectiveSort}}
+                @togglePostSelection={{@togglePostSelection}}
+                @togglePostType={{@togglePostType}}
+                @toggleWiki={{@toggleWiki}}
+                @topic={{@topic}}
+                @unhidePost={{@unhidePost}}
+                @unlockPost={{@unlockPost}}
               />
             </div>
           {{/each}}
         </div>
       {{else}}
         <NestedOp
-          @post={{@opPost}}
-          @topic={{@topic}}
-          @editPost={{@editPost}}
-          @showHistory={{@showHistory}}
-          @replyToPost={{@replyToPost}}
           @changeNotice={{@changeNotice}}
           @changePostOwner={{@changePostOwner}}
+          @deletePost={{@deletePost}}
+          @editPost={{@editPost}}
           @grantBadge={{@grantBadge}}
           @lockPost={{@lockPost}}
-          @unlockPost={{@unlockPost}}
+          @multiSelect={{@multiSelect}}
           @permanentlyDeletePost={{@permanentlyDeletePost}}
+          @post={{@opPost}}
+          @postSelected={{@postSelected}}
           @rebakePost={{@rebakePost}}
+          @recoverPost={{@recoverPost}}
+          @registerPost={{this.viewportTracker.registerPost}}
+          @replyToPost={{@replyToPost}}
+          @selectBelow={{@selectBelow}}
+          @selectReplies={{@selectReplies}}
+          @showFlags={{@showFlags}}
+          @showHistory={{@showHistory}}
           @showPagePublish={{@showPagePublish}}
+          @showPostMenu={{true}}
+          @togglePostSelection={{@togglePostSelection}}
           @togglePostType={{@togglePostType}}
           @toggleWiki={{@toggleWiki}}
+          @topic={{@topic}}
           @unhidePost={{@unhidePost}}
-          @showPostMenu={{true}}
-          @registerPost={{this.viewportTracker.registerPost}}
-          @multiSelect={{@multiSelect}}
-          @togglePostSelection={{@togglePostSelection}}
-          @selectReplies={{@selectReplies}}
-          @selectBelow={{@selectBelow}}
-          @postSelected={{@postSelected}}
+          @unlockPost={{@unlockPost}}
         />
 
         {{#if this.currentUser}}
@@ -893,45 +1058,45 @@ export default class Nested extends Component {
         <div class="nested-view__roots">
           {{#each @rootNodes key="_renderKey" as |node index|}}
             <NestedPost
-              @post={{node.post}}
-              @children={{node.children}}
-              @topic={{@topic}}
-              @depth={{0}}
-              @path={{this.emptyPath}}
-              @sort={{@sort}}
-              @isPinned={{includes @pinnedPostIds node.post.id}}
-              @replyToPost={{@replyToPost}}
-              @editPost={{@editPost}}
-              @deletePost={{@deletePost}}
-              @recoverPost={{@recoverPost}}
-              @showFlags={{@showFlags}}
-              @showHistory={{@showHistory}}
+              @captureScrollAnchor={{this.captureScrollAnchor}}
               @changeNotice={{@changeNotice}}
               @changePostOwner={{@changePostOwner}}
-              @grantBadge={{@grantBadge}}
-              @lockPost={{@lockPost}}
-              @unlockPost={{@unlockPost}}
-              @permanentlyDeletePost={{@permanentlyDeletePost}}
-              @rebakePost={{@rebakePost}}
-              @showPagePublish={{@showPagePublish}}
-              @togglePostType={{@togglePostType}}
-              @toggleWiki={{@toggleWiki}}
-              @unhidePost={{@unhidePost}}
-              @expansionState={{@expansionState}}
-              @fetchedChildrenCache={{@fetchedChildrenCache}}
-              @scrollAnchor={{this.rootScrollAnchor}}
-              @registerPost={{this.viewportTracker.registerPost}}
-              @getCloakingData={{this.viewportTracker.getCloakingData}}
+              @children={{node.children}}
               @cloakAbove={{this.cloakAbove}}
               @cloakBelow={{this.cloakBelow}}
               @collapseFromDepth={{this.collapseFromDepth}}
+              @deletePost={{@deletePost}}
+              @depth={{0}}
+              @editPost={{@editPost}}
+              @expansionState={{@expansionState}}
+              @fetchedChildrenCache={{@fetchedChildrenCache}}
               @focusPost={{this.focusPath}}
-              @captureScrollAnchor={{this.captureScrollAnchor}}
+              @getCloakingData={{this.viewportTracker.getCloakingData}}
+              @grantBadge={{@grantBadge}}
+              @isPinned={{includes @pinnedPostIds node.post.id}}
+              @lockPost={{@lockPost}}
               @multiSelect={{@multiSelect}}
-              @togglePostSelection={{@togglePostSelection}}
-              @selectReplies={{@selectReplies}}
-              @selectBelow={{@selectBelow}}
+              @path={{this.emptyPath}}
+              @permanentlyDeletePost={{@permanentlyDeletePost}}
+              @post={{node.post}}
               @postSelected={{@postSelected}}
+              @rebakePost={{@rebakePost}}
+              @recoverPost={{@recoverPost}}
+              @registerPost={{this.viewportTracker.registerPost}}
+              @replyToPost={{@replyToPost}}
+              @scrollAnchor={{this.rootPostScrollAnchor}}
+              @selectBelow={{@selectBelow}}
+              @selectReplies={{@selectReplies}}
+              @showFlags={{@showFlags}}
+              @showHistory={{@showHistory}}
+              @showPagePublish={{@showPagePublish}}
+              @sort={{@effectiveSort}}
+              @togglePostSelection={{@togglePostSelection}}
+              @togglePostType={{@togglePostType}}
+              @toggleWiki={{@toggleWiki}}
+              @topic={{@topic}}
+              @unhidePost={{@unhidePost}}
+              @unlockPost={{@unlockPost}}
             />
             <PluginOutlet
               @name="nested-roots-between"
@@ -954,43 +1119,43 @@ export default class Nested extends Component {
       {{/if}}
 
       <PluginOutlet
-        @name="topic-above-footer-buttons"
         @connectorTagName="div"
+        @name="topic-above-footer-buttons"
         @outletArgs={{lazyHash model=@topic}}
       />
 
       <PluginOutlet
-        @name="topic-area-bottom"
         @connectorTagName="div"
+        @name="topic-area-bottom"
         @outletArgs={{lazyHash model=@topic}}
       />
 
       {{#unless this.isMobileFocused}}
         <NestedFloatingActions
-          @topic={{@topic}}
           @replyAction={{fn @replyToPost @opPost 0}}
+          @topic={{@topic}}
         />
       {{/unless}}
 
       {{#if (and (not this.isMobileFocused) (not @hasMoreRoots))}}
         <PluginOutlet
-          @name="topic-above-suggested"
           @connectorTagName="div"
+          @name="topic-above-suggested"
           @outletArgs={{lazyHash model=@topic}}
         />
 
         <MoreTopics @topic={{@topic}} />
 
         <PluginOutlet
-          @name="topic-below-suggested"
           @connectorTagName="div"
+          @name="topic-below-suggested"
           @outletArgs={{lazyHash model=@topic}}
         />
       {{/if}}
 
       <PluginOutlet
-        @name="topic-navigation-bottom"
         @connectorTagName="div"
+        @name="topic-navigation-bottom"
         @outletArgs={{lazyHash model=@topic}}
       />
 

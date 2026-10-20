@@ -3,8 +3,10 @@
 class TagSettingsSerializer < ApplicationSerializer
   attributes :id,
              :name,
+             :locale,
              :slug,
              :description,
+             :description_cooked,
              :synonyms,
              :tag_group_names,
              :tag_groups,
@@ -25,6 +27,10 @@ class TagSettingsSerializer < ApplicationSerializer
 
   def description
     object.description
+  end
+
+  def description_cooked
+    object.description_cooked
   end
 
   def synonyms

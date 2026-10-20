@@ -1,7 +1,8 @@
 import AdminReport from "discourse/admin/components/admin-report";
 
-<template>
+export default <template>
   <AdminReport
+    @bare={{true}}
     @dataSourceName={{@item.identifier}}
     @preloadedData={{@payload}}
     @showHeader={{false}}

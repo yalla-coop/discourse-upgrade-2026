@@ -140,7 +140,7 @@ RSpec.describe DiscourseWorkflows::Executor::NodeExecutionContext do
     end
   end
 
-  describe "#helpers" do
+  describe "#helpers item normalization" do
     it "normalizes runtime-compatible items through execution helpers" do
       ctx = described_class.new(input_items: [], resolver: nil)
 
@@ -253,6 +253,45 @@ RSpec.describe DiscourseWorkflows::Executor::NodeExecutionContext do
         DiscourseWorkflows::InteractiveResume.action_payload(ctx.resume_action_id("approve"))
 
       expect(payload).to include("execution_id" => 123, "action" => "approve")
+    end
+  end
+
+  describe "#put_execution_to_wait" do
+    let(:runtime_state) { described_class::RuntimeState.new }
+    let(:ctx) { described_class.new(input_items: [], resolver: nil, runtime_state: runtime_state) }
+
+    it "includes an explicit timeout action in the wait request" do
+      waiting_until = 10.minutes.from_now
+
+      ctx.put_execution_to_wait(
+        waiting_until,
+        kind: :approval,
+        payload: {
+          source: "chat",
+        },
+        timeout_action: "fail",
+      )
+
+      expect(runtime_state.wait_request).to have_attributes(
+        waiting_until: waiting_until,
+        kind: "approval",
+        payload: {
+          "source" => "chat",
+        },
+        timeout_action: "fail",
+      )
+    end
+
+    it "keeps timeout action nil for existing callers that omit it" do
+      ctx.put_execution_to_wait
+
+      expect(runtime_state.wait_request).to have_attributes(
+        waiting_until: nil,
+        kind: "default",
+        payload: {
+        },
+        timeout_action: nil,
+      )
     end
   end
 
@@ -456,7 +495,7 @@ RSpec.describe DiscourseWorkflows::Executor::NodeExecutionContext do
     end
   end
 
-  describe "#helpers" do
+  describe "#helpers data table access" do
     fab!(:admin)
     fab!(:data_table, :discourse_workflows_data_table)
 
@@ -731,7 +770,7 @@ RSpec.describe DiscourseWorkflows::Executor::NodeExecutionContext do
     end
   end
 
-  describe "#create_post" do
+  describe "#create_post authorization" do
     fab!(:admin)
     fab!(:user)
     fab!(:first_post) { Fabricate(:post, user: user, raw: "First post", post_number: 1) }
@@ -933,7 +972,7 @@ RSpec.describe DiscourseWorkflows::Executor::NodeExecutionContext do
         ctx.http_request(method: "GET", url: "https://api.example.com/retry")
       }.to raise_error(
         DiscourseWorkflows::NodeError,
-        "HTTP GET https://api.example.com/retry failed with status 503",
+        "HTTP GET https://api.example.com/retry failed with status 503: unavailable",
       )
       expect(WebMock).to have_requested(:get, "https://api.example.com/retry").once
     end
@@ -950,7 +989,7 @@ RSpec.describe DiscourseWorkflows::Executor::NodeExecutionContext do
         ctx.http_request(method: "POST", url: "https://api.example.com/retry")
       }.to raise_error(
         DiscourseWorkflows::NodeError,
-        "HTTP POST https://api.example.com/retry failed with status 503",
+        "HTTP POST https://api.example.com/retry failed with status 503: unavailable",
       )
       expect(WebMock).to have_requested(:post, "https://api.example.com/retry").once
     end
@@ -979,6 +1018,55 @@ RSpec.describe DiscourseWorkflows::Executor::NodeExecutionContext do
 
       expect(response.status).to eq(200)
       expect(WebMock).to have_requested(:post, "https://api.example.com/retry").twice
+    end
+  end
+
+  describe "#create_post provenance" do
+    it "records bypass provenance custom fields on the created post" do
+      author = Fabricate(:user, trust_level: 0, refresh_auto_groups: true)
+      workflow = Fabricate(:discourse_workflows_workflow, published: true)
+      first_post = Fabricate(:post)
+
+      ctx =
+        described_class.new(input_items: [], resolver: nil, workflow: workflow, node_id: "post-1")
+
+      post =
+        ctx.create_post(
+          user: author,
+          raw: "Reply created with a permission bypass",
+          topic_id: first_post.topic_id,
+          bypass_permission_checks: true,
+        )
+
+      expect(post.reload.custom_fields).to include(
+        described_class::BYPASSED_PERMISSION_CHECKS_FIELD => "true",
+        described_class::WORKFLOW_ID_FIELD => workflow.id.to_s,
+        described_class::WORKFLOW_VERSION_ID_FIELD => workflow.active_version_id.to_s,
+        described_class::NODE_ID_FIELD => "post-1",
+      )
+    end
+
+    it "does not record provenance custom fields without a bypass" do
+      author = Fabricate(:user, trust_level: 0, refresh_auto_groups: true)
+      workflow = Fabricate(:discourse_workflows_workflow, published: true)
+      first_post = Fabricate(:post)
+
+      ctx =
+        described_class.new(input_items: [], resolver: nil, workflow: workflow, node_id: "post-1")
+
+      post =
+        ctx.create_post(
+          user: author,
+          raw: "Reply created with the author permissions",
+          topic_id: first_post.topic_id,
+        )
+
+      expect(post.reload.custom_fields.keys).not_to include(
+        described_class::BYPASSED_PERMISSION_CHECKS_FIELD,
+        described_class::WORKFLOW_ID_FIELD,
+        described_class::WORKFLOW_VERSION_ID_FIELD,
+        described_class::NODE_ID_FIELD,
+      )
     end
   end
 

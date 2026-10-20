@@ -3,10 +3,8 @@
 module Migrations
   module Converters
     module Discourse
-      class Topics < Conversion::ProgressStep
+      class Topics < Conversion::Step
         source do
-          attr_accessor :source_db
-
           def max_progress
             @source_db.count <<~SQL
               SELECT COUNT(*) FROM topics
@@ -22,6 +20,7 @@ module Migrations
                      up.user_id           AS og_image_user_id
               FROM topics t
                    LEFT JOIN uploads up ON t.og_image_upload_id = up.id
+              ORDER BY t.id
             SQL
           end
         end
@@ -50,6 +49,7 @@ module Migrations
               pinned_globally: item[:pinned_globally],
               pinned_until: item[:pinned_until],
               slow_mode_seconds: item[:slow_mode_seconds],
+              slug: item[:slug],
               subtype: item[:subtype],
               title: item[:title],
               user_id: item[:user_id],

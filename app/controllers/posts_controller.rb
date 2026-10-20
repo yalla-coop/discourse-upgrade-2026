@@ -43,55 +43,28 @@ class PostsController < ApplicationController
   end
 
   def latest
+    discourse_expires_in 1.minute
+
     params.permit(:before)
     last_post_id = params[:before].to_i
     last_post_id = nil if last_post_id <= 0
 
     if params[:id] == "private_posts"
       raise Discourse::NotFound if current_user.nil?
-
-      allowed_private_topics = TopicAllowedUser.where(user_id: current_user.id).select(:topic_id)
-
-      allowed_groups = GroupUser.where(user_id: current_user.id).select(:group_id)
-      allowed_private_topics_by_group =
-        TopicAllowedGroup.where(group_id: allowed_groups).select(:topic_id)
-
-      all_allowed =
-        Topic
-          .where(id: allowed_private_topics)
-          .or(Topic.where(id: allowed_private_topics_by_group))
-          .select(:id)
-
       posts =
-        Post
-          .private_posts
-          .where(post_type: Topic.visible_post_types(current_user))
-          .order(id: :desc)
-          .includes(topic: :category)
-          .includes(user: %i[primary_group flair_group])
-          .includes(:reply_to_user)
-          .limit(50)
+        LatestPostsQuery.new(user: current_user, guardian:).private_posts(
+          before_post_id: last_post_id,
+        )
       rss_description = I18n.t("rss_description.private_posts")
-
-      posts = posts.where(topic_id: all_allowed) if !current_user.admin?
     else
       posts =
-        Post
-          .public_posts
-          .visible
-          .where(post_type: Post.types[:regular])
-          .order(id: :desc)
-          .includes(topic: :category)
-          .includes(user: %i[primary_group flair_group])
-          .includes(:reply_to_user)
-          .where("categories.id" => Category.secured(guardian).select(:id))
-          .limit(50)
+        LatestPostsQuery.new(user: current_user, guardian:).public_posts(
+          before_post_id: last_post_id,
+        )
 
       rss_description = I18n.t("rss_description.posts")
       @use_canonical = true
     end
-
-    posts = posts.where("posts.id < ?", last_post_id) if last_post_id
 
     posts = posts.to_a
 
@@ -723,6 +696,8 @@ class PostsController < ApplicationController
 
     post.revise(current_user, wiki: params[:wiki])
 
+    return render_json_error(post) if post.errors.present?
+
     render body: nil
   end
 
@@ -730,9 +705,16 @@ class PostsController < ApplicationController
     guardian.ensure_can_change_post_type!
     post = find_post_from_params
     params.require(:post_type)
-    raise Discourse::InvalidParameters.new(:post_type) if Post.types[params[:post_type].to_i].blank?
+    post_type = params[:post_type].to_i
+    unless PostRevisor.valid_post_type?(post_type)
+      raise Discourse::InvalidParameters.new(:post_type)
+    end
 
-    post.revise(current_user, post_type: params[:post_type].to_i)
+    if post.is_first_post? && post_type == Post.types[:whisper]
+      raise Discourse::InvalidParameters.new(:post_type)
+    end
+
+    post.revise(current_user, post_type: post_type)
 
     render body: nil
   end
@@ -1115,9 +1097,12 @@ class PostsController < ApplicationController
   end
 
   def find_post_from_params_by_date
+    topic = Topic.with_deleted.find_by(id: params[:topic_id])
+    raise Discourse::NotFound unless guardian.can_see?(topic)
+
     by_date_finder =
       TopicView
-        .new(params[:topic_id], current_user)
+        .new(topic, current_user)
         .filtered_posts
         .where("created_at >= ?", Time.zone.parse(params[:date]))
         .order("created_at ASC")
@@ -1137,7 +1122,7 @@ class PostsController < ApplicationController
       raise Discourse::NotFound unless guardian.can_moderate_topic?(post.topic)
     end
 
-    guardian.ensure_can_see!(post)
+    raise Discourse::NotFound unless guardian.can_see?(post)
 
     post
   end

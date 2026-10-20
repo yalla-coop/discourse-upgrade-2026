@@ -28,11 +28,36 @@ RSpec.describe ExportCsvController do
         expect(job_data["user_id"]).to eq(user.id)
       end
 
-      it "should not enqueue export job if rate limit is reached" do
+      it "does not enqueue an export job after reaching the rate limit" do
         UserExport.create(file_name: "user-archive-codinghorror-150116-003249", user_id: user.id)
         post "/export_csv/export_entity.json", params: { entity: "user_archive" }
         expect(response.status).to eq(422)
         expect(Jobs::ExportUserArchive.jobs.size).to eq(0)
+      end
+
+      it "rate limits repeated archive requests while the export job is pending" do
+        post "/export_csv/export_entity.json", params: { entity: "user_archive" }
+        expect(response.status).to eq(200)
+        expect(response.parsed_body["success"]).to eq("OK")
+
+        post "/export_csv/export_entity.json", params: { entity: "user_archive" }
+        expect(response.status).to eq(422)
+        expect(response.parsed_body["errors"]).to contain_exactly(
+          I18n.t("csv_export.rate_limit_error"),
+        )
+        expect(Jobs::ExportUserArchive.jobs.size).to eq(1)
+      end
+
+      it "releases the reservation if enqueuing the job raises" do
+        Jobs::ExportUserArchive.stubs(:client_push).raises("boom").once
+        post "/export_csv/export_entity.json", params: { entity: "user_archive" }
+        expect(response.status).to eq(500)
+        expect(Jobs::ExportUserArchive.jobs.size).to eq(0)
+
+        Jobs::ExportUserArchive.unstub(:client_push)
+        post "/export_csv/export_entity.json", params: { entity: "user_archive" }
+        expect(response.status).to eq(200)
+        expect(Jobs::ExportUserArchive.jobs.size).to eq(1)
       end
 
       it "returns 404 when normal user tries to export admin entity" do
@@ -102,7 +127,7 @@ RSpec.describe ExportCsvController do
         expect(job_data["user_id"]).to eq(admin.id)
       end
 
-      it "should not rate limit export for staff" do
+      it "does not rate-limit exports for staff" do
         UserExport.create(file_name: "screened-email-150116-010145", user_id: admin.id)
         post "/export_csv/export_entity.json", params: { entity: "staff_action" }
         expect(response.status).to eq(200)
@@ -143,7 +168,36 @@ RSpec.describe ExportCsvController do
       end
 
       it "fails requests where the name arg is too long" do
-        post "/export_csv/export_entity.json", params: { entity: "foo", args: { name: "x" * 200 } }
+        post "/export_csv/export_entity.json", params: { entity: "foo", args: { name: "x" * 300 } }
+        expect(response.status).to eq(400)
+      end
+
+      it "accepts comma-separated filter args like category_ids and groups" do
+        post "/export_csv/export_entity.json",
+             params: {
+               entity: "report",
+               args: {
+                 name: "posters_by_member_type",
+                 category_ids: "1,2",
+                 groups: "new_members,staff",
+               },
+             }
+        expect(response.status).to eq(200)
+
+        job_data = Jobs::ExportCsvFile.jobs.last["args"].first
+        expect(job_data["args"]["category_ids"]).to eq("1,2")
+        expect(job_data["args"]["groups"]).to eq("new_members,staff")
+      end
+
+      it "fails requests where a filter arg is too long" do
+        post "/export_csv/export_entity.json",
+             params: {
+               entity: "report",
+               args: {
+                 name: "posters_by_member_type",
+                 groups: "x" * 300,
+               },
+             }
         expect(response.status).to eq(400)
       end
     end

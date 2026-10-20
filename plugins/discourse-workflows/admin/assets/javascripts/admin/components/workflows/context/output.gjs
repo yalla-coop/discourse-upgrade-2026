@@ -1,5 +1,5 @@
 import Component from "@glimmer/component";
-import { tracked } from "@glimmer/tracking";
+import { cached, tracked } from "@glimmer/tracking";
 import { fn } from "@ember/helper";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
@@ -8,7 +8,7 @@ import { eq } from "discourse/truth-helpers";
 import dConcatClass from "discourse/ui-kit/helpers/d-concat-class";
 import dIcon from "discourse/ui-kit/helpers/d-icon";
 import { i18n } from "discourse-i18n";
-import { outputSchemaForNode } from "../../../lib/workflows/data-schema";
+import { outputPreviewForNode } from "../../../lib/workflows/data-preview";
 import processFields from "../../../lib/workflows/field-processors";
 import { nodeTypePorts } from "../../../lib/workflows/node-types";
 import DragDropHint from "./drag-drop-hint";
@@ -94,24 +94,42 @@ export default class OutputContext extends Component {
     };
   }
 
-  get outputSchema() {
+  @cached
+  get outputPreview() {
     const currentNode = this.args.node;
-    const schema = outputSchemaForNode(
+    const preview = outputPreviewForNode(
       this.args.session?.lastExecutionRunData || {},
       currentNode.name,
-      { pinnedItems: this.pinnedItems, node: currentNode }
+      {
+        pinnedItems: this.pinnedItems,
+        node: currentNode,
+        graph: this.graph,
+        configuration: this.args.configuration,
+      }
     );
 
     return {
-      ...schema,
-      itemCountLabel: this.itemCountLabel(schema.summary),
-      emptyMessage: this.emptyMessage(schema.summary),
-      fields: processFields(schema.fields, currentNode, this.graph),
+      ...preview,
+      itemCountLabel: this.itemCountLabel(preview.summary),
+      emptyMessage: this.emptyMessage(preview.summary),
+      fields: processFields(preview.fields, currentNode, this.graph),
     };
   }
 
   get fields() {
-    return this.outputSchema.fields || [];
+    return this.outputPreview.fields || [];
+  }
+
+  get singleItemCountLabel() {
+    return this.outputPreview.itemCountLabel;
+  }
+
+  get emptyOutputMessage() {
+    return this.outputPreview.emptyMessage;
+  }
+
+  get canTogglePin() {
+    return this.singleOutputNode && (this.isPinned || this.canPin);
   }
 
   itemCountLabel(summary) {
@@ -122,10 +140,6 @@ export default class OutputContext extends Component {
     return i18n("discourse_workflows.configurator.schema_item_count", {
       count: summary.itemCount,
     });
-  }
-
-  get singleItemCountLabel() {
-    return this.outputSchema.itemCountLabel;
   }
 
   emptyMessage(summary) {
@@ -140,10 +154,6 @@ export default class OutputContext extends Component {
     }
 
     return i18n("discourse_workflows.configurator.no_output_context");
-  }
-
-  get emptyOutputMessage() {
-    return this.outputSchema.emptyMessage;
   }
 
   @action
@@ -164,10 +174,6 @@ export default class OutputContext extends Component {
     }
   }
 
-  get canTogglePin() {
-    return this.singleOutputNode && (this.isPinned || this.canPin);
-  }
-
   <template>
     <div class="workflows-context-panel">
       {{#if this.isPinned}}
@@ -177,8 +183,8 @@ export default class OutputContext extends Component {
             {{i18n "discourse_workflows.pin_data.is_pinned"}}
           </span>
           <button
-            type="button"
             class="btn-link workflows-context-panel__unpin-btn"
+            type="button"
             {{on "click" this.togglePin}}
           >
             {{i18n "discourse_workflows.pin_data.unpin"}}
@@ -210,29 +216,33 @@ export default class OutputContext extends Component {
             <div class="workflows-context-panel__header-actions">
               <div class="workflows-context-panel__tabs" role="tablist">
                 <button
-                  type="button"
-                  role="tab"
                   aria-selected={{if this.isSchemaView "true" "false"}}
                   class={{dConcatClass
                     "workflows-context-panel__tab"
                     (if (eq this.viewMode "schema") "is-active")
                   }}
+                  role="tab"
+                  type="button"
                   {{on "click" (fn this.switchView "schema")}}
                 >{{i18n "discourse_workflows.pin_data.schema_view"}}</button>
                 <button
-                  type="button"
-                  role="tab"
                   aria-selected={{if this.isJsonView "true" "false"}}
                   class={{dConcatClass
                     "workflows-context-panel__tab"
                     (if (eq this.viewMode "json") "is-active")
                   }}
+                  role="tab"
+                  type="button"
                   {{on "click" (fn this.switchView "json")}}
                 >{{i18n "discourse_workflows.pin_data.json_view"}}</button>
               </div>
 
               <button
-                type="button"
+                aria-label={{if
+                  this.isPinned
+                  (i18n "discourse_workflows.pin_data.unpin")
+                  (i18n "discourse_workflows.pin_data.pin")
+                }}
                 class={{dConcatClass
                   "workflows-context-panel__icon-btn workflows-context-panel__pin-btn"
                   (if this.isPinned "is-pinned")
@@ -243,11 +253,7 @@ export default class OutputContext extends Component {
                   (i18n "discourse_workflows.pin_data.unpin")
                   (i18n "discourse_workflows.pin_data.pin")
                 }}
-                aria-label={{if
-                  this.isPinned
-                  (i18n "discourse_workflows.pin_data.unpin")
-                  (i18n "discourse_workflows.pin_data.pin")
-                }}
+                type="button"
                 {{on "click" this.togglePin}}
               >
                 {{dIcon "thumbtack"}}
@@ -256,32 +262,30 @@ export default class OutputContext extends Component {
           {{/if}}
         </div>
 
-        {{#if this.hasNoData}}
+        {{#if this.isJsonView}}
           <PinDataEditor
-            @nodeName={{this.nodeName}}
-            @initialItems={{this.effectiveItems}}
             @canEdit={{this.canEditPinData}}
+            @initialItems={{this.effectiveItems}}
+            @nodeName={{this.nodeName}}
             @session={{@session}}
           />
-        {{else if this.isJsonView}}
+        {{else if this.fields.length}}
+          <ul class="workflows-schema-field-list">
+            {{#each this.fields as |field|}}
+              <SchemaField @field={{field}} />
+            {{/each}}
+          </ul>
+        {{else if this.hasNoData}}
           <PinDataEditor
-            @nodeName={{this.nodeName}}
-            @initialItems={{this.effectiveItems}}
             @canEdit={{this.canEditPinData}}
+            @initialItems={{this.effectiveItems}}
+            @nodeName={{this.nodeName}}
             @session={{@session}}
           />
         {{else}}
-          {{#if this.fields.length}}
-            <ul class="workflows-schema-field-list">
-              {{#each this.fields as |field|}}
-                <SchemaField @field={{field}} />
-              {{/each}}
-            </ul>
-          {{else}}
-            <p class="workflows-context-panel__empty">
-              {{this.emptyOutputMessage}}
-            </p>
-          {{/if}}
+          <p class="workflows-context-panel__empty">
+            {{this.emptyOutputMessage}}
+          </p>
         {{/if}}
       </div>
     </div>

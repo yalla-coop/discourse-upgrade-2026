@@ -73,6 +73,11 @@ export default class ChatChannel {
   @tracked draft;
   @tracked newestMessage;
   @tracked pinnedMessagesCount;
+  // newest pin id the current user dismissed the bar above (per-device); the
+  // bar reappears once a pin newer than this exists
+  @tracked pinsDismissedAboveId;
+  // pin the user tapped in the bar; overrides scroll anchoring until they scroll
+  @tracked activePinnedMessageId = null;
 
   threadsManager = new ChatThreadsManager(getOwnerWithFallback(this));
   messagesManager = new ChatMessagesManager(getOwnerWithFallback(this));
@@ -100,6 +105,7 @@ export default class ChatChannel {
     this.currentUserMembership = args.current_user_membership;
     this.lastMessage = args.last_message;
     this.meta = args.meta;
+    this.livestreamTopic = args.livestream_topic;
 
     this.chatable = this.#initChatable(args.chatable ?? []);
     this.tracking = new ChatTrackingState(getOwnerWithFallback(this));
@@ -107,6 +113,41 @@ export default class ChatChannel {
 
     if (args.archive_completed || args.archive_failed) {
       this.archive = ChatChannelArchive.create(args);
+    }
+  }
+
+  get currentUserMembership() {
+    return this._currentUserMembership;
+  }
+
+  set currentUserMembership(membership) {
+    if (membership === null) {
+      this._currentUserMembership = null;
+      return;
+    }
+
+    if (membership instanceof UserChatChannelMembership) {
+      this._currentUserMembership = membership;
+    } else {
+      this._currentUserMembership =
+        UserChatChannelMembership.create(membership);
+    }
+  }
+
+  get lastMessage() {
+    return this._lastMessage;
+  }
+
+  set lastMessage(message) {
+    if (!message) {
+      this._lastMessage = null;
+      return;
+    }
+
+    if (message instanceof ChatMessage) {
+      this._lastMessage = message;
+    } else {
+      this._lastMessage = ChatMessage.create(this, message);
     }
   }
 
@@ -143,10 +184,6 @@ export default class ChatChannel {
     return this.threadsManager.threads.reduce((unreadCount, thread) => {
       return unreadCount + thread.tracking.watchedThreadsUnreadCount;
     }, 0);
-  }
-
-  updateLastViewedAt() {
-    this.currentUserMembership.lastViewedAt = new Date();
   }
 
   get canDeleteSelf() {
@@ -251,6 +288,10 @@ export default class ChatChannel {
     return this.currentUserMembership?.hasUnseenPins ?? false;
   }
 
+  updateLastViewedAt() {
+    this.currentUserMembership.lastViewedAt = new Date();
+  }
+
   async stageMessage(message) {
     message.id = guid();
     message.staged = true;
@@ -282,41 +323,6 @@ export default class ChatChannel {
     }
 
     return !READONLY_STATUSES.includes(this.status);
-  }
-
-  get currentUserMembership() {
-    return this._currentUserMembership;
-  }
-
-  set currentUserMembership(membership) {
-    if (membership === null) {
-      this._currentUserMembership = null;
-      return;
-    }
-
-    if (membership instanceof UserChatChannelMembership) {
-      this._currentUserMembership = membership;
-    } else {
-      this._currentUserMembership =
-        UserChatChannelMembership.create(membership);
-    }
-  }
-
-  get lastMessage() {
-    return this._lastMessage;
-  }
-
-  set lastMessage(message) {
-    if (!message) {
-      this._lastMessage = null;
-      return;
-    }
-
-    if (message instanceof ChatMessage) {
-      this._lastMessage = message;
-    } else {
-      this._lastMessage = ChatMessage.create(this, message);
-    }
   }
 
   #initChatable(chatable) {

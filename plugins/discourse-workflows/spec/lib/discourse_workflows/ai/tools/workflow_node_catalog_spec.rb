@@ -3,24 +3,112 @@
 RSpec.describe DiscourseWorkflows::Ai::Tools::WorkflowNodeCatalog do
   fab!(:admin)
 
-  before { SiteSetting.discourse_ai_enabled = true }
+  subject(:result) { invoke_tool(query:, include_examples:) }
 
   def invoke_tool(query: nil, include_examples: false)
-    context = DiscourseAi::Agents::BotContext.new(messages: [], user: admin)
     described_class.new(
       { query: query, include_examples: include_examples }.compact,
       bot_user: Discourse.system_user,
       llm: nil,
-      context: context,
+      context: bot_context,
     ).invoke
   end
 
-  it "exposes post author, topic link, and action output fields", :aggregate_failures do
-    result = invoke_tool
-    nodes_by_type = result[:nodes].index_by { |node| node[:type] }
+  before { SiteSetting.discourse_ai_enabled = true }
 
+  let(:query) { nil }
+  let(:include_examples) { false }
+  let(:bot_context) { DiscourseAi::Agents::BotContext.new(messages: [], user: admin) }
+  let(:nodes_by_type) { result[:nodes].index_by { |node| node[:type] } }
+  let(:output_contracts_by_type) do
+    nodes_by_type.transform_values { |node| node.fetch(:output_contracts).first }.compact
+  end
+  let(:output_fields_by_type) do
+    output_contracts_by_type.transform_values { |contract| contract.fetch(:fields) }
+  end
+
+  it "excludes nodes hidden from the palette" do
+    hidden_node_type = DiscourseWorkflows::Nodes::LoopOverItems::V1.identifier
+
+    result = invoke_tool(query: hidden_node_type)
+
+    expect(result[:nodes]).to be_empty
+  end
+
+  it "finds the external chat integration action by provider keywords" do
+    SiteSetting.chat_integration_enabled = true
+
+    result = invoke_tool(query: "slack", include_examples: true)
+    node =
+      result[:nodes].find { |candidate| candidate[:type] == "action:send_chat_integration_message" }
+
+    expect(node).to include(
+      available: true,
+      examples: [
+        a_hash_including(
+          parameters:
+            a_hash_including(
+              channel_id: 123,
+              channel_name: "Slack: #general",
+              message: "={{ $json.post.excerpt }}",
+            ),
+        ),
+      ],
+    )
+    expect(node.dig(:output_contracts, 0, :fields)).to eq(
+      "channel_id" => "integer",
+      "provider" => "string",
+    )
+  end
+
+  it "finds the moderation action by unlist keywords", :aggregate_failures do
+    result = invoke_tool(query: "unlist topic", include_examples: true)
+    node = result[:nodes].find { |candidate| candidate[:type] == "action:topic_moderation" }
+
+    expect(node[:examples]).to contain_exactly(
+      include(
+        name: "Unlist the trigger topic",
+        parameters:
+          include(
+            operation: "unlist_topic",
+            topic_id: "={{ $json.topic.id }}",
+            actor_username: "system",
+          ),
+      ),
+    )
+    expect(node.dig(:output_contracts, 0, :fields)).to include(
+      "topic.id" => "integer",
+      "topic.visible" => "boolean",
+      "topic.visibility_reason_id" => "integer",
+    )
+  end
+
+  it "finds the Tag group action with its example and output fields", :aggregate_failures do
+    result = invoke_tool(query: "organize tag group", include_examples: true)
+    node = result[:nodes].find { |candidate| candidate[:type] == "action:tag_group" }
+
+    expect(node[:examples]).to contain_exactly(
+      include(
+        name: "Add tags to a tag group",
+        parameters:
+          include(
+            operation: "add",
+            tag_group_id: 123,
+            tag_names: "needs-review, escalated",
+            actor_username: "system",
+          ),
+      ),
+    )
+    expect(node.dig(:output_contracts, 0, :fields)).to include(
+      "tag_group_id" => "integer",
+      "tag_group_name" => "string",
+      "tag_names" => "array<string>",
+    )
+  end
+
+  it "exposes post author, topic link, and action output fields", :aggregate_failures do
     expect(result[:status]).to eq("success")
-    expect(nodes_by_type.dig("trigger:topic_created", :output_schema)).to include(
+    expect(output_fields_by_type.fetch("trigger:topic_created")).to include(
       "post.user_id" => "integer",
       "post.username" => "string",
       "post.post_number" => "integer",
@@ -28,11 +116,11 @@ RSpec.describe DiscourseWorkflows::Ai::Tools::WorkflowNodeCatalog do
       "post.post_url" => "string",
       "post.upload_ids" => "array<integer>",
     )
-    expect(nodes_by_type.dig("trigger:topic_created", :output_schema)).not_to include(
+    expect(output_fields_by_type.fetch("trigger:topic_created")).not_to include(
       "post.trust_level",
       "user.trust_level",
     )
-    expect(nodes_by_type.dig("trigger:post_created", :output_schema)).to include(
+    expect(output_fields_by_type.fetch("trigger:post_created")).to include(
       "post.user_id" => "integer",
       "post.username" => "string",
       "post.post_number" => "integer",
@@ -46,45 +134,75 @@ RSpec.describe DiscourseWorkflows::Ai::Tools::WorkflowNodeCatalog do
       "user.moderator" => "boolean",
       "user.staff" => "boolean",
     )
-    expect(nodes_by_type.dig("trigger:post_created", :output_schema)).not_to include(
+    expect(output_fields_by_type.fetch("trigger:post_created")).not_to include(
       "post.trust_level",
       "post.admin",
       "post.moderator",
       "post.staff",
     )
-    expect(nodes_by_type.dig("trigger:post_edited", :output_schema)).to include(
+    expect(output_fields_by_type.fetch("trigger:post_edited")).to include(
       "post.id" => "integer",
       "post.raw" => "string",
       "user.trust_level" => "integer",
       "user.trust_level_name" => "string",
     )
-    expect(nodes_by_type.dig("trigger:topic_closed", :output_schema)).to include(
+    expect(output_fields_by_type.fetch("trigger:topic_closed")).to include(
       "topic.id" => "integer",
       "topic.title" => "string",
       "topic.slug" => "string",
       "topic.closed" => "boolean",
       "topic.archived" => "boolean",
     )
-    expect(nodes_by_type.dig("action:topic", :output_schema)).to include(
+    expect(output_fields_by_type.fetch("trigger:tag_created")).to include(
+      "tag.id" => "integer",
+      "tag.name" => "string",
+      "tag.slug" => "string",
+      "tag.topic_count" => "integer",
+      "tag.staff" => "boolean",
+      "tag.description" => "string|null",
+      "tag.description_cooked" => "string|null",
+    )
+    {
+      "trigger:user_added_to_group" => "\"added\"",
+      "trigger:user_removed_from_group" => "\"removed\"",
+    }.each do |trigger_type, membership_action|
+      expect(output_fields_by_type.fetch(trigger_type)).to include(
+        "user.id" => "integer",
+        "user.username" => "string",
+        "user.trust_level" => "integer",
+        "group.id" => "integer",
+        "group.name" => "string",
+        "group.full_name" => "string|null",
+        "group.automatic" => "boolean",
+        "membership.action" => membership_action,
+        "membership.automatic" => "boolean|null",
+      )
+    end
+    expect(output_fields_by_type.fetch("action:topic")).to include(
       "topic.id" => "integer",
       "topic.slug" => "string",
       "topic.archived" => "boolean",
       "post.post_url" => "string",
     )
-    expect(nodes_by_type.dig("action:topic", :output_schema)).not_to include(
+    expect(output_fields_by_type.fetch("action:topic")).not_to include(
       "post.trust_level",
       "post.upload_ids",
     )
-    expect(nodes_by_type.dig("action:topic_tags", :output_schema)).to include(
+    expect(output_fields_by_type.fetch("action:topic_tags")).to include(
       "topic_id" => "integer",
       "tag_names" => "array<string>",
     )
-    expect(nodes_by_type.dig("action:post", :output_schema)).to include(
+    expect(output_fields_by_type.fetch("action:tag_group")).to include(
+      "tag_group_id" => "integer",
+      "tag_group_name" => "string",
+      "tag_names" => "array<string>",
+    )
+    expect(output_fields_by_type.fetch("action:post")).to include(
       "post.id" => "integer",
       "post.topic_id" => "integer",
       "post.post_url" => "string",
     )
-    expect(nodes_by_type.dig("action:user", :output_schema)).to include(
+    expect(output_fields_by_type.fetch("action:user")).to include(
       "user.id" => "integer",
       "user.username" => "string",
       "user.bio_raw" => "string|null",
@@ -93,24 +211,93 @@ RSpec.describe DiscourseWorkflows::Ai::Tools::WorkflowNodeCatalog do
       "user.trust_level_locked" => "boolean",
       "user.user_fields" => "object",
       "user.groups" => "array<object>",
-      "user.groups[].name" => "string",
+      "user.groups[0].name" => "string",
     )
-    expect(nodes_by_type.dig("action:send_personal_message", :output_schema)).to include(
+    expect(output_fields_by_type.fetch("action:send_personal_message")).to include(
       "topic.id" => "integer",
       "topic.slug" => "string",
       "post.id" => "integer",
       "post.post_url" => "string",
     )
-    expect(nodes_by_type.dig("action:ai_agent", :output_schema)).to include("result" => "string")
+    expect(output_contracts_by_type.fetch("action:group")[:variants]).to include(
+      a_hash_including(
+        mode: "replace",
+        display_options: {
+          "show" => {
+            "operation" => %w[add remove],
+          },
+        },
+        fields:
+          a_hash_including(
+            "group.id" => "integer",
+            "group.name" => "string",
+            "user.username" => "string",
+          ),
+      ),
+      a_hash_including(
+        mode: "replace",
+        display_options: {
+          "show" => {
+            "operation" => ["get"],
+          },
+        },
+        fields: a_hash_including("group.id" => "integer", "group.user_count" => "integer"),
+      ),
+      a_hash_including(
+        mode: "merge",
+        display_options: {
+          "show" => {
+            "operation" => ["check_membership"],
+          },
+        },
+        fields: a_hash_including("group_membership.in_group" => "boolean"),
+      ),
+    )
+    expect(output_contracts_by_type.fetch("flow:wait")[:variants]).to include(
+      a_hash_including(
+        mode: "replace",
+        display_options: {
+          "show" => {
+            "resume" => ["webhook"],
+          },
+        },
+        fields: a_hash_including("method" => "string", "body" => "unknown"),
+      ),
+    )
+    expect(output_fields_by_type.fetch("trigger:chat_message_created")).to include(
+      "message.id" => "integer",
+      "channel.id" => "integer",
+      "user.id" => "integer",
+      "user.username" => "string",
+      "user.avatar_template" => "string",
+    )
+    expect(output_fields_by_type.fetch("trigger:chat_message_created")).not_to include(
+      "user.trust_level",
+      "user.admin",
+      "user.moderator",
+      "user.staff",
+    )
+    expect(output_fields_by_type.fetch("action:ai_agent")).to include("result" => "string")
+  end
+
+  it "finds the tag created trigger by taxonomy keywords" do
+    result = invoke_tool(query: "taxonomy keyword")
+
+    expect(result[:nodes].map { |node| node[:type] }).to include("trigger:tag_created")
   end
 
   it "matches broad multi-term catalog queries", :aggregate_failures do
     result =
-      invoke_tool(
-        query:
-          "trigger topic_closed action topic get condition filter chat message dm group membership user profile trust title",
-        include_examples: true,
-      )
+      described_class.new(
+        {
+          query:
+            "trigger topic_closed action topic get condition filter chat message dm group membership user profile trust title",
+          include_examples: true,
+        },
+        bot_user: Discourse.system_user,
+        llm: nil,
+        context: bot_context,
+      ).invoke
     node_types = result[:nodes].map { |node| node[:type] }
 
     expect(node_types).to include(
@@ -119,6 +306,8 @@ RSpec.describe DiscourseWorkflows::Ai::Tools::WorkflowNodeCatalog do
       "condition:filter",
       "action:group",
       "action:user",
+      "trigger:user_added_to_group",
+      "trigger:user_removed_from_group",
       "action:send_chat_message",
       "action:send_personal_message",
     )
@@ -126,7 +315,13 @@ RSpec.describe DiscourseWorkflows::Ai::Tools::WorkflowNodeCatalog do
   end
 
   it "matches AI agent runner and attachment queries" do
-    result = invoke_tool(query: "runner permissions attachments", include_examples: true)
+    result =
+      described_class.new(
+        { query: "runner permissions attachments", include_examples: true },
+        bot_user: Discourse.system_user,
+        llm: nil,
+        context: bot_context,
+      ).invoke
     ai_agent_node = result[:nodes].find { |node| node[:type] == "action:ai_agent" }
 
     expect(ai_agent_node).to be_present
@@ -135,7 +330,13 @@ RSpec.describe DiscourseWorkflows::Ai::Tools::WorkflowNodeCatalog do
   end
 
   it "includes declarative filter and topic lookup examples", :aggregate_failures do
-    result = invoke_tool(include_examples: true)
+    result =
+      described_class.new(
+        { include_examples: true },
+        bot_user: Discourse.system_user,
+        llm: nil,
+        context: bot_context,
+      ).invoke
     filter_node = result[:nodes].find { |node| node[:type] == "condition:filter" }
     group_node = result[:nodes].find { |node| node[:type] == "action:group" }
     user_node = result[:nodes].find { |node| node[:type] == "action:user" }
@@ -166,6 +367,8 @@ RSpec.describe DiscourseWorkflows::Ai::Tools::WorkflowNodeCatalog do
     )
     expect(post_node[:examples]).to contain_exactly(
       include(parameters: include(operation: "create", topic_id: "={{ $json.topic.id }}")),
+      include(parameters: include(operation: "delete", post_id: "={{ $json.post.id }}")),
+      include(parameters: include(operation: "recover", post_id: "={{ $json.post.id }}")),
     )
     expect(group_node[:examples]).to contain_exactly(
       include(

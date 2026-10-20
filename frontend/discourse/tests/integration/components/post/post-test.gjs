@@ -1,14 +1,20 @@
 import { getOwner } from "@ember/owner";
-import { click, render, settled, triggerEvent } from "@ember/test-helpers";
+import {
+  click,
+  find,
+  render,
+  settled,
+  triggerEvent,
+} from "@ember/test-helpers";
 import hbs from "htmlbars-inline-precompile";
 import { module, test } from "qunit";
+import sinon from "sinon";
 import Post from "discourse/components/post";
 import DMenus from "discourse/float-kit/components/d-menus";
 import { forceMobile, resetMobile } from "discourse/lib/mobile";
 import { withPluginApi } from "discourse/lib/plugin-api";
 import { setupRenderingTest } from "discourse/tests/helpers/component-test";
 import pretender, { response } from "discourse/tests/helpers/create-pretender";
-import { queryAll } from "discourse/tests/helpers/qunit-helpers";
 import { registerTemporaryModule } from "discourse/tests/helpers/temporary-module-helper";
 import { i18n } from "discourse-i18n";
 
@@ -30,12 +36,12 @@ function renderComponent(
   return render(
     <template>
       <Post
-        @post={{post}}
-        @prevPost={{prevPost}}
         @changePostOwner={{changePostOwner}}
         @editPost={{editPost}}
         @expandHidden={{expandHidden}}
         @permanentlyDeletePost={{permanentlyDeletePost}}
+        @post={{post}}
+        @prevPost={{prevPost}}
         @rebakePost={{rebakePost}}
         @showHistory={{showHistory}}
         @showRawEmail={{showRawEmail}}
@@ -151,11 +157,11 @@ module("Integration | Component | Post", function (hooks) {
     await renderComponent(this.post);
 
     assert.strictEqual(
-      queryAll("a[data-clicks='1']")[0].getAttribute("data-clicks"),
+      find("a[data-clicks='1']").getAttribute("data-clicks"),
       "1"
     );
     assert.strictEqual(
-      queryAll("a[data-clicks='2']")[0].getAttribute("data-clicks"),
+      find("a[data-clicks='2']").getAttribute("data-clicks"),
       "2"
     );
   });
@@ -181,12 +187,12 @@ module("Integration | Component | Post", function (hooks) {
     await renderComponent(this.post);
 
     assert.strictEqual(
-      queryAll("a[data-clicks='1']")[0].getAttribute("data-clicks"),
+      find("a[data-clicks='1']").getAttribute("data-clicks"),
       "1",
       "First link has correct data attribute and content"
     );
     assert.strictEqual(
-      queryAll("a[data-clicks='2']")[0].getAttribute("data-clicks"),
+      find("a[data-clicks='2']").getAttribute("data-clicks"),
       "2",
       "Second link has correct data attribute and content"
     );
@@ -673,8 +679,36 @@ module("Integration | Component | Post", function (hooks) {
 
     await renderComponent(this.post);
 
+    assert
+      .dom(".expand-post")
+      .hasText(
+        i18n("post.show_more"),
+        "labels the feed-content expansion accurately"
+      );
     await click(".topic-body .expand-post");
     assert.dom(".expand-post").doesNotExist("button is gone");
+  });
+
+  test("reports an error and keeps the expansion retryable", async function (assert) {
+    const message = "Could not show more.";
+    const dialog = getOwner(this).lookup("service:dialog");
+    sinon.stub(dialog, "alert");
+    pretender.get("/posts/:post_id/expand-embed", () =>
+      response(422, { errors: [message] })
+    );
+    this.post.post_number = 1;
+    this.post.topic.expandable_first_post = true;
+
+    await renderComponent(this.post);
+    await click(".topic-body .expand-post");
+
+    assert.dom(".expand-post").exists("keeps the button available for retry");
+    assert.true(
+      dialog.alert.calledWith(
+        i18n("generic_error_with_reason", { error: message })
+      ),
+      "shows the expansion error"
+    );
   });
 
   test("can't show admin menu when you can't manage", async function (assert) {
@@ -1091,7 +1125,7 @@ module("Integration | Component | Post", function (hooks) {
   test("a11y heading is rendered when post is cloaked", async function (assert) {
     await render(
       <template>
-        <Post @post={{this.post}} @cloaked={{true}} />
+        <Post @cloaked={{true}} @post={{this.post}} />
         <DMenus />
       </template>
     );

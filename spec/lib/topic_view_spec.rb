@@ -28,6 +28,30 @@ RSpec.describe TopicView do
     end
   end
 
+  describe "#has_localized_content?" do
+    before { SiteSetting.content_localization_enabled = true }
+
+    it "ignores localizations on posts that are not eligible for translation" do
+      localized_topic = Fabricate(:topic, locale: "en")
+      post = Fabricate(:post, topic: localized_topic, locale: nil)
+      Fabricate(:post_localization, post:, locale: "en")
+
+      expect(TopicView.new(localized_topic.id, user).has_localized_content?).to eq(false)
+    end
+
+    it "detects a site-default post localization when default fallback is enabled" do
+      SiteSetting.default_locale = "en"
+      SiteSetting.content_localization_use_default_locale_when_unsupported = true
+      localized_topic = Fabricate(:topic, locale: "de")
+      post = Fabricate(:post, topic: localized_topic, locale: "ja")
+      Fabricate(:post_localization, post:, locale: "en")
+
+      I18n.with_locale(:de) do
+        expect(TopicView.new(localized_topic.id, user).has_localized_content?).to eq(true)
+      end
+    end
+  end
+
   describe "#reset_post_collection" do
     fab!(:post1) { Fabricate(:post, topic: topic) }
     fab!(:post2) { Fabricate(:post, topic: topic) }
@@ -286,7 +310,7 @@ RSpec.describe TopicView do
     fab!(:p2) { Fabricate(:post, topic: topic, user: evil_trout, percent_rank: 0.5) }
     fab!(:p3) { Fabricate(:post, topic: topic, user: first_poster, percent_rank: 0) }
 
-    it "it can find the best responses" do
+    it "finds the best responses" do
       best2 = TopicView.new(topic.id, evil_trout, best: 2)
       expect(best2.posts.count).to eq(2)
       expect(best2.posts[0].id).to eq(p2.id)
@@ -486,7 +510,7 @@ RSpec.describe TopicView do
 
       before { TopicView.stubs(:chunk_size).returns(2) }
 
-      it "should return the next page" do
+      it "returns the next page" do
         expect(TopicView.new(topic.id, user, { post_number: post.post_number }).next_page).to eql(3)
       end
     end
@@ -557,7 +581,7 @@ RSpec.describe TopicView do
       end
     end
 
-    describe "#bookmarks" do
+    describe "#bookmarks for regular bookmarks" do
       let!(:user) { Fabricate(:user) }
       let!(:bookmark1) do
         Fabricate(:bookmark, bookmarkable: Fabricate(:post, topic: topic), user: user)
@@ -578,7 +602,7 @@ RSpec.describe TopicView do
       end
     end
 
-    describe "#bookmarks" do
+    describe "#bookmarks for next-business-day reminders" do
       let!(:user) { Fabricate(:user) }
       let!(:bookmark1) do
         Fabricate(:bookmark_next_business_day_reminder, bookmarkable: topic.first_post, user: user)
@@ -694,7 +718,7 @@ RSpec.describe TopicView do
     end
 
     describe "contains_gaps?" do
-      it "works" do
+      it "returns the requested topic view" do
         # does not contain contains_gaps with default filtering
         expect(topic_view.contains_gaps?).to eq(false)
         # contains contains_gaps when filtered by username" do
@@ -744,7 +768,7 @@ RSpec.describe TopicView do
       describe "ascending" do
         let(:asc) { true }
 
-        it "should return the right posts" do
+        it "returns the expected posts" do
           topic_view = create_topic_view(p3.post_number)
 
           expect(topic_view.posts).to eq([p5])
@@ -757,7 +781,7 @@ RSpec.describe TopicView do
       describe "descending" do
         let(:asc) { false }
 
-        it "should return the right posts" do
+        it "returns the expected posts" do
           topic_view = create_topic_view(p7.post_number)
 
           expect(topic_view.posts).to eq([p5, p3, p2])
@@ -924,11 +948,13 @@ RSpec.describe TopicView do
     context "with uncategorized topic" do
       context "when topic_page_title_includes_category is false" do
         before { SiteSetting.topic_page_title_includes_category = false }
+
         it { is_expected.to eq(topic.title) }
       end
 
       context "when topic_page_title_includes_category is true" do
         before { SiteSetting.topic_page_title_includes_category = true }
+
         it { is_expected.to eq(topic.title) }
 
         context "with tagged topic" do
@@ -972,6 +998,27 @@ RSpec.describe TopicView do
       end
     end
 
+    context "with a tagged personal message" do
+      fab!(:pm) { Fabricate(:private_message_topic, user: user) }
+      fab!(:pm_post) { Fabricate(:post, topic: pm) }
+
+      before do
+        SiteSetting.tagging_enabled = true
+        SiteSetting.topic_page_title_includes_category = true
+        pm.tags << tag2
+      end
+
+      it "does not include the tag for participants who cannot tag personal messages" do
+        expect(TopicView.new(pm.id, user).page_title).not_to include(tag2.name)
+      end
+
+      it "includes the tag for participants who can tag personal messages" do
+        SiteSetting.pm_tags_allowed_for_groups = Group::AUTO_GROUPS[:trust_level_0]
+
+        expect(TopicView.new(pm.id, user).page_title).to end_with(tag2.name)
+      end
+    end
+
     context "with categorized topic" do
       let(:category) { Fabricate(:category) }
 
@@ -979,11 +1026,13 @@ RSpec.describe TopicView do
 
       context "when topic_page_title_includes_category is false" do
         before { SiteSetting.topic_page_title_includes_category = false }
+
         it { is_expected.to eq(topic.title) }
       end
 
       context "when topic_page_title_includes_category is true" do
         before { SiteSetting.topic_page_title_includes_category = true }
+
         it { is_expected.to start_with(topic.title) }
         it { is_expected.to end_with(category.name) }
 
@@ -1007,12 +1056,12 @@ RSpec.describe TopicView do
     let!(:post2) { Fabricate(:post, topic: topic, user: evil_trout, created_at: 6.hours.ago) }
     let!(:post3) { Fabricate(:post, topic: topic, user: first_poster) }
 
-    it "should return the right columns" do
+    it "returns the expected columns" do
       expect(topic_view.filtered_post_stream).to eq([[post.id, 1], [post2.id, 0], [post3.id, 0]])
     end
 
     describe "for mega topics" do
-      it "should return the right columns" do
+      it "returns the expected columns" do
         stub_const(TopicView, "MEGA_TOPIC_POSTS_COUNT", 2) do
           expect(topic_view.filtered_post_stream).to eq([post.id, post2.id, post3.id])
         end
@@ -1021,7 +1070,7 @@ RSpec.describe TopicView do
   end
 
   describe "#filtered_post_id" do
-    it "should return the right id" do
+    it "returns the expected ID" do
       post = Fabricate(:post, topic: topic)
 
       expect(topic_view.filtered_post_id(nil)).to eq(nil)
@@ -1036,7 +1085,7 @@ RSpec.describe TopicView do
 
     before { [p1, p2, p3].each_with_index { |post, index| post.update!(sort_order: index + 1) } }
 
-    it "should return the right id" do
+    it "returns the expected ID" do
       expect(topic_view.last_post_id).to eq(p3.id)
     end
   end
@@ -1053,7 +1102,7 @@ RSpec.describe TopicView do
       topic_view.topic.reload
     end
 
-    it "should return the right read time" do
+    it "returns the expected read time" do
       SiteSetting.read_time_word_count = 500
       expect(topic_view.read_time).to eq(1)
 
@@ -1134,6 +1183,21 @@ RSpec.describe TopicView do
 
       topic_view = TopicView.new(pm_topic.id, admin)
       expect(topic_view.show_read_indicator?).to be_truthy
+    end
+
+    it "does not show read indicator if current_user cannot see members of the read state group" do
+      user = Fabricate(:user)
+      group =
+        Fabricate(
+          :group,
+          users: [user],
+          publish_read_state: true,
+          members_visibility_level: Group.visibility_levels[:staff],
+        )
+      pm_topic.topic_allowed_groups = [Fabricate.build(:topic_allowed_group, group: group)]
+
+      topic_view = TopicView.new(pm_topic.id, user)
+      expect(topic_view.show_read_indicator?).to be_falsey
     end
 
     it "does not show read indicator if groups do not have read indicator enabled" do

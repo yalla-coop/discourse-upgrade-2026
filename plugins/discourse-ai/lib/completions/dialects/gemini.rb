@@ -6,7 +6,7 @@ module DiscourseAi
       class Gemini < Dialect
         class << self
           def can_translate?(llm_model)
-            llm_model.provider == "google"
+            llm_model.provider == "google" || llm_model.provider == "google_vertex_ai"
           end
         end
 
@@ -119,7 +119,9 @@ module DiscourseAi
 
         def message_for_role(role, msg)
           content_array = []
-          content_array << "#{msg[:id]}: " if msg[:id]
+          if (prefix = user_id_prefix(msg))
+            content_array << prefix
+          end
 
           content_array << msg[:content]
           content_array.flatten!

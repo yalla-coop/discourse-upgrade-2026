@@ -56,6 +56,17 @@ if defined?(Bundler)
   Bundler.require(*bundler_groups)
 end
 
+if Rails.env.production?
+  require "json_schemer"
+  require "omniauth-facebook"
+  require "omniauth-github"
+  require "omniauth-google-oauth2"
+  require "omniauth-twitter"
+  require "rqrcode"
+end
+
+require "discourse_dev_assets" if Rails.env.development?
+
 require_relative "../lib/require_dependency_backward_compatibility"
 
 module Discourse
@@ -78,7 +89,9 @@ module Discourse
     # tiny file needed by site settings
     require "highlight_js"
 
-    config.load_defaults 8.0
+    config.load_defaults 8.1
+    # Existing permalink targets and redirect settings can contain path-relative URLs.
+    config.action_controller.action_on_path_relative_redirect = :log
     config.yjit = GlobalSetting.yjit_enabled
     config.active_record.cache_versioning = false # our custom cache class doesn’t support this
     config.action_controller.forgery_protection_origin_check = false
@@ -90,7 +103,10 @@ module Discourse
       Symbol,
     ]
     config.active_support.key_generator_hash_digest_class = OpenSSL::Digest::SHA1
-    config.action_dispatch.cookies_serializer = :message_pack_allow_marshal
+    config.action_dispatch.cookies_serializer = :message_pack
+
+    # Missing controllers use the same not-found response as missing routes.
+    config.action_dispatch.rescue_responses["ActionDispatch::MissingController"] = :not_found
     config.action_controller.wrap_parameters_by_default = false
     config.active_support.cache_format_version = 7.1
     config.active_record.dump_schema_after_migration = false
@@ -112,6 +128,10 @@ module Discourse
     config.autoload_paths << "#{root}/lib/guardian"
     config.autoload_paths << "#{root}/lib/i18n"
     config.autoload_paths << "#{root}/lib/validators"
+
+    # `lib` directories under a service namespace hold supporting classes
+    # (value objects, caches, etc.) without adding a `Lib` constant.
+    Rails.autoloaders.main.collapse("#{root}/app/services/*/lib")
 
     # Only load the plugins named here, in the order given (default is alphabetical).
     # :all can be used as a placeholder for all plugins not explicitly named.

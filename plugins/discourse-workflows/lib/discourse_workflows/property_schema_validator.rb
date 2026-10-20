@@ -70,6 +70,12 @@ module DiscourseWorkflows
     ].freeze
 
     KNOWN_CONTROL_OPTIONS_KEYS = %i[
+      acl_target_type
+      acl_target_key
+      acl_target_name
+      required_permissions
+      permissions
+      allow_anonymous
       action_icon
       action_label
       action_route
@@ -88,6 +94,8 @@ module DiscourseWorkflows
     ].freeze
 
     KNOWN_UI_CONTROLS = %i[
+      color
+      access_control
       actor
       boolean
       category
@@ -100,6 +108,8 @@ module DiscourseWorkflows
       data_table_columns
       data_table_condition_builder
       data_table_select
+      date_time
+      field_path
       filter_query
       group_select
       icon
@@ -109,10 +119,14 @@ module DiscourseWorkflows
       password
       query_params
       select
+      summarize_aggregations
       tags
       textarea
+      time
+      timezone
       url_preview
       user
+      user_seen_trigger_options
       user_or_group
     ].freeze
 

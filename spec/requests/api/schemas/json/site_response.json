@@ -154,6 +154,9 @@
         },
         "suggested_edit_accepted": {
           "type": "integer"
+        },
+        "voice_invitation": {
+          "type": "integer"
         }
       },
       "required": [
@@ -288,6 +291,9 @@
           "full_name": {
             "type": "string"
           },
+          "display_name": {
+            "type": "string"
+          },
           "flair_url": {
             "type": [
               "string",
@@ -325,6 +331,36 @@
     "filters": {
       "type": "array",
       "items": {}
+    },
+    "anonymous_list_filters": {
+      "type": "array",
+      "items": {}
+    },
+    "homepage_choices": {
+      "type": "array",
+      "items": {}
+    },
+    "homepage_options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "server_side": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "server_side"
+        ]
+      }
     },
     "periods": {
       "type": "array",
@@ -479,6 +515,9 @@
       }
     },
     "can_create_tag": {
+      "type": "boolean"
+    },
+    "can_search": {
       "type": "boolean"
     },
     "can_tag_topics": {
@@ -963,6 +1002,56 @@
         "mandatory_acl",
         "banned_acl"
       ]
+    },
+    "permanent_upcoming_change_names": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "category_types": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "visible": {
+            "type": "boolean"
+          },
+          "configuration_schema": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "title",
+          "description",
+          "icon",
+          "available",
+          "visible",
+          "configuration_schema"
+        ]
+      }
     }
   },
   "required": [
@@ -972,6 +1061,9 @@
     "trust_levels",
     "groups",
     "filters",
+    "anonymous_list_filters",
+    "homepage_choices",
+    "homepage_options",
     "periods",
     "top_menu_items",
     "anonymous_top_menu_items",
@@ -980,6 +1072,7 @@
     "post_action_types",
     "topic_flag_types",
     "can_create_tag",
+    "can_search",
     "can_tag_topics",
     "can_tag_pms",
     "tags_filter_regexp",

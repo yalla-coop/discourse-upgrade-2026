@@ -315,7 +315,7 @@ module Oneboxer
       when "topics"
         local_topic_html(url, route, opts)
       when "users"
-        local_user_html(url, route)
+        local_user_html(url, route, opts)
       when "list"
         local_category_html(url, route)
       else
@@ -456,11 +456,12 @@ module Oneboxer
     [title, excerpt]
   end
 
-  def self.local_user_html(url, route)
+  def self.local_user_html(url, route, opts)
     username = route[:username] || ""
 
     if user = User.find_by(username_lower: username.downcase)
       return if SiteSetting.allow_users_to_hide_profile && user.user_option&.hide_profile?
+      return unless Guardian.new(User.find_by(id: opts[:user_id])).can_see_profile?(user)
       name = user.name if SiteSetting.enable_names
 
       args = {
@@ -560,6 +561,8 @@ module Oneboxer
       elsif (fd.status_code || uri.nil?) && available_strategies.present?
         # Try a different oneboxing strategy, if we have any options left:
         return compute_external_onebox(url, available_strategies)
+      elsif fd.bot_challenge?
+        args[:error_message] = I18n.t("errors.onebox.bot_challenge")
       elsif fd.status_code
         args[:error_message] = I18n.t("errors.onebox.error_response", status_code: fd.status_code)
       end

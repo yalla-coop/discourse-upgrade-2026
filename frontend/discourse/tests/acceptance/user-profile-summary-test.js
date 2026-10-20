@@ -7,6 +7,7 @@ import selectKit from "discourse/tests/helpers/select-kit-helper";
 import { i18n } from "discourse-i18n";
 
 let deleteAndBlock;
+let deleteData;
 
 acceptance("User Profile - Summary", function (needs) {
   needs.user();
@@ -56,6 +57,30 @@ acceptance("User Profile - Summary", function (needs) {
     );
   });
 });
+
+acceptance(
+  "User Profile - Summary - Anonymous search disabled",
+  function (needs) {
+    needs.site({ can_search: false });
+
+    test("shows category counts without search links", async function (assert) {
+      await visit("/u/eviltrout/summary");
+
+      assert
+        .dom(".top-categories-section tbody .reply-count a")
+        .doesNotExist("does not link reply counts to search");
+      assert
+        .dom(".top-categories-section tbody .topic-count a")
+        .doesNotExist("does not link topic counts to search");
+      assert
+        .dom(".top-categories-section tbody .reply-count")
+        .hasText("1", "keeps the reply count visible");
+      assert
+        .dom(".top-categories-section tbody .topic-count")
+        .hasText("1", "keeps the topic count visible");
+    });
+  }
+);
 
 acceptance("User Profile - Summary - User Status", function (needs) {
   needs.user();
@@ -158,6 +183,7 @@ acceptance("User Profile - Summary - Admin", function (needs) {
     server.delete("/admin/users/5.json", (request) => {
       const data = helper.parsePostData(request.requestBody);
 
+      deleteData = data;
       deleteAndBlock = !!(data.block_email || data.block_ip || data.block_urls);
 
       return helper.response({});
@@ -166,6 +192,7 @@ acceptance("User Profile - Summary - Admin", function (needs) {
 
   needs.hooks.beforeEach(() => {
     deleteAndBlock = null;
+    deleteData = null;
   });
 
   test("Delete only action", async function (assert) {
@@ -197,5 +224,25 @@ acceptance("User Profile - Summary - Admin", function (needs) {
       ".delete-user-modal.delete-and-block .dialog-footer .btn-danger"
     );
     assert.true(deleteAndBlock, "second option also blocks user");
+  });
+
+  test("Delete and block email only", async function (assert) {
+    await visit("/u/charlie/summary");
+
+    const dropdown = selectKit(".btn-delete-user");
+    await dropdown.expand();
+    await dropdown.selectRowByValue("delete_and_block_email");
+
+    await click(
+      ".delete-user-modal.delete-and-block .dialog-footer .btn-danger"
+    );
+
+    assert.strictEqual(deleteData.block_email, "true", "blocks the email");
+    assert.strictEqual(deleteData.block_ip, undefined, "does not block the IP");
+    assert.strictEqual(
+      deleteData.block_urls,
+      undefined,
+      "does not block external URLs"
+    );
   });
 });

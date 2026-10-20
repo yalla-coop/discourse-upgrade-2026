@@ -25,7 +25,7 @@ RSpec.describe "Admin editing objects type" do
 
     before { objects_setting }
 
-    it "should display the right label and description for each property if the label and description has been configured in a locale file" do
+    it "displays property labels and descriptions from the locale file" do
       theme.set_field(
         target: :translations,
         name: "en",
@@ -61,7 +61,7 @@ RSpec.describe "Admin editing objects type" do
       expect(admin_objects_setting_editor_page).to have_setting_field_label("url", "URL")
     end
 
-    it "should allow admin to edit the theme setting of objects type" do
+    it "allows admins to edit an objects theme setting" do
       visit("/admin/customize/themes/#{theme.id}")
 
       expect(admin_customize_themes_page).to have_no_overriden_setting("objects_setting")
@@ -115,6 +115,45 @@ RSpec.describe "Admin editing objects type" do
 
       expect(find(".schema-setting-editor__errors")).to have_text(
         "The property at JSON Pointer '/0/name' must be present. The property at JSON Pointer '/1/name' must be present. The property at JSON Pointer '/1/links/0/name' must be present.",
+      )
+    end
+
+    it "allows an admin to pick an icon for an icon type property" do
+      SiteSetting.svg_icon_subset = "gamepad"
+
+      theme.set_field(target: :settings, name: "yaml", value: <<~YAML)
+        links_setting:
+          type: objects
+          default:
+            - title: link
+              icon: heart
+          schema:
+            name: link
+            properties:
+              title:
+                type: string
+              icon:
+                type: icon
+      YAML
+      theme.save!
+
+      visit("/admin/customize/themes/#{theme.id}")
+
+      admin_objects_theme_setting_editor =
+        admin_customize_themes_page.click_edit_objects_setting_button("links_setting")
+
+      icon_picker = PageObjects::Components::DIconGridPicker.new(".schema-field[data-name='icon']")
+
+      expect(icon_picker).to have_selected_icon("heart")
+
+      icon_picker.expand
+      icon_picker.filter("gamepad")
+      icon_picker.select_icon("gamepad")
+
+      admin_objects_theme_setting_editor.save
+
+      expect(theme.reload.settings[:links_setting].value).to eq(
+        [{ "title" => "link", "icon" => "gamepad" }],
       )
     end
 

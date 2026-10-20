@@ -30,7 +30,6 @@ import DoughnutChart from "./doughnut-chart";
 
 export default class AdminReportSentimentAnalysis extends Component {
   @service router;
-  @service siteSettings;
 
   @tracked selectedChart = null;
   @tracked posts = [];
@@ -46,46 +45,6 @@ export default class AdminReportSentimentAnalysis extends Component {
       .querySelector(`li[data-filter-type="${this.activeFilter}"] button`)
       .classList.add("active");
   });
-
-  clearActiveFilters(element) {
-    const filterButtons = element.querySelectorAll("li button");
-    for (let button of filterButtons) {
-      button.classList.remove("active");
-    }
-  }
-
-  calculateNeutralScore(data) {
-    return data.total_count - (data.positive_count + data.negative_count);
-  }
-
-  sentimentMapping(sentiment) {
-    switch (sentiment) {
-      case "positive":
-        return {
-          id: "positive",
-          text: i18n(
-            "discourse_ai.sentiments.sentiment_analysis.filter_types.positive"
-          ),
-          icon: "face-smile",
-        };
-      case "neutral":
-        return {
-          id: "neutral",
-          text: i18n(
-            "discourse_ai.sentiments.sentiment_analysis.filter_types.neutral"
-          ),
-          icon: "face-meh",
-        };
-      case "negative":
-        return {
-          id: "negative",
-          text: i18n(
-            "discourse_ai.sentiments.sentiment_analysis.filter_types.negative"
-          ),
-          icon: "face-angry",
-        };
-    }
-  }
 
   get groupingType() {
     const dataSample = this.args.model.data[0];
@@ -200,6 +159,46 @@ export default class AdminReportSentimentAnalysis extends Component {
         },
       },
     ];
+  }
+
+  clearActiveFilters(element) {
+    const filterButtons = element.querySelectorAll("li button");
+    for (let button of filterButtons) {
+      button.classList.remove("active");
+    }
+  }
+
+  calculateNeutralScore(data) {
+    return data.total_count - (data.positive_count + data.negative_count);
+  }
+
+  sentimentMapping(sentiment) {
+    switch (sentiment) {
+      case "positive":
+        return {
+          id: "positive",
+          text: i18n(
+            "discourse_ai.sentiments.sentiment_analysis.filter_types.positive"
+          ),
+          icon: "face-smile",
+        };
+      case "neutral":
+        return {
+          id: "neutral",
+          text: i18n(
+            "discourse_ai.sentiments.sentiment_analysis.filter_types.neutral"
+          ),
+          icon: "face-meh",
+        };
+      case "negative":
+        return {
+          id: "negative",
+          text: i18n(
+            "discourse_ai.sentiments.sentiment_analysis.filter_types.negative"
+          ),
+          icon: "face-angry",
+        };
+    }
   }
 
   async postRequest() {
@@ -331,109 +330,55 @@ export default class AdminReportSentimentAnalysis extends Component {
     <span {{didInsert this.openToChart}}></span>
 
     {{#unless this.showingSelectedChart}}
-      {{#if this.siteSettings.reporting_improvements}}
-        <table class="sentiment-analysis-table md-table">
-          <thead>
-            <th>{{this.groupingType}}</th>
-            <th>{{i18n
-                "discourse_ai.sentiments.sentiment_analysis.table.total_count"
-              }}</th>
-            <th>{{i18n
-                "discourse_ai.sentiments.sentiment_analysis.table.sentiment"
-              }}</th>
-          </thead>
+      <table class="sentiment-analysis-table md-table">
+        <thead>
+          <th>{{this.groupingType}}</th>
+          <th>{{i18n
+              "discourse_ai.sentiments.sentiment_analysis.table.total_count"
+            }}</th>
+          <th>{{i18n
+              "discourse_ai.sentiments.sentiment_analysis.table.sentiment"
+            }}</th>
+        </thead>
 
-          <tbody>
-            {{#each this.transformedData as |data|}}
-              <tr
-                class="sentiment-analysis-table__row"
-                role="button"
-                {{on "click" (fn this.showDetails data)}}
-              >
-                <td class="sentiment-analysis-table__title">
-                  {{#if data.category}}
-                    {{dCategoryBadge data.category}}
-                  {{else}}
-                    {{data.title}}
-                  {{/if}}
-                </td>
-                <td
-                  class="sentiment-analysis-table__total-score"
-                >{{data.total_score}}</td>
-                <td class="sentiment-horizontal-bar">
-                  <AiSentimentHorizontalBar
-                    @type="positive"
-                    @score={{data.score_map.positive}}
-                    @width={{data.widths.positive}}
-                  />
-                  <AiSentimentHorizontalBar
-                    @type="negative"
-                    @score={{data.score_map.negative}}
-                    @width={{data.widths.negative}}
-                  />
-                  <AiSentimentHorizontalBar
-                    @type="neutral"
-                    @score={{data.score_map.neutral}}
-                    @width={{data.widths.neutral}}
-                  />
-                </td>
-              </tr>
-            {{/each}}
-          </tbody>
-        </table>
-      {{else}}
-        <div class="admin-report-sentiment-analysis">
-          <table class="sentiment-analysis-table md-table">
-            <thead>
-              <th>{{this.groupingType}}</th>
-              <th>{{i18n
-                  "discourse_ai.sentiments.sentiment_analysis.table.total_count"
-                }}</th>
-              <th>{{i18n
-                  "discourse_ai.sentiments.sentiment_analysis.table.sentiment"
-                }}</th>
-            </thead>
-
-            <tbody>
-              {{#each this.transformedData as |data|}}
-                <tr
-                  class="sentiment-analysis-table__row"
-                  role="button"
-                  {{on "click" (fn this.showDetails data)}}
-                >
-                  <td class="sentiment-analysis-table__title">
-                    {{#if data.category}}
-                      {{dCategoryBadge data.category}}
-                    {{else}}
-                      {{data.title}}
-                    {{/if}}
-                  </td>
-                  <td
-                    class="sentiment-analysis-table__total-score"
-                  >{{data.total_score}}</td>
-                  <td class="sentiment-horizontal-bar">
-                    <AiSentimentHorizontalBar
-                      @type="positive"
-                      @score={{data.score_map.positive}}
-                      @width={{data.widths.positive}}
-                    />
-                    <AiSentimentHorizontalBar
-                      @type="negative"
-                      @score={{data.score_map.negative}}
-                      @width={{data.widths.negative}}
-                    />
-                    <AiSentimentHorizontalBar
-                      @type="neutral"
-                      @score={{data.score_map.neutral}}
-                      @width={{data.widths.neutral}}
-                    />
-                  </td>
-                </tr>
-              {{/each}}
-            </tbody>
-          </table>
-        </div>
-      {{/if}}
+        <tbody>
+          {{#each this.transformedData as |data|}}
+            <tr
+              class="sentiment-analysis-table__row"
+              role="button"
+              {{on "click" (fn this.showDetails data)}}
+            >
+              <td class="sentiment-analysis-table__title">
+                {{#if data.category}}
+                  {{dCategoryBadge data.category}}
+                {{else}}
+                  {{data.title}}
+                {{/if}}
+              </td>
+              <td
+                class="sentiment-analysis-table__total-score"
+              >{{data.total_score}}</td>
+              <td class="sentiment-horizontal-bar">
+                <AiSentimentHorizontalBar
+                  @score={{data.score_map.positive}}
+                  @type="positive"
+                  @width={{data.widths.positive}}
+                />
+                <AiSentimentHorizontalBar
+                  @score={{data.score_map.negative}}
+                  @type="negative"
+                  @width={{data.widths.negative}}
+                />
+                <AiSentimentHorizontalBar
+                  @score={{data.score_map.neutral}}
+                  @type="neutral"
+                  @width={{data.widths.neutral}}
+                />
+              </td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
     {{/unless}}
 
     {{#if (and this.selectedChart this.showingSelectedChart)}}
@@ -441,57 +386,57 @@ export default class AdminReportSentimentAnalysis extends Component {
       <div class="admin-report-sentiment-analysis__selected-chart">
         <div class="admin-report-sentiment-analysis__selected-chart-actions">
           <DButton
-            @label="back_button"
-            @icon="chevron-left"
             class="btn-flat"
             @action={{this.backToAllCharts}}
+            @icon="chevron-left"
+            @label="back_button"
           />
 
           <DTooltip
             class="share btn-flat"
-            @icon={{this.shareIcon}}
-            {{on "click" this.shareChart}}
             @content={{i18n
               "discourse_ai.sentiments.sentiment_analysis.share_chart"
             }}
+            @icon={{this.shareIcon}}
+            {{on "click" this.shareChart}}
           />
         </div>
 
         <DoughnutChart
-          @labels={{@model.labels}}
           @colors={{this.colors}}
           @data={{this.selectedChart.scores}}
-          @totalScore={{this.selectedChart.total_score}}
-          @doughnutTitle={{this.selectedChart.title}}
           @displayLegend={{true}}
+          @doughnutTitle={{this.selectedChart.title}}
+          @labels={{@model.labels}}
+          @totalScore={{this.selectedChart.total_score}}
         />
 
       </div>
       <div class="admin-report-sentiment-analysis-details">
         <DHorizontalOverflowNav
-          {{this.setActiveFilter}}
           class="admin-report-sentiment-analysis-details__filters"
+          {{this.setActiveFilter}}
         >
           {{#each this.postFilters as |filter|}}
             <li data-filter-type={{filter.id}}>
               <DButton
+                class="btn-transparent"
+                @action={{filter.action}}
                 @icon={{filter.icon}}
                 @translatedLabel={{filter.text}}
-                @action={{filter.action}}
-                class="btn-transparent"
               />
             </li>
           {{/each}}
         </DHorizontalOverflowNav>
 
         <PostList
-          @posts={{this.filteredPosts}}
-          @urlPath="url"
-          @idPath="post_id"
-          @titlePath="topic_title"
-          @usernamePath="username"
-          @fetchMorePosts={{this.fetchMorePosts}}
           class="admin-report-sentiment-analysis-details__post-list"
+          @fetchMorePosts={{this.fetchMorePosts}}
+          @idPath="post_id"
+          @posts={{this.filteredPosts}}
+          @titlePath="topic_title"
+          @urlPath="url"
+          @usernamePath="username"
         >
           <:abovePostItemExcerpt as |post|>
             {{#let (this.sentimentMapping post.sentiment) as |sentiment|}}

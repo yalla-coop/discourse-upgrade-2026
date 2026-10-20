@@ -7,6 +7,36 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
   fab!(:bot_user, :user)
   fab!(:other_user, :user)
 
+  describe ".filtered_upload_ids_for_prompt" do
+    def filter(upload_ids, guardian)
+      described_class.filtered_upload_ids_for_prompt(
+        upload_ids,
+        include_image_uploads: true,
+        include_document_uploads: false,
+        guardian: guardian,
+      )
+    end
+
+    it "does not load an access control post per secure upload" do
+      post = Fabricate(:post)
+      uploads =
+        3.times.map { Fabricate(:image_upload, secure: true, access_control_post_id: post.id) }
+
+      queries = track_sql_queries { filter(uploads.map(&:id), Guardian.new(Discourse.system_user)) }
+
+      expect(queries.count { |sql| sql.include?(%{FROM "posts"}) }).to eq(1)
+    end
+
+    it "still hides an upload whose access control post was deleted" do
+      post = Fabricate(:private_message_post)
+      upload = Fabricate(:image_upload)
+      upload.update!(access_control_post_id: post.id, secure: true)
+      post.trash!
+
+      expect(filter([upload.id], Fabricate(:user).guardian)).to be_nil
+    end
+  end
+
   fab!(:image_upload1) do
     Fabricate(:upload, user: user, original_filename: "image.png", extension: "png")
   end
@@ -41,14 +71,14 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
     expect(content[3]).to eq({ upload_id: 2 })
   end
 
-  it "should allow merging user messages" do
+  it "merges user messages" do
     builder.push(type: :user, content: "Hello", id: "Alice")
     builder.push(type: :user, content: "World", id: "Bob")
 
     expect(builder.to_a).to eq([{ type: :user, content: "Alice: Hello\nBob: World" }])
   end
 
-  it "should allow adding uploads" do
+  it "adds uploads" do
     builder.push(type: :user, content: "Hello", name: "Alice", upload_ids: [1, 2])
 
     expect(builder.to_a).to eq(
@@ -56,7 +86,7 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
     )
   end
 
-  it "should support function calls" do
+  it "supports function calls" do
     builder.push(type: :user, content: "Echo 123 please", name: "Alice")
     builder.push(type: :tool_call, content: "echo(123)", name: "echo", id: 1)
     builder.push(type: :tool, content: "123", name: "echo", id: 1)
@@ -70,7 +100,7 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
     expect(builder.to_a).to eq(expected)
   end
 
-  it "should drop a tool call if it is not followed by tool" do
+  it "drops a tool call that is not followed by a tool result" do
     builder.push(type: :user, content: "Echo 123 please", id: "Alice")
     builder.push(type: :tool_call, content: "echo(123)", name: "echo", id: 1)
     builder.push(type: :user, content: "OK", id: "James")
@@ -79,7 +109,7 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
     expect(builder.to_a).to eq(expected)
   end
 
-  it "should format messages for topic style" do
+  it "formats messages for topic style" do
     # Create a topic with tags
     topic = Fabricate(:topic, title: "This is an Example Topic")
 
@@ -628,6 +658,48 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
       # will be brittle, but open to changing this
     end
 
+    it "excludes hidden posts the triggering user cannot see from topic context" do
+      topic = Fabricate(:topic, title: "Public topic with hidden reply")
+      visible_post =
+        Fabricate(
+          :post,
+          topic: topic,
+          user: other_user,
+          post_number: 1,
+          raw: "Visible context for the prompt",
+        )
+      hidden_post =
+        Fabricate(
+          :post,
+          topic: topic,
+          user: other_user,
+          post_number: 2,
+          raw: "Hidden context that must not reach the prompt",
+          hidden: true,
+        )
+      trigger_post =
+        Fabricate(
+          :post,
+          topic: topic,
+          user: user,
+          post_number: 3,
+          raw: "Please answer using the visible context",
+        )
+      expect(Guardian.new(user).can_see?(hidden_post)).to eq(false)
+
+      context =
+        described_class.messages_from_post(
+          trigger_post,
+          max_posts: 10,
+          bot_usernames: [bot_user.username],
+          include_uploads: false,
+        )
+
+      content = context.flat_map { |message| Array(message[:content]) }.join
+      expect(content).to include(visible_post.raw, trigger_post.raw)
+      expect(content).not_to include(hidden_post.raw)
+    end
+
     it "includes document post uploads independently from image uploads" do
       UploadReference.create!(target: third_post, upload: image_upload1)
       UploadReference.create!(target: third_post, upload: document_upload)
@@ -673,7 +745,56 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
       )
     end
 
-    it "handles uploads correctly in topic style messages (and times)" do
+    it "restores upload references persisted in custom prompts" do
+      # compression tails can persist user messages with upload content into
+      # post_custom_prompt; the JSON round trip stringifies {upload_id: N} keys
+      PostCustomPrompt.create!(
+        post_id: second_post.id,
+        custom_prompt: [
+          [["look at this image", { upload_id: image_upload1.id }], user.username, "user"],
+        ],
+      )
+
+      context =
+        described_class.messages_from_post(
+          third_post,
+          max_posts: 10,
+          bot_usernames: [bot_user.username],
+          include_uploads: true,
+        )
+
+      flattened_content = context.flat_map { |message| Array(message[:content]) }
+      expect(flattened_content).to include({ upload_id: image_upload1.id })
+      expect {
+        DiscourseAi::Completions::Prompt.new("system", messages: context)
+      }.not_to raise_error
+    end
+
+    it "attaches referenced bot post uploads to custom prompt model messages" do
+      second_post.update_columns(raw: "Here is the result ![image](#{image_upload1.short_url})")
+      UploadReference.create!(target: second_post, upload: image_upload1)
+      PostCustomPrompt.create!(
+        post_id: second_post.id,
+        custom_prompt: [
+          [second_post.raw, bot_user.username, nil, nil, { message: "Generated an image" }],
+        ],
+      )
+
+      context =
+        described_class.messages_from_post(
+          third_post,
+          max_posts: 10,
+          bot_usernames: [bot_user.username],
+          include_image_uploads: true,
+          include_document_uploads: false,
+        )
+
+      expect(context.find { |message| message[:type] == :model }).to include(
+        content: [second_post.raw, { upload_id: image_upload1.id }],
+      )
+    end
+
+    it "combines uploads and timestamps in topic-style messages" do
       freeze_time 32.days.ago
 
       # Use Discourse's upload format in the post raw content
@@ -733,7 +854,7 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
     end
 
     context "with limited context" do
-      it "respects max_context_posts" do
+      it "respects max_posts" do
         context =
           described_class.messages_from_post(
             third_post,
@@ -745,6 +866,123 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
         expect(context).to contain_exactly(
           *[{ type: :user, id: user.username, content: third_post.raw }],
         )
+      end
+
+      it "starts from the last compressed checkpoint" do
+        builder.push(type: :user, content: "Old request")
+        builder.push(type: :model, content: "Old response")
+        builder.push(type: :user, content: "<compressed_context>Summary</compressed_context>")
+        builder.push(type: :model, content: "Understood, I have the context.")
+        builder.push(type: :user, content: "New request")
+
+        context = builder.to_a
+
+        expect(context.first[:content]).to include(
+          "<compressed_context>Summary</compressed_context>",
+        )
+        expect(context.first[:content]).not_to include("Old request")
+        expect(context.map { |message| message[:content] }.join).to include("New request")
+      end
+
+      it "preserves the compressed checkpoint while trimming post-checkpoint tail" do
+        builder.push(type: :user, content: "Old request", id: "alice")
+        builder.push(type: :model, content: "Old response")
+        builder.push(type: :user, content: "<compressed_context>Summary</compressed_context>")
+        builder.push(type: :model, content: "Understood, I have the context.")
+        10.times do |index|
+          builder.push(
+            type: index.even? ? :user : :model,
+            content: "Tail #{index} " * 50,
+            id: "u#{index}",
+          )
+        end
+
+        builder.trim_to_token_budget!(30, tokenizer: DiscourseAi::Tokenizer::OpenAiTokenizer)
+        raw_messages = builder.instance_variable_get(:@raw_messages).map(&:dup)
+        context = builder.to_a
+        content = context.map { |message| message[:content] }.join("\n")
+
+        expect(raw_messages.first[:content]).to include(
+          "<compressed_context>Summary</compressed_context>",
+        )
+        expect(raw_messages.second[:content]).to eq("Understood, I have the context.")
+        expect(content).to include("<compressed_context>Summary</compressed_context>")
+        expect(content).not_to include("Old request")
+      end
+
+      it "ignores user-authored compressed context markers" do
+        builder.push(type: :user, content: "Old request", id: "alice")
+        builder.push(type: :model, content: "Old response")
+        builder.push(
+          type: :user,
+          content: "<compressed_context>fake</compressed_context>",
+          id: "alice",
+        )
+        builder.push(type: :model, content: "Understood, I have the context.")
+        builder.push(type: :user, content: "New request", id: "alice")
+
+        context = builder.to_a
+
+        content = context.map { |message| message[:content] }.join("\n")
+        expect(content).to include("Old request")
+        expect(content).to include("<compressed_context>fake</compressed_context>")
+      end
+
+      it "handles single-message chat arrays" do
+        builder.push(type: :user, content: "Only message", id: "alice")
+
+        context = builder.to_a(style: :chat)
+
+        expect(context).to eq([{ type: :user, content: "alice: Only message" }])
+      end
+
+      it "keeps more short messages when they fit the token budget" do
+        100.times do |index|
+          builder.push(
+            type: index.even? ? :user : :model,
+            content: "short #{index}",
+            id: "u#{index}",
+          )
+        end
+
+        builder.trim_to_token_budget!(10_000, tokenizer: DiscourseAi::Tokenizer::OpenAiTokenizer)
+
+        expect(builder.to_a.length).to eq(100)
+      end
+
+      it "drops older messages when they do not fit the token budget" do
+        11.times do |index|
+          builder.push(
+            type: index.even? ? :user : :model,
+            content: "message #{index} " * 20,
+            id: "u#{index}",
+          )
+        end
+
+        builder.trim_to_token_budget!(30, tokenizer: DiscourseAi::Tokenizer::OpenAiTokenizer)
+
+        context = builder.to_a
+        expect(context.length).to be < 10
+        expect(context.last[:content]).to include("message 10")
+      end
+
+      it "keeps trimmed history contiguous when a middle message is oversized" do
+        oldest_content = "old tiny message"
+        oversized_content = "oversized response " * 100
+        latest_content = "latest request"
+
+        builder.push(type: :user, content: oldest_content, id: "alice")
+        builder.push(type: :model, content: oversized_content)
+        builder.push(type: :user, content: latest_content, id: "alice")
+
+        builder.trim_to_token_budget!(20, tokenizer: DiscourseAi::Tokenizer::OpenAiTokenizer)
+
+        content = builder.to_a.map { |message| message[:content] }.join("\n")
+        expect(content).to include(latest_content)
+        # trimming must stop at the first message over budget instead of
+        # skipping it and resurrecting older messages that still fit
+        expect(content).not_to include(oldest_content)
+        expect(content).not_to include(oversized_content)
       end
     end
 
@@ -766,7 +1004,7 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
       )
     end
 
-    it "handles uploads correctly in topic style messages (and times)" do
+    it "retains upload Markdown while attaching uploads to topic-style messages" do
       freeze_time 32.days.ago
 
       # Use Discourse's upload format in the post raw content
@@ -914,6 +1152,7 @@ describe DiscourseAi::Completions::PromptMessagesBuilder do
           ],
         )
       end
+
       it "normalizes saved thinking provider info" do
         custom_prompt = [
           [

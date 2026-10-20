@@ -1,15 +1,18 @@
 import Component from "@glimmer/component";
-import { action } from "@ember/object";
 import didInsert from "@ember/render-modifiers/modifiers/did-insert";
 import didUpdate from "@ember/render-modifiers/modifiers/did-update";
+import { buildLegendIcon, dimColor } from "discourse/lib/chart-legend-icon";
 import { bind } from "discourse/lib/decorators";
 import loadChartJS from "discourse/lib/load-chart-js";
+import { remToPx } from "discourse/lib/rem-to-px";
 import I18n, { i18n } from "discourse-i18n";
 import { formatChartDateLabel, SERIES_COLORS } from "../lib/chart-helpers";
 import themeColor from "../lib/themeColor";
 
 export default class DataExplorerChart extends Component {
   chart;
+
+  #latestInit;
 
   willDestroy() {
     super.willDestroy(...arguments);
@@ -25,6 +28,19 @@ export default class DataExplorerChart extends Component {
     }
 
     return this._buildSingleSeriesConfig(gridColor, labelColor);
+  }
+
+  @bind
+  async initChart(canvas) {
+    const call = (this.#latestInit = {});
+    const Chart = await loadChartJS();
+
+    if (call !== this.#latestInit || this.isDestroying) {
+      return;
+    }
+
+    this.chart?.destroy();
+    this.chart = new Chart(canvas.getContext("2d"), this.config);
   }
 
   _buildSingleSeriesConfig(gridColor, labelColor) {
@@ -178,7 +194,26 @@ export default class DataExplorerChart extends Component {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: true, position: "bottom" },
+          legend: {
+            display: true,
+            position: "bottom",
+            labels: {
+              usePointStyle: true,
+              padding: remToPx(1),
+              font: { size: remToPx(0.75) },
+              generateLabels: (chart) =>
+                chart.data.datasets.map((dataset, i) => {
+                  const isVisible = chart.isDatasetVisible(i);
+                  return {
+                    text: dataset.label,
+                    fontColor: isVisible ? labelColor : dimColor(labelColor),
+                    hidden: false,
+                    datasetIndex: i,
+                    pointStyle: buildLegendIcon(dataset.borderColor, isVisible),
+                  };
+                }),
+            },
+          },
           tooltip: this._multiSeriesTooltipOptions(stacked),
         },
         scales,
@@ -214,26 +249,11 @@ export default class DataExplorerChart extends Component {
     };
   }
 
-  @bind
-  async initChart(canvas) {
-    const Chart = await loadChartJS();
-    const context = canvas.getContext("2d");
-    this.chart = new Chart(context, this.config);
-  }
-
-  @action
-  updateChartData(canvas) {
-    if (this.chart) {
-      this.chart.destroy();
-    }
-    this.initChart(canvas);
-  }
-
   <template>
     <canvas
       {{didInsert this.initChart}}
       {{didUpdate
-        this.updateChartData
+        this.initChart
         @labels
         @datasets
         @chartType

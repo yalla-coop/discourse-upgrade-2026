@@ -2,19 +2,18 @@ import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { Input } from "@ember/component";
 import { action } from "@ember/object";
-import DCalendarDateTimeInput from "discourse/ui-kit/d-calendar-date-time-input";
 import DDatePicker from "discourse/ui-kit/d-date-picker";
 import StyleguideComponent from "discourse/plugins/styleguide/discourse/components/styleguide/component";
 import Controls from "discourse/plugins/styleguide/discourse/components/styleguide/controls";
 import Row from "discourse/plugins/styleguide/discourse/components/styleguide/controls/row";
 import StyleguideExample from "discourse/plugins/styleguide/discourse/components/styleguide-example";
+import CalendarDateTimeInputExample from "../examples/atoms/date-time-inputs/calendar-date-time-input";
+import calendarDateTimeInputSource from "../examples/atoms/date-time-inputs/calendar-date-time-input?source=file";
 
 export default class StyleguideCalendarDateTimeInput extends Component {
   @tracked date = null;
   @tracked time = null;
   @tracked minDate = null;
-  dateFormat = "YYYY-MM-DD";
-  timeFormat = "HH:mm:ss";
 
   @action
   changeDate(date) {
@@ -26,36 +25,18 @@ export default class StyleguideCalendarDateTimeInput extends Component {
     this.time = time;
   }
 
-  get calendarDateTimeInputCode() {
-    return `
-import CalendarDateTimeInput from "discourse/components/calendar-date-time-input";
-
-<template>
-  <CalendarDateTimeInput
-    @datePickerId="styleguide"
-    @date={{this.date}}
-    @time={{this.time}}
-    @minDate={{this.minDate}}
-  />
-</template>
-    `;
-  }
-
   <template>
     <StyleguideExample
+      @code={{calendarDateTimeInputSource}}
       @title="CalendarDateTimeInput"
-      @code={{this.calendarDateTimeInputCode}}
     >
       <StyleguideComponent>
-        <DCalendarDateTimeInput
-          @datePickerId="styleguide"
+        <CalendarDateTimeInputExample
           @date={{this.date}}
-          @time={{this.time}}
           @minDate={{this.minDate}}
-          @timeFormat={{this.timeFormat}}
-          @dateFormat={{this.dateFormat}}
           @onChangeDate={{this.changeDate}}
           @onChangeTime={{this.changeTime}}
+          @time={{this.time}}
         />
       </StyleguideComponent>
 
@@ -70,11 +51,11 @@ import CalendarDateTimeInput from "discourse/components/calendar-date-time-input
 
         <Row @name="Time">
           <Input
+            class="time-picker"
             maxlength={{5}}
             placeholder="hh:mm"
             @type="time"
             @value={{this.time}}
-            class="time-picker"
           />
         </Row>
       </Controls>

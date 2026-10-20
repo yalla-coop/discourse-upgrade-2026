@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 class UserOption < ActiveRecord::Base
+  MAX_HIDDEN_COMPOSER_TOOLBAR_BUTTONS = 50
+  MAX_HIDDEN_COMPOSER_TOOLBAR_BUTTON_LENGTH = 100
+
   AUTO_MODE = 1
   LIGHT_MODE = 2
   DARK_MODE = 3
@@ -19,6 +22,17 @@ class UserOption < ActiveRecord::Base
 
   self.ignored_columns = [
     "enable_experimental_sidebar", # TODO: Remove when 20250804021210_drop_enable_experimental_sidebar_user_option has been promoted to pre-deploy
+    "only_chat_push_notifications", # TODO(2027-01): replaced by push_notification_level; drop the column in a follow-up PR once this has shipped
+    "chat_send_shortcut", # TODO(2027-01): replaced by send_shortcut; drop the column in a follow-up PR once this has shipped
+    "enable_defer", # TODO(2027-02): the preference was removed; drop the column in a follow-up PR once this has shipped
+    "topics_unread_when_closed", # TODO: Remove when 20260826124054_drop_topics_unread_when_closed_from_user_options has been promoted to pre-deploy
+  ]
+  # TODO: remove after 20260824051214_drop_ai_search_discovery_preferences_from_user_options has been promoted
+  self.ignored_columns += %w[
+    ai_search_discoveries_mode
+    ai_search_discoveries_show_summary
+    ai_search_discoveries_summary_detail
+    ai_search_discoveries_related_count
   ]
 
   self.primary_key = :user_id
@@ -30,7 +44,11 @@ class UserOption < ActiveRecord::Base
 
   scope :human_users, -> { where("user_id > 0") }
 
-  enum :default_calendar, { none_selected: 0, ics: 1, google: 2 }, scopes: false
+  enum :default_calendar,
+       { none_selected: 0, ics: 1, google: 2, outlook: 3, apple: 4 },
+       scopes: false
+  enum :push_notification_level, { none: 0, all: 1, chat_only: 2 }, prefix: true, scopes: false
+  enum :send_shortcut, { enter: 0, meta_enter: 1 }, prefix: true, scopes: false
 
   def self.ensure_consistency!
     sql = <<~SQL
@@ -71,6 +89,9 @@ class UserOption < ActiveRecord::Base
   validates :email_level, inclusion: { in: UserOption.email_level_types.values }
   validates :email_messages_level, inclusion: { in: UserOption.email_level_types.values }
   validates :timezone, timezone: true
+  validate :understood_languages_are_supported, if: :will_save_change_to_understood_languages?
+  validate :hidden_composer_toolbar_buttons_are_bounded,
+           if: :will_save_change_to_hidden_composer_toolbar_buttons?
 
   def set_defaults
     self.mailing_list_mode = SiteSetting.default_email_mailing_list_mode
@@ -83,7 +104,6 @@ class UserOption < ActiveRecord::Base
 
     self.enable_quoting = SiteSetting.default_other_enable_quoting
     self.enable_smart_lists = SiteSetting.default_other_enable_smart_lists
-    self.enable_defer = SiteSetting.default_other_enable_defer
     self.enable_markdown_monospace_font = SiteSetting.default_other_enable_markdown_monospace_font
     self.external_links_in_new_tab = SiteSetting.default_other_external_links_in_new_tab
     self.dynamic_favicon = SiteSetting.default_other_dynamic_favicon
@@ -244,6 +264,23 @@ class UserOption < ActiveRecord::Base
 
   private
 
+  def hidden_composer_toolbar_buttons_are_bounded
+    values = hidden_composer_toolbar_buttons
+
+    if values.size > MAX_HIDDEN_COMPOSER_TOOLBAR_BUTTONS ||
+         values.any? { |id| id.to_s.size > MAX_HIDDEN_COMPOSER_TOOLBAR_BUTTON_LENGTH }
+      errors.add(:hidden_composer_toolbar_buttons, :invalid)
+    end
+  end
+
+  def understood_languages_are_supported
+    if understood_languages.all? { |locale| LocaleSiteSetting.supported_locales.include?(locale) }
+      return
+    end
+
+    errors.add(:understood_languages, :invalid)
+  end
+
   def update_hide_profile_and_presence
     if hide_profile_changed? || hide_presence_changed?
       self.hide_profile_and_presence = hide_profile || hide_presence
@@ -263,18 +300,27 @@ end
 #
 # Table name: user_options
 #
+#  ai_ask_ai_default                              :boolean          default(TRUE), not null
 #  ai_search_discoveries                          :boolean          default(TRUE), not null
 #  allow_private_messages                         :boolean          default(TRUE), not null
 #  auto_image_caption                             :boolean          default(FALSE), not null
 #  auto_track_topics_after_msecs                  :integer
+#  automatically_translate                        :boolean          default(TRUE), not null
 #  automatically_unpin_topics                     :boolean          default(TRUE), not null
 #  bookmark_auto_delete_preference                :integer          default(3), not null
+#  chat_announce_new_messages                     :boolean          default(TRUE), not null
+#  chat_channel_list_filter                       :integer          default("all"), not null
+#  chat_channel_list_filter_dms                   :integer          default("all"), not null
+#  chat_channel_list_filter_starred               :integer          default("all"), not null
+#  chat_channel_list_sort                         :integer          default("alphabetical"), not null
+#  chat_channel_list_sort_dms                     :integer          default("priority"), not null
+#  chat_channel_list_sort_starred                 :integer          default("alphabetical"), not null
 #  chat_email_frequency                           :integer          default("when_away"), not null
 #  chat_enabled                                   :boolean          default(TRUE), not null
 #  chat_header_indicator_preference               :integer          default("all_new"), not null
+#  chat_new_message_sound                         :boolean          default(FALSE), not null
 #  chat_quick_reaction_type                       :integer          default("frequent"), not null
 #  chat_quick_reactions_custom                    :string
-#  chat_send_shortcut                             :integer          default("enter"), not null
 #  chat_separate_sidebar_mode                     :integer          default("default"), not null
 #  chat_sound                                     :string
 #  composition_mode                               :integer          default(1), not null
@@ -292,12 +338,13 @@ end
 #  email_messages_level                           :integer          default(0), not null
 #  email_previous_replies                         :integer          default(2), not null
 #  enable_allowed_pm_users                        :boolean          default(FALSE), not null
-#  enable_defer                                   :boolean          default(FALSE), not null
 #  enable_markdown_monospace_font                 :boolean          default(TRUE), not null
 #  enable_quoting                                 :boolean          default(TRUE), not null
 #  enable_smart_lists                             :boolean          default(TRUE), not null
 #  enable_upcoming_change_available_notifications :boolean          default(TRUE), not null
+#  event_reminder_preference                      :integer          default("personal_message"), not null
 #  external_links_in_new_tab                      :boolean          default(FALSE), not null
+#  hidden_composer_toolbar_buttons                :string           default([]), not null, is an Array
 #  hide_presence                                  :boolean          default(FALSE), not null
 #  hide_profile                                   :boolean          default(FALSE), not null
 #  hide_profile_and_presence                      :boolean          default(FALSE), not null
@@ -314,9 +361,10 @@ end
 #  notify_on_linked_posts                         :boolean          default(TRUE), not null
 #  notify_on_solved                               :boolean          default(TRUE), not null
 #  oldest_search_log_date                         :datetime
-#  only_chat_push_notifications                   :boolean
 #  policy_email_frequency                         :integer          default("never"), not null
+#  push_notification_level                        :integer          default("all"), not null
 #  seen_popups                                    :integer          is an Array
+#  send_shortcut                                  :integer          default("enter"), not null
 #  show_original_content                          :boolean          default(FALSE), not null
 #  show_thread_title_prompts                      :boolean          default(TRUE), not null
 #  sidebar_link_to_filtered_list                  :boolean          default(FALSE), not null
@@ -328,7 +376,7 @@ end
 #  theme_key_seq                                  :integer          default(0), not null
 #  timezone                                       :string
 #  title_count_mode_key                           :integer          default(0), not null
-#  topics_unread_when_closed                      :boolean          default(TRUE), not null
+#  understood_languages                           :string           default([]), not null, is an Array
 #  watched_precedence_over_muted                  :boolean          default(FALSE), not null
 #  color_scheme_id                                :integer
 #  dark_scheme_id                                 :integer

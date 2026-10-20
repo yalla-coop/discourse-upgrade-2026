@@ -203,6 +203,122 @@ describe OpenIDConnectAuthenticator do
     end
   end
 
+  describe "#required_settings" do
+    it "requires a client secret by default" do
+      expect(authenticator.required_settings).to contain_exactly(
+        :openid_connect_discovery_document,
+        :openid_connect_client_id,
+        :openid_connect_client_secret,
+      )
+    end
+
+    it "does not require a client secret when using PKCE" do
+      SiteSetting.openid_connect_use_pkce = true
+      expect(authenticator.required_settings).not_to include(:openid_connect_client_secret)
+    end
+
+    it "does not require a client secret when using mTLS" do
+      SiteSetting.openid_connect_mtls_client_cert = "cert-pem"
+      SiteSetting.openid_connect_mtls_client_key = "key-pem"
+      expect(authenticator.required_settings).not_to include(:openid_connect_client_secret)
+    end
+
+    it "requires a client secret when only half of the mTLS pair is set" do
+      SiteSetting.openid_connect_mtls_client_cert = "cert-pem"
+      expect(authenticator.required_settings).to include(:openid_connect_client_secret)
+    end
+  end
+
+  describe "enabling the plugin" do
+    before do
+      SiteSetting.openid_connect_discovery_document =
+        "https://id.example.com/.well-known/openid-configuration"
+      SiteSetting.openid_connect_client_id = "my-client-id"
+    end
+
+    it "is refused while credentials are missing" do
+      expect { SiteSetting.openid_connect_enabled = true }.to raise_error(
+        Discourse::InvalidHTMLParameters,
+      )
+    end
+
+    it "is allowed once credentials are set" do
+      SiteSetting.openid_connect_client_secret = "my-client-secret"
+      SiteSetting.openid_connect_enabled = true
+      expect(authenticator.enabled?).to eq(true)
+    end
+
+    it "is allowed without a client secret when using PKCE" do
+      SiteSetting.openid_connect_use_pkce = true
+      SiteSetting.openid_connect_enabled = true
+      expect(authenticator.enabled?).to eq(true)
+    end
+  end
+
+  describe "mTLS support" do
+    let!(:mtls_key) { OpenSSL::PKey::RSA.new(2048) }
+    let!(:mtls_cert) do
+      cert = OpenSSL::X509::Certificate.new
+      cert.subject = OpenSSL::X509::Name.parse("/CN=test")
+      cert.issuer = cert.subject
+      cert.not_before = Time.now
+      cert.not_after = Time.now + 365 * 86_400
+      cert.public_key = mtls_key.public_key
+      cert.sign(mtls_key, OpenSSL::Digest.new("SHA256"))
+      cert
+    end
+
+    it "returns empty hash when no mTLS settings are configured" do
+      SiteSetting.openid_connect_mtls_client_cert = ""
+      SiteSetting.openid_connect_mtls_client_key = ""
+      expect(authenticator.mtls_ssl_options).to eq({})
+    end
+
+    it "parses valid PEM certificate and key" do
+      SiteSetting.openid_connect_mtls_client_cert = mtls_cert.to_pem
+      SiteSetting.openid_connect_mtls_client_key = mtls_key.to_pem
+
+      result = authenticator.mtls_ssl_options
+      expect(result[:client_cert]).to be_a(OpenSSL::X509::Certificate)
+      expect(result[:client_key]).to be_a(OpenSSL::PKey::RSA)
+    end
+
+    it "raises OpenSSL error for invalid cert PEM" do
+      SiteSetting.openid_connect_mtls_client_cert = "not-a-cert"
+      SiteSetting.openid_connect_mtls_client_key = mtls_key.to_pem
+      Rails.logger.expects(:error).with(includes("Failed to parse mTLS"))
+      expect { authenticator.mtls_ssl_options }.to raise_error(OpenSSL::OpenSSLError)
+    end
+
+    it "raises OpenSSL error for invalid key PEM" do
+      SiteSetting.openid_connect_mtls_client_cert = mtls_cert.to_pem
+      SiteSetting.openid_connect_mtls_client_key = "not-a-key"
+      Rails.logger.expects(:error).with(includes("Failed to parse mTLS"))
+      expect { authenticator.mtls_ssl_options }.to raise_error(OpenSSL::OpenSSLError)
+    end
+
+    it "decrypts a key with a passcode when the setting is provided" do
+      encrypted_key = mtls_key.export(OpenSSL::Cipher.new("aes-256-cbc"), "some_passphrase")
+
+      SiteSetting.openid_connect_mtls_client_cert = mtls_cert.to_pem
+      SiteSetting.openid_connect_mtls_client_key = encrypted_key
+      SiteSetting.openid_connect_mtls_client_key_passcode = "some_passphrase"
+
+      result = authenticator.mtls_ssl_options
+      expect(result[:client_key]).to be_a(OpenSSL::PKey::RSA)
+    end
+
+    it "raises OpenSSL error when the passphrase is wrong" do
+      encrypted_key = mtls_key.export(OpenSSL::Cipher.new("aes-256-cbc"), "some_passphrase")
+
+      SiteSetting.openid_connect_mtls_client_key = encrypted_key
+      SiteSetting.openid_connect_mtls_client_key_passcode = "wrong_passphrase"
+      SiteSetting.openid_connect_mtls_client_cert = mtls_cert.to_pem
+      Rails.logger.expects(:error).with(includes("Failed to parse mTLS"))
+      expect { authenticator.mtls_ssl_options }.to raise_error(OpenSSL::OpenSSLError)
+    end
+  end
+
   describe "discovery document fetching" do
     let(:document_url) do
       SiteSetting.openid_connect_discovery_document =
@@ -216,6 +332,7 @@ describe OpenIDConnectAuthenticator do
         userinfo_endpoint: "https://id.example.com/userinfo",
       }.to_json
     end
+
     after { Discourse.cache.delete("openid-connect-discovery-#{document_url}") }
 
     it "loads the document correctly" do

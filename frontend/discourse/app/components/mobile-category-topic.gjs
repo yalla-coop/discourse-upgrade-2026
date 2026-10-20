@@ -4,35 +4,16 @@ import { classNameBindings, tagName } from "@ember-decorators/component";
 import PostCountOrBadges from "discourse/components/topic-list/post-count-or-badges";
 import TopicStatus from "discourse/components/topic-status";
 import coldAgeClass from "discourse/helpers/cold-age-class";
-import domUtils from "discourse/lib/dom-utils";
 import dAgeWithTooltip from "discourse/ui-kit/helpers/d-age-with-tooltip";
 import dTopicLink from "discourse/ui-kit/helpers/d-topic-link";
-
-export function showEntrance(e) {
-  let target = e.target;
-
-  if (target.closest(".posts-map")) {
-    if (target.tagName !== "A") {
-      target = target.querySelector("a") || target;
-    }
-
-    this.appEvents.trigger("topic-entrance:show", {
-      topic: this.topic,
-      position: domUtils.offset(target),
-    });
-    return false;
-  }
-}
 
 @tagName("tr")
 @classNameBindings(":category-topic-link", "topic.archived", "topic.visited")
 export default class MobileCategoryTopic extends Component {
-  click = showEntrance;
-
   <template>
     <td class="main-link">
       <div class="topic-inset">
-        <TopicStatus @topic={{this.topic}} @disableActions={{true}} />
+        <TopicStatus @disableActions={{true}} @topic={{this.topic}} />
         {{dTopicLink this.topic}}
         {{#if this.topic.unseen}}
           <span class="badge-notification new-topic"></span>
@@ -43,7 +24,7 @@ export default class MobileCategoryTopic extends Component {
       </div>
     </td>
     <td class="num posts">
-      <PostCountOrBadges @topic={{this.topic}} @postBadgesEnabled={{true}} />
+      <PostCountOrBadges @postBadgesEnabled={{true}} @topic={{this.topic}} />
     </td>
   </template>
 }

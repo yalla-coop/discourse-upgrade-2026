@@ -1,10 +1,13 @@
 import Component from "@glimmer/component";
 import { concat, hash } from "@ember/helper";
 import { LinkTo } from "@ember/routing";
+import { service } from "@ember/service";
 import AdminReportStackedChart from "discourse/admin/components/admin-report-stacked-chart";
 import DashboardSection from "discourse/admin/components/dashboard/section";
 import { countryFlag, countryName } from "discourse/admin/lib/format-country";
 import DTooltip from "discourse/float-kit/components/d-tooltip";
+import { formatMinutesSeconds } from "discourse/lib/formatter";
+import getURL from "discourse/lib/get-url";
 import { or } from "discourse/truth-helpers";
 import dIcon from "discourse/ui-kit/helpers/d-icon";
 import I18n, { i18n } from "discourse-i18n";
@@ -28,10 +31,13 @@ const PERIOD_COPY_KEYS = {
 };
 
 export default class DashboardTraffic extends Component {
+  @service currentUser;
+  @service siteSettings;
+
   hiddenLabels = ["page_view_crawler"];
 
   get browserPageviews() {
-    return this.args.traffic?.kpis?.browser_pageviews?.value ?? 0;
+    return this.#kpiValue("browser_pageviews") ?? 0;
   }
 
   get headlineCount() {
@@ -87,21 +93,45 @@ export default class DashboardTraffic extends Component {
   }
 
   get showLoggedInShare() {
-    const loggedInShare = this.args.traffic?.kpis?.logged_in_share?.value;
-    return loggedInShare !== null && loggedInShare !== undefined;
+    return this.#kpiValue("logged_in_share") != null;
   }
 
   get loggedInShare() {
-    return `${this.args.traffic?.kpis?.logged_in_share?.value ?? 0}%`;
+    return `${this.#kpiValue("logged_in_share") ?? 0}%`;
   }
 
   get showDirectTraffic() {
-    const directTraffic = this.args.traffic?.kpis?.direct_traffic?.value;
-    return directTraffic !== null && directTraffic !== undefined;
+    return this.#kpiValue("direct_traffic") != null;
   }
 
   get directTraffic() {
-    return `${this.args.traffic?.kpis?.direct_traffic?.value ?? 0}%`;
+    return `${this.#kpiValue("direct_traffic") ?? 0}%`;
+  }
+
+  get showSessionMetrics() {
+    return this.#kpiValue("bounce_rate") !== undefined;
+  }
+
+  get showMetrics() {
+    return (
+      this.showLoggedInShare ||
+      this.showDirectTraffic ||
+      this.showSessionMetrics
+    );
+  }
+
+  get sessionMetricsEmpty() {
+    return this.#kpiValue("bounce_rate") == null;
+  }
+
+  get bounceRate() {
+    const value = this.#kpiValue("bounce_rate");
+    return value == null ? "—" : `${value}%`;
+  }
+
+  get averageSessionDuration() {
+    const value = this.#kpiValue("average_session_duration_seconds");
+    return value == null ? "—" : formatMinutesSeconds(value);
   }
 
   get chartModel() {
@@ -126,6 +156,18 @@ export default class DashboardTraffic extends Component {
     };
   }
 
+  get explorerQuery() {
+    if (this.args.period === "custom") {
+      return { range: this.args.period, ...this.reportQuery };
+    }
+
+    return { range: this.args.period };
+  }
+
+  get showTrafficExplorerLink() {
+    return this.currentUser.admin && !this.siteSettings.use_legacy_pageviews;
+  }
+
   formatHeadlineCount(value) {
     if (value >= 1_000_000) {
       const formatted = I18n.toNumber(value / 1_000_000, { precision: 1 });
@@ -142,6 +184,10 @@ export default class DashboardTraffic extends Component {
   formatTrendPercent(value) {
     const precision = value < 1 ? 1 : 0;
     return `${I18n.toNumber(value, { precision })}%`;
+  }
+
+  #kpiValue(key) {
+    return this.args.traffic?.kpis?.[key]?.value;
   }
 
   #dateFrom(value) {
@@ -202,10 +248,10 @@ export default class DashboardTraffic extends Component {
 
   <template>
     <DashboardSection
-      @title={{i18n "admin.dashboard.sections.traffic.title"}}
-      @startDate={{@startDate}}
-      @endDate={{@endDate}}
       ...attributes
+      @endDate={{@endDate}}
+      @startDate={{@startDate}}
+      @title={{i18n "admin.dashboard.sections.traffic.title"}}
     >
       <div class="db-traffic {{if @loading 'is-loading'}}">
         <div class="db-section__subheader">
@@ -219,21 +265,16 @@ export default class DashboardTraffic extends Component {
                 </span>
                 <DTooltip
                   class="db-section__info"
-                  @identifier="site-traffic-comparison-tooltip"
                   @icon="far-circle-question"
+                  @identifier="site-traffic-comparison-tooltip"
                 >
                   <:content>{{this.comparisonTooltipText}}</:content>
                 </DTooltip>
               {{/if}}
             </h3>
-            {{! <p>
-              Placeholder: Logged-in traffic is growing steadily. Two spikes on
-              Mar 8-9 drove a burst of anonymous visitors who didn't log in,
-              pulling the logged-in share down slightly to 38%.
-            </p> }}
           </div>
 
-          {{#if (or this.showLoggedInShare this.showDirectTraffic)}}
+          {{#if this.showMetrics}}
             <div class="db-section__metrics">
               {{#if this.showLoggedInShare}}
                 <div class="db-section__metric">
@@ -246,8 +287,8 @@ export default class DashboardTraffic extends Component {
                     }}
                     <DTooltip
                       class="db-section__info"
-                      @identifier="site-traffic-logged-in-share-tooltip"
                       @icon="far-circle-question"
+                      @identifier="site-traffic-logged-in-share-tooltip"
                     >
                       <:content>
                         {{i18n
@@ -270,8 +311,8 @@ export default class DashboardTraffic extends Component {
                     }}
                     <DTooltip
                       class="db-section__info"
-                      @identifier="site-traffic-direct-traffic-tooltip"
                       @icon="far-circle-question"
+                      @identifier="site-traffic-direct-traffic-tooltip"
                     >
                       <:content>
                         {{i18n
@@ -282,14 +323,70 @@ export default class DashboardTraffic extends Component {
                   </div>
                 </div>
               {{/if}}
+
+              {{#if this.showSessionMetrics}}
+                <div class="db-section__metric" data-test-kpi="bounce_rate">
+                  <div
+                    class="db-section__metric-number"
+                  >{{this.bounceRate}}</div>
+                  <div class="db-section__metric-label">
+                    {{i18n
+                      "admin.dashboard.site_traffic.kpi.bounce_rate.label"
+                    }}
+                    <DTooltip
+                      class="db-section__info"
+                      @icon="far-circle-question"
+                      @identifier="site-traffic-bounce-rate-tooltip"
+                    >
+                      <:content>
+                        {{#if this.sessionMetricsEmpty}}
+                          {{i18n
+                            "admin.dashboard.site_traffic.kpi.session_metrics.empty_tooltip"
+                          }}
+                        {{else}}
+                          {{i18n
+                            "admin.dashboard.site_traffic.kpi.bounce_rate.tooltip"
+                          }}
+                        {{/if}}
+                      </:content>
+                    </DTooltip>
+                  </div>
+                </div>
+
+                <div
+                  class="db-section__metric"
+                  data-test-kpi="average_session_duration"
+                >
+                  <div
+                    class="db-section__metric-number"
+                  >{{this.averageSessionDuration}}</div>
+                  <div class="db-section__metric-label">
+                    {{i18n
+                      "admin.dashboard.site_traffic.kpi.average_session_duration.label"
+                    }}
+                    <DTooltip
+                      class="db-section__info"
+                      @icon="far-circle-question"
+                      @identifier="site-traffic-average-session-duration-tooltip"
+                    >
+                      <:content>
+                        {{#if this.sessionMetricsEmpty}}
+                          {{i18n
+                            "admin.dashboard.site_traffic.kpi.session_metrics.empty_tooltip"
+                          }}
+                        {{else}}
+                          {{i18n
+                            "admin.dashboard.site_traffic.kpi.average_session_duration.tooltip"
+                          }}
+                        {{/if}}
+                      </:content>
+                    </DTooltip>
+                  </div>
+                </div>
+              {{/if}}
             </div>
           {{/if}}
         </div>
-
-        {{! <div class="db-section__callout">
-          Placeholder: Spikes on Mar 8 and Mar 9 - a Hacker News post linking to
-          the plugin release docs drove a surge in anonymous pageviews.
-        </div> }}
 
         {{#if @fetchError}}
           <div class="db-section__traffic-chart">
@@ -300,23 +397,34 @@ export default class DashboardTraffic extends Component {
         {{else if @traffic}}
           <div class="db-section__traffic-chart">
             <AdminReportStackedChart
+              class="db-section__traffic-chart-canvas"
               @model={{this.chartModel}}
               @options={{this.chartOptions}}
-              class="db-section__traffic-chart-canvas"
             />
           </div>
-          <LinkTo
-            class="db-traffic__see-details"
-            @route="adminReports.show"
-            @model="site_traffic"
-            @query={{hash
-              start_date=this.reportQuery.start_date
-              end_date=this.reportQuery.end_date
-            }}
-          >
-            {{i18n "admin.dashboard.site_traffic.see_details"}}
-            {{dIcon "arrow-right"}}
-          </LinkTo>
+          {{#if this.showTrafficExplorerLink}}
+            <LinkTo
+              class="db-traffic__see-details"
+              @query={{this.explorerQuery}}
+              @route="adminSiteTraffic"
+            >
+              {{i18n "admin.dashboard.site_traffic.see_details"}}
+              {{dIcon "arrow-right"}}
+            </LinkTo>
+          {{else}}
+            <LinkTo
+              class="db-traffic__see-details"
+              @model="site_traffic"
+              @query={{hash
+                start_date=this.reportQuery.start_date
+                end_date=this.reportQuery.end_date
+              }}
+              @route="adminReports.show"
+            >
+              {{i18n "admin.dashboard.site_traffic.see_details"}}
+              {{dIcon "arrow-right"}}
+            </LinkTo>
+          {{/if}}
         {{else}}
           <div class="db-section__traffic-chart">
             <div class="db-section__traffic-chart-shell"></div>
@@ -325,22 +433,28 @@ export default class DashboardTraffic extends Component {
 
         {{#unless @fetchError}}
           {{#if @traffic}}
-            {{#if (or @traffic.top_countries @traffic.top_referrers)}}
+            {{#if
+              (or
+                @traffic.top_countries
+                @traffic.top_referrers
+                @traffic.top_entry_urls
+              )
+            }}
               <div class="db-section__row">
                 <div class="db-section__row-block">
                   <h3 class="db-section__row-block-title">
                     <LinkTo
-                      @route="adminReports.show"
                       @model="top_referrers_by_browser_pageviews"
                       @query={{hash
                         start_date=this.reportQuery.start_date
                         end_date=this.reportQuery.end_date
                       }}
+                      @route="adminReports.show"
                     >
                       {{i18n
                         "admin.dashboard.site_traffic.top_referrers.title"
                       }}
-                      <span class="db-link-arrow" aria-hidden="true">
+                      <span aria-hidden="true" class="db-link-arrow">
                         {{dIcon "arrow-right"}}
                       </span>
                     </LinkTo>
@@ -360,8 +474,11 @@ export default class DashboardTraffic extends Component {
                             href={{concat "https://" row.normalized_referrer}}
                             rel="noopener noreferrer nofollow ugc"
                             target="_blank"
+                            title={{row.normalized_referrer}}
                           >
-                            {{row.normalized_referrer}}
+                            <span class="db-traffic__label">
+                              {{row.normalized_referrer}}
+                            </span>
                           </a>
                           <span class="db-traffic__metric">
                             <span class="db-traffic__percent">
@@ -383,20 +500,80 @@ export default class DashboardTraffic extends Component {
                   {{/if}}
                 </div>
 
+                {{#if @traffic.top_entry_urls}}
+                  <div class="db-section__row-block">
+                    <h3 class="db-section__row-block-title">
+                      <LinkTo
+                        @model="top_entry_urls"
+                        @query={{hash
+                          start_date=this.reportQuery.start_date
+                          end_date=this.reportQuery.end_date
+                        }}
+                        @route="adminReports.show"
+                      >
+                        {{i18n
+                          "admin.dashboard.site_traffic.top_entry_urls.title"
+                        }}
+                        <span aria-hidden="true" class="db-link-arrow">
+                          {{dIcon "arrow-right"}}
+                        </span>
+                      </LinkTo>
+                    </h3>
+
+                    {{#if @traffic.top_entry_urls.error}}
+                      <p class="db-traffic__list-error" role="status">
+                        {{i18n
+                          "admin.dashboard.site_traffic.top_entry_urls.error"
+                        }}
+                      </p>
+                    {{else if @traffic.top_entry_urls.rows.length}}
+                      <ul class="db-traffic__list">
+                        {{#each @traffic.top_entry_urls.rows as |row|}}
+                          <li class="db-traffic__list-row">
+                            <a
+                              class="db-traffic__link"
+                              href={{getURL row.entry_url}}
+                              title={{row.entry_url}}
+                            >
+                              <span class="db-traffic__label">
+                                {{row.entry_url}}
+                              </span>
+                            </a>
+                            <span class="db-traffic__metric">
+                              <span class="db-traffic__percent">
+                                {{row.percent}}%
+                              </span>
+                              <span class="db-traffic__count">
+                                ({{this.formatHeadlineCount row.count}})
+                              </span>
+                            </span>
+                          </li>
+                        {{/each}}
+                      </ul>
+                    {{else}}
+                      <p class="db-traffic__list-empty">
+                        {{i18n
+                          "admin.dashboard.site_traffic.top_entry_urls.empty"
+                        }}
+                      </p>
+                    {{/if}}
+                  </div>
+                {{/if}}
+
                 <div class="db-section__row-block">
                   <h3 class="db-section__row-block-title">
                     <LinkTo
-                      @route="adminReports.show"
                       @model="top_countries_by_browser_pageviews"
                       @query={{hash
                         start_date=this.reportQuery.start_date
                         end_date=this.reportQuery.end_date
                       }}
+                      @route="adminReports.show"
                     >
                       {{i18n
                         "admin.dashboard.site_traffic.top_countries.title"
                       }}
-                      <span class="db-link-arrow" aria-hidden="true">
+                      <span aria-hidden="true" class="db-link-arrow">
                         {{dIcon "arrow-right"}}
                       </span>
                     </LinkTo>
@@ -414,11 +591,16 @@ export default class DashboardTraffic extends Component {
                           class="db-traffic__list-row"
                           data-test-country-code={{row.country_code}}
                         >
-                          <span class="db-traffic__name">
+                          <span
+                            class="db-traffic__name"
+                            title={{countryName row.country_code}}
+                          >
                             <span aria-hidden="true">
                               {{countryFlag row.country_code}}
                             </span>
-                            {{countryName row.country_code}}
+                            <span class="db-traffic__label">
+                              {{countryName row.country_code}}
+                            </span>
                           </span>
                           <span class="db-traffic__metric">
                             <span class="db-traffic__percent">
@@ -449,6 +631,14 @@ export default class DashboardTraffic extends Component {
                 </h3>
                 <div class="db-traffic__list-shell"></div>
               </div>
+              {{#if this.currentUser.admin}}
+                <div class="db-section__row-block">
+                  <h3 class="db-section__row-block-title">
+                    {{i18n "admin.dashboard.site_traffic.top_entry_urls.title"}}
+                  </h3>
+                  <div class="db-traffic__list-shell"></div>
+                </div>
+              {{/if}}
               <div class="db-section__row-block">
                 <h3 class="db-section__row-block-title">
                   {{i18n "admin.dashboard.site_traffic.top_countries.title"}}

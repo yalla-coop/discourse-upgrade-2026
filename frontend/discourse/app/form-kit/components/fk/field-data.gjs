@@ -43,6 +43,14 @@ export default class FKFieldData extends Component {
     }
   }
 
+  get type() {
+    return this.args.type ?? this._legacyControlType;
+  }
+
+  set type(value) {
+    this._legacyControlType = value;
+  }
+
   /**
    * Retrieves the current value of the field.
    * @type {any}
@@ -62,29 +70,6 @@ export default class FKFieldData extends Component {
   }
 
   /**
-   * Updates the value of the field and triggers revalidation.
-   * @param {any} value - The new value for the field.
-   * @returns {Promise<void>}
-   */
-  @action
-  async set(value) {
-    if (this.args.onSet) {
-      await this.args.onSet(value, {
-        set: this.args.set,
-        name: this.name,
-        parentName: this.args.parentName,
-        index: this.args.collectionIndex,
-      });
-    } else {
-      await this.args.set(this.name, value, {
-        index: this.args.collectionIndex,
-      });
-    }
-
-    this.args.triggerRevalidationFor(this.name);
-  }
-
-  /**
    * Title of the field.
    * @type {string}
    */
@@ -94,14 +79,6 @@ export default class FKFieldData extends Component {
 
   get hasExplicitType() {
     return this.args.type !== undefined;
-  }
-
-  get type() {
-    return this.args.type ?? this._legacyControlType;
-  }
-
-  set type(value) {
-    this._legacyControlType = value;
   }
 
   /**
@@ -207,12 +184,22 @@ export default class FKFieldData extends Component {
   }
 
   /**
-   * Indicates whether to show the field's title.
-   * Defaults to `true`.
+   * Indicates whether to show the title rendered by the field container.
+   * Has no effect on controls that render the title themselves; see
+   * `showControlTitle`. Defaults to `true`.
    * @type {boolean}
    */
   get showTitle() {
     return this.args.showTitle ?? true;
+  }
+
+  /**
+   * Indicates whether a control that renders the field's title itself, inline
+   * in its own markup, should render it. Defaults to `true`.
+   * @type {boolean}
+   */
+  get showControlTitle() {
+    return this.args.showControlTitle ?? true;
   }
 
   /**
@@ -307,13 +294,38 @@ export default class FKFieldData extends Component {
   }
 
   /**
+   * Updates the value of the field and triggers revalidation.
+   * @param {any} value - The new value for the field.
+   * @returns {Promise<void>}
+   */
+  @action
+  async set(value) {
+    if (this.args.onSet) {
+      await this.args.onSet(value, {
+        set: this.args.set,
+        name: this.name,
+        parentName: this.args.parentName,
+        index: this.args.collectionIndex,
+      });
+    } else {
+      await this.args.set(this.name, value, {
+        index: this.args.collectionIndex,
+      });
+    }
+
+    this.args.triggerRevalidationFor(this.name);
+  }
+
+  /**
    * Validates the field value.
    * @param {string} name - The name of the field.
    * @param {any} value - The value of the field.
    * @param {Object} data - Additional data for validation.
-   * @returns {Promise<Object>} The validation errors.
+   * @param {Object} context - Additional validation handlers.
+   * @param {Function} context.preventSubmit - Prevents the current submission.
+   * @returns {Promise<void>}
    */
-  async validate(name, value, data) {
+  async validate(name, value, data, { preventSubmit }) {
     if (this.disabled) {
       return;
     }
@@ -322,6 +334,7 @@ export default class FKFieldData extends Component {
       data,
       type: this.type,
       addError: this.addError,
+      preventSubmit,
     });
 
     const validator = new Validator(value, this.rules);

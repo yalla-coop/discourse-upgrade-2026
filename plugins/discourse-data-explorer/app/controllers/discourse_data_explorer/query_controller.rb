@@ -91,7 +91,7 @@ module DiscourseDataExplorer
       json = serialize_data(@query, QueryDetailsSerializer, root: nil)
 
       unless params[:export]
-        cached = QueryRunner.cached_result(@query, params[:params])
+        cached = QueryRunner.cached_result(@query, params[:params], current_user:)
         json[:cached_result] = cached if cached
       end
 
@@ -252,7 +252,7 @@ module DiscourseDataExplorer
       rate_limit_query_runs!
 
       query = Query.find(params[:id].to_i)
-      query.update!(last_run_at: Time.now)
+      query.record_run!
 
       explain = params[:explain] == "true"
       return run_download(query, explain:) if params[:download]
