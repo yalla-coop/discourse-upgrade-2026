@@ -42,6 +42,13 @@ module DiscourseAi
         SQL
       end
 
+      # Anonymous users can't converse with a bot. Adding them to
+      # `ai_bot_allowed_groups` only lets them preview the conversations page.
+      def self.anonymous_preview_allowed?
+        SiteSetting.ai_bot_enabled &&
+          SiteSetting.ai_bot_allowed_groups_map.include?(Group::AUTO_GROUPS[:anonymous_users])
+      end
+
       def self.personal_message_bot_user_ids(user)
         return [] if user.blank? || !SiteSetting.ai_bot_enabled
 
@@ -93,6 +100,31 @@ module DiscourseAi
         TopicView.default_post_custom_fields << POST_AI_LLM_NAME_FIELD
 
         plugin.register_topic_custom_field_type(TOPIC_AI_BOT_PM_FIELD, :string)
+
+        plugin.register_homepage(
+          "ai-conversations",
+          name: "discourse_ai.ai_bot.conversations.homepage_option",
+          path: "/discourse-ai/ai-bot/conversations",
+          route: "discourse_ai/ai_bot/conversations#index",
+          anonymous: true,
+          enabled: -> { SiteSetting.ai_bot_enabled },
+          available: ->(guardian:, request:) do
+            if guardian.anonymous?
+              DiscourseAi::AiBot::EntryPoint.anonymous_preview_allowed? &&
+                !CrawlerDetection.crawler_layout_request?(request)
+            else
+              DiscourseAi::AiBot::EntryPoint.personal_message_bot_user_ids(guardian.user).present?
+            end
+          end,
+        )
+
+        plugin.add_to_serializer(
+          :site,
+          :ai_bot_anonymous_preview,
+          include_condition: -> do
+            scope.anonymous? && DiscourseAi::AiBot::EntryPoint.anonymous_preview_allowed?
+          end,
+        ) { true }
 
         # Hide bot PMs from the personal inbox queries (Latest, New, Unread)
         # so human conversations are not buried under bot replies. Sent and
@@ -170,7 +202,7 @@ module DiscourseAi
         ) do |url, route|
           if route[:action] == "show" && share_key = route[:share_key]
             if conversation = SharedAiConversation.find_by(share_key: share_key)
-              conversation.onebox
+              conversation.onebox if conversation.publicly_visible?
             end
           end
         end
@@ -246,7 +278,9 @@ module DiscourseAi
                 {
                   "id" => agent_user[:user_id],
                   "username" => agent_user[:username],
-                  "has_default_llm" => agent_user[:default_llm_id].present?,
+                  "has_default_llm" =>
+                    agent_user[:default_llm_id].present? ||
+                      SiteSetting.ai_default_llm_model.present?,
                   "force_default_llm" => agent_user[:force_default_llm],
                   "is_agent" => true,
                 }
@@ -278,7 +312,20 @@ module DiscourseAi
           DiscourseAi::AiBot::Playground.schedule_chat_reply(chat_message, channel, user, context)
         end
 
+        plugin.on(:chat_message_interaction) do |interaction|
+          DiscourseAi::AiBot::ChatToolApproval.handle_interaction(interaction)
+        end
+
         plugin.register_editable_topic_custom_field(:ai_agent_id)
+        plugin.register_topic_custom_field_type(
+          :ai_agent_id,
+          :string,
+          max_length: TOPIC_AI_AGENT_ID_MAX_LENGTH,
+        )
+
+        plugin.on(:after_validate_topic) do |topic, topic_creator|
+          DiscourseAi::AiBot::TopicAgentValidator.validate(topic, topic_creator)
+        end
 
         plugin.add_api_key_scope(
           :ai,

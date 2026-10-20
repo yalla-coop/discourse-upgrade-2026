@@ -30,6 +30,7 @@ de:
     explorer:
       default_query: "Standard"
       default_query_notice: "Dies ist eine Standardabfrage, deren SQL-Code nicht bearbeitet werden kann. Erstelle eine neue Abfrage, um den SQL-Code zu bearbeiten."
+      view_query: "Ansehen"
       queries: "Anfragen"
       query_created: "Anfrage erstellt!"
       mode:
@@ -50,7 +51,6 @@ de:
         regenerate_placeholder: "z. B. Passe die Abfrage so an, dass nur 50 Ergebnisse angezeigt werden"
         prompt_label: "Aufforderung"
         generate: "Erzeugen"
-        regenerate: "Aufforderung aktualisieren"
         generating: "Abfrage wird mit KI generiert …"
         generation_timeout: "Eine Zeitüberschreitung ist bei der Generierung der KI-Abfrage aufgetreten. Du kannst die SQL-Abfrage manuell eingeben."
         generation_error: "Beim Erstellen der Abfrage ist etwas schiefgelaufen."
@@ -160,14 +160,11 @@ de:
       sql:
         operation: "Aktion"
         operation_description: "So führst du die Abfrage aus"
-        queries: "Anfragen"
-        raw: "Rohes SQL"
         query_id: "Anfrage"
         query_id_description: "Wähle eine gespeicherte Abfrage aus, um sie auszuführen"
         query_params: "Abfrageparameter"
         query_params_description: "Gib die Parameter für die ausgewählte Abfrage ein"
         query: "SQL-Abfrage"
-        query_description: "Schreibe eine schreibgeschützte SQL-Abfrage. Deklariere die Parameter mit der Daten-Explorer-Syntax und ordne ihre Werte unten zu."
         params: "Abfrageparameter"
         params_description: "Parameter können in der SQL-Abfrage als :my_param verwendet werden."
         add_param: "Parameter hinzufügen"

@@ -4,32 +4,15 @@ import { LinkTo } from "@ember/routing";
 import { service } from "@ember/service";
 import { trustHTML } from "@ember/template";
 import DashboardSection from "discourse/admin/components/dashboard/section";
+import { formatDeltaPercent } from "discourse/admin/lib/dashboard-format";
+import { searchHeadlineKeys } from "discourse/admin/lib/search-headline";
 import DTooltip from "discourse/float-kit/components/d-tooltip";
 import dBasePath from "discourse/ui-kit/helpers/d-base-path";
 import dConcatClass from "discourse/ui-kit/helpers/d-concat-class";
 import I18n, { i18n } from "discourse-i18n";
 
-const COUNT_HEADLINE_KEYS = {
-  last_7_days: "admin.dashboard.sections.search.count_headline.last_7_days",
-  last_30_days: "admin.dashboard.sections.search.count_headline.last_30_days",
-  last_3_months: "admin.dashboard.sections.search.count_headline.last_3_months",
-};
-
 function formatCount(value) {
   return I18n.toNumber(value, { precision: 0 });
-}
-
-function formatDelta(value) {
-  const abs = Math.abs(value);
-
-  if (abs > 0 && abs < 1) {
-    const sign = value > 0 ? "+" : "-";
-    return `${sign}${I18n.toNumber(abs, { precision: 1 })}%`;
-  }
-
-  const rounded = Math.round(value);
-  const sign = rounded > 0 ? "+" : "";
-  return `${sign}${I18n.toNumber(rounded, { precision: 0 })}%`;
 }
 
 function badgeLabel(status) {
@@ -49,27 +32,44 @@ export default class DashboardSearch extends Component {
     return this.args.search?.logging_enabled === false;
   }
 
-  get isNoSignal() {
-    return this.args.search.headline_state === "no_signal";
-  }
+  get headline() {
+    const prefix = "admin.dashboard.sections.search.headline";
+    const totalSearches = this.args.search.kpis.total_searches;
+    const noResultRate = this.args.search.kpis.no_result_rate;
 
-  get headlineTitle() {
-    if (this.isNoSignal) {
-      return i18n("admin.dashboard.sections.search.headline.no_signal_title");
+    if (
+      totalSearches.value === 0 &&
+      totalSearches.previous_value === 0 &&
+      noResultRate.value == null
+    ) {
+      const headlineKeys = searchHeadlineKeys({ noData: true });
+      return {
+        title: i18n(`${prefix}.titles.${headlineKeys.title}`),
+        summary: i18n(`${prefix}.summaries.${headlineKeys.summary}`),
+      };
     }
 
-    const count = this.args.search.kpis.total_searches.value;
-    const key =
-      COUNT_HEADLINE_KEYS[this.args.period] ??
-      "admin.dashboard.sections.search.count_headline.selected_period";
-
-    return i18n(key, { count, formatted_count: formatCount(count) });
-  }
-
-  get headlineSummary() {
-    return i18n(
-      `admin.dashboard.sections.search.headline.${this.args.search.headline_state}`
+    const searchesDirection = this.#direction(
+      totalSearches,
+      totalSearches.percent_change
     );
+    const noResultDirection = this.#direction(
+      noResultRate,
+      noResultRate.point_change
+    );
+    const headlineKeys = searchHeadlineKeys({
+      searches: searchesDirection,
+      noResultRate: noResultDirection,
+    });
+    const summary = i18n(`${prefix}.summaries.${headlineKeys.summary}`);
+    const cta = headlineKeys.cta
+      ? i18n(`${prefix}.cta.${headlineKeys.cta}`)
+      : null;
+
+    return {
+      title: i18n(`${prefix}.titles.${headlineKeys.title}`),
+      summary: cta ? `${summary} ${cta}` : summary,
+    };
   }
 
   get totalSearchesValue() {
@@ -84,7 +84,7 @@ export default class DashboardSearch extends Component {
     }
 
     return {
-      text: formatDelta(change),
+      text: formatDeltaPercent(change),
       className: change > 0 ? "--pos" : "--neg",
     };
   }
@@ -102,7 +102,7 @@ export default class DashboardSearch extends Component {
     }
 
     return {
-      text: formatDelta(change),
+      text: formatDeltaPercent(change),
       className: change > 0 ? "--neg" : "--pos",
     };
   }
@@ -119,12 +119,30 @@ export default class DashboardSearch extends Component {
     return this.args.search.trending_period;
   }
 
+  #direction(kpi, change) {
+    if (kpi.value == null) {
+      return "unavailable";
+    }
+
+    if (kpi.previous_value == null || kpi.previous_value === 0) {
+      return kpi.value > 0 ? "up" : "flat";
+    }
+
+    if (change > 0) {
+      return "up";
+    } else if (change < 0) {
+      return "down";
+    }
+
+    return "flat";
+  }
+
   <template>
     <DashboardSection
-      @title={{i18n "admin.dashboard.sections.search.title"}}
-      @startDate={{@startDate}}
-      @endDate={{@endDate}}
       ...attributes
+      @endDate={{@endDate}}
+      @startDate={{@startDate}}
+      @title={{i18n "admin.dashboard.sections.search.title"}}
     >
       {{#if @fetchError}}
         <div class="db-section__error" role="alert">
@@ -148,8 +166,8 @@ export default class DashboardSearch extends Component {
       {{else if @search}}
         <div class="db-section__subheader">
           <div class="db-section__subintro">
-            <h3>{{this.headlineTitle}}</h3>
-            <p>{{this.headlineSummary}}</p>
+            <h3>{{this.headline.title}}</h3>
+            <p>{{this.headline.summary}}</p>
           </div>
 
           <div class="db-section__metrics">
@@ -166,8 +184,8 @@ export default class DashboardSearch extends Component {
                 }}
                 <DTooltip
                   class="db-section__info"
-                  @identifier="search-total-searches-tooltip"
                   @icon="far-circle-question"
+                  @identifier="search-total-searches-tooltip"
                 >
                   <:content>
                     {{i18n
@@ -201,8 +219,8 @@ export default class DashboardSearch extends Component {
                 }}
                 <DTooltip
                   class="db-section__info"
-                  @identifier="search-no-result-rate-tooltip"
                   @icon="far-circle-question"
+                  @identifier="search-no-result-rate-tooltip"
                 >
                   <:content>
                     {{i18n
@@ -226,8 +244,8 @@ export default class DashboardSearch extends Component {
               {{i18n "admin.dashboard.sections.search.trending.title"}}
               <DTooltip
                 class="db-section__info"
-                @identifier="search-trending-tooltip"
                 @icon="far-circle-question"
+                @identifier="search-trending-tooltip"
               >
                 <:content>
                   {{i18n "admin.dashboard.sections.search.trending.tooltip"}}
@@ -251,13 +269,13 @@ export default class DashboardSearch extends Component {
                     <tr data-test-search-term-row>
                       <td>
                         <LinkTo
-                          @route="adminSearchLogs.term"
+                          title={{row.term}}
                           @query={{hash
                             term=row.term
                             period=this.trendingTermPeriod
-                            searchType="logged_in_only"
+                            searchType=@search.search_type
                           }}
-                          title={{row.term}}
+                          @route="adminSearchLogs.term"
                         >
                           {{row.term}}
                         </LinkTo>
@@ -300,9 +318,9 @@ export default class DashboardSearch extends Component {
                     <tr data-test-search-term-row>
                       <td>
                         <LinkTo
-                          @route="full-page-search"
-                          @query={{hash q=row.term}}
                           title={{row.term}}
+                          @query={{hash q=row.term}}
+                          @route="full-page-search"
                         >
                           {{row.term}}
                         </LinkTo>

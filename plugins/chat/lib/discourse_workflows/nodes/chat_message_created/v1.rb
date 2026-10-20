@@ -15,8 +15,54 @@ if defined?(DiscourseWorkflows)
               color: "teal",
             },
             group: "discourse_triggers",
+            event: :chat_message_created,
             available: -> { SiteSetting.chat_enabled },
             unavailable_reason_key: "discourse_workflows.node_unavailable.requires_chat",
+            output_contracts: [
+              {
+                schema: {
+                  "$schema" => DiscourseWorkflows::Schema::DRAFT_URI,
+                  "type" => "object",
+                  "properties" => {
+                    "message" => {
+                      "type" => "object",
+                      "properties" => {
+                        "id" => {
+                          "type" => "integer",
+                        },
+                        "message" => {
+                          "type" => "string",
+                        },
+                        "cooked" => {
+                          "type" => "string",
+                        },
+                        "excerpt" => {
+                          "type" => "string",
+                        },
+                        "created_at" => {
+                          "type" => "string",
+                          "format" => "date-time",
+                        },
+                        "thread_id" => {
+                          "type" => %w[integer null],
+                        },
+                        "chat_channel_id" => {
+                          "type" => "integer",
+                        },
+                      },
+                    },
+                    "channel" => {
+                      "type" => "object",
+                      "properties" => Chat::WorkflowChannelSerializer::PROPERTIES,
+                    },
+                    "user" => {
+                      "type" => "object",
+                      "properties" => DiscourseWorkflows::Schema::BASIC_USER_PROPERTIES,
+                    },
+                  },
+                },
+              },
+            ],
             properties: {
               channel_id: {
                 type: :integer,
@@ -46,7 +92,7 @@ if defined?(DiscourseWorkflows)
             },
           )
 
-          def initialize(message, channel, user)
+          def initialize(message, channel, user, *)
             super(parameters: {})
             @message = message
             @channel = channel
@@ -82,13 +128,7 @@ if defined?(DiscourseWorkflows)
                 thread_id: @message.thread_id,
                 chat_channel_id: @message.chat_channel_id,
               },
-              channel: {
-                id: @channel.id,
-                title: @channel.title(@user),
-                slug: @channel.slug,
-                chatable_type: @channel.chatable_type,
-                chatable_id: @channel.chatable_id,
-              },
+              channel: channel_data,
               user: user_data,
             }
           end
@@ -99,6 +139,11 @@ if defined?(DiscourseWorkflows)
             return {} if @user.blank?
 
             serialize_record(@user, BasicUserSerializer)
+          end
+
+          def channel_data
+            scope = @user&.guardian || Discourse.system_user.guardian
+            serialize_record(@channel, Chat::WorkflowChannelSerializer, scope:)
           end
         end
       end

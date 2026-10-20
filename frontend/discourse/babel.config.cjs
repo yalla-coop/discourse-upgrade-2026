@@ -1,4 +1,7 @@
 const { buildMacros } = require("@embroider/macros/babel");
+const {
+  setConfig: setWarpDriveConfig,
+} = require("@warp-drive/core/build-config");
 const StripTestSelectors = require("strip-test-selectors");
 
 const macros = buildMacros({
@@ -6,6 +9,10 @@ const macros = buildMacros({
     macrosConfig.setGlobalConfig(__filename, "@embroider/core", {
       active: true,
     });
+    // WarpDrive build config (previously wired via setConfig in ember-cli-build.js).
+    // Feeds into our existing @embroider/macros config rather than a second
+    // instance, which would duplicate the macros babel plugin.
+    setWarpDriveConfig(macrosConfig, { compatWith: "5.9" });
   },
 });
 
@@ -68,6 +75,18 @@ module.exports = {
       "@ember/debug stripping",
     ],
     ...macros.babelMacros,
+  ],
+
+  overrides: [
+    {
+      test: /\.(gts|ts|mts|cts)$/,
+      plugins: [
+        [
+          require.resolve("@babel/plugin-transform-typescript"),
+          { allowDeclareFields: true },
+        ],
+      ],
+    },
   ],
 
   generatorOpts: {

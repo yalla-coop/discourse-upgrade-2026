@@ -2,6 +2,7 @@ import { hash } from "@ember/helper";
 import { find, render, tab } from "@ember/test-helpers";
 import { module, test } from "qunit";
 import { forceMobile } from "discourse/lib/mobile";
+import SelectKitRow from "discourse/select-kit/components/select-kit/select-kit-row";
 import SingleSelect from "discourse/select-kit/components/single-select";
 import { setupRenderingTest } from "discourse/tests/helpers/component-test";
 import selectKit from "discourse/tests/helpers/select-kit-helper";
@@ -37,6 +38,35 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
 
   hooks.beforeEach(function () {
     this.set("subject", selectKit());
+  });
+
+  test("suppresses hover during teardown", function (assert) {
+    const item = { id: 1 };
+    const selectKitApi = {
+      onHover() {
+        assert.step("hover");
+      },
+    };
+    const context = {
+      isDestroyed: false,
+      isDestroying: false,
+      item,
+      rowValue: item.id,
+      selectKit: selectKitApi,
+    };
+    const handleMouseEnter = Object.getOwnPropertyDescriptor(
+      SelectKitRow.prototype,
+      "handleMouseEnter"
+    ).get.call(context);
+
+    handleMouseEnter();
+    context.isDestroying = true;
+    handleMouseEnter();
+
+    assert.verifySteps(
+      ["hover"],
+      "dispatches hover only while the row is live"
+    );
   });
 
   test("content", async function (assert) {
@@ -121,11 +151,11 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
           @nameProperty={{this.nameProperty}}
-          @valueProperty={{this.valueProperty}}
           @onChange={{this.onChange}}
+          @value={{this.value}}
+          @valueProperty={{this.valueProperty}}
         />
       </template>
     );
@@ -143,12 +173,12 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
           @nameProperty={{this.nameProperty}}
-          @valueProperty={{this.valueProperty}}
           @onChange={{this.onChange}}
           @options={{hash filterable=this.filterable}}
+          @value={{this.value}}
+          @valueProperty={{this.valueProperty}}
         />
       </template>
     );
@@ -171,15 +201,15 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
           @nameProperty={{this.nameProperty}}
-          @valueProperty={{this.valueProperty}}
           @onChange={{this.onChange}}
           @options={{hash
             limitMatches=this.limitMatches
             filterable=this.filterable
           }}
+          @value={{this.value}}
+          @valueProperty={{this.valueProperty}}
         />
       </template>
     );
@@ -209,8 +239,8 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
+          @value={{this.value}}
           @valueAttribute="value"
         />
       </template>
@@ -221,6 +251,40 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     assert.strictEqual(this.subject.selectedRow().value(), this.value);
   });
 
+  test("selects a row with a blank value", async function (assert) {
+    setDefaultState(this, {
+      content: [{ id: "", name: "default" }, ...DEFAULT_CONTENT],
+      value: "",
+    });
+
+    await render(
+      <template>
+        <SingleSelect
+          @content={{this.content}}
+          @nameProperty={{this.nameProperty}}
+          @onChange={{this.onChange}}
+          @value={{this.value}}
+          @valueProperty={{this.valueProperty}}
+        />
+      </template>
+    );
+
+    assert.strictEqual(this.subject.header().name(), "default");
+
+    await this.subject.expand();
+    await this.subject.selectRowByValue(1);
+    assert.strictEqual(this.subject.header().name(), "foo");
+
+    await this.subject.expand();
+    await this.subject.selectRowByValue("");
+    assert.strictEqual(
+      this.subject.header().name(),
+      "default",
+      "selecting the blank-value row selects it rather than clearing"
+    );
+    assert.strictEqual(this.value, "");
+  });
+
   test("none:string", async function (assert) {
     I18n.translations[I18n.locale].js.test = { none: "(default)" };
     setDefaultState(this, { value: 1 });
@@ -228,12 +292,12 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
           @nameProperty={{this.nameProperty}}
-          @valueProperty={{this.valueProperty}}
           @onChange={{this.onChange}}
           @options={{hash none="test.none"}}
+          @value={{this.value}}
+          @valueProperty={{this.valueProperty}}
         />
       </template>
     );
@@ -251,12 +315,12 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
           @nameProperty={{this.nameProperty}}
-          @valueProperty={{this.valueProperty}}
           @onChange={{this.onChange}}
           @options={{hash none=this.none}}
+          @value={{this.value}}
+          @valueProperty={{this.valueProperty}}
         />
       </template>
     );
@@ -280,12 +344,12 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
           @nameProperty={{this.nameProperty}}
-          @valueProperty={{this.valueProperty}}
           @onChange={{this.onChange}}
           @options={{hash none="test.none"}}
+          @value={{this.value}}
+          @valueProperty={{this.valueProperty}}
         />
       </template>
     );
@@ -314,11 +378,11 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
           @nameProperty={{this.nameProperty}}
-          @valueProperty={{this.valueProperty}}
           @onChange={{this.onChange}}
+          @value={{this.value}}
+          @valueProperty={{this.valueProperty}}
         />
       </template>
     );
@@ -340,11 +404,11 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
 
     await render(
       <template>
-        <DButton @icon="xmark" @action={{this.onClick}}>
+        <DButton @action={{this.onClick}} @icon="xmark">
           <SingleSelect
-            @value={{this.value}}
             @content={{this.content}}
             @options={{hash preventsClickPropagation=true}}
+            @value={{this.value}}
           />
         </DButton>
       </template>
@@ -364,9 +428,9 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
+          @content={{this.content}}
           @labelProperty="foo"
           @value={{this.value}}
-          @content={{this.content}}
         />
       </template>
     );
@@ -389,9 +453,9 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
+          @content={{this.content}}
           @titleProperty="foo"
           @value={{this.value}}
-          @content={{this.content}}
         />
       </template>
     );
@@ -414,9 +478,9 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
+          @content={{this.content}}
           @langProperty="foo"
           @value={{this.value}}
-          @content={{this.content}}
         />
       </template>
     );
@@ -447,7 +511,7 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
 
     await render(
       <template>
-        <SingleSelect @value={{this.value}} @content={{this.content}} />
+        <SingleSelect @content={{this.content}} @value={{this.value}} />
       </template>
     );
 
@@ -477,7 +541,7 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
 
     await render(
       <template>
-        <SingleSelect @value={{this.value}} @content={{this.content}} />
+        <SingleSelect @content={{this.content}} @value={{this.value}} />
       </template>
     );
     await this.subject.expand();
@@ -491,12 +555,12 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
           @nameProperty={{this.nameProperty}}
-          @valueProperty={{this.valueProperty}}
           @onChange={{this.onChange}}
           @options={{hash verticalOffset=this.verticalOffset}}
+          @value={{this.value}}
+          @valueProperty={{this.valueProperty}}
         />
       </template>
     );
@@ -515,9 +579,9 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
       <template>
         <div style="position: fixed; top: 50%; left: 0; right: 0;">
           <SingleSelect
-            @value={{this.value}}
             @content={{this.content}}
             @options={{hash mobilePlacement="top"}}
+            @value={{this.value}}
           />
         </div>
       </template>
@@ -536,9 +600,9 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
           @options={{hash expandedOnInsert=true}}
+          @value={{this.value}}
         />
       </template>
     );
@@ -551,9 +615,9 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
     await render(
       <template>
         <SingleSelect
-          @value={{this.value}}
           @content={{this.content}}
           @options={{hash formName="foo"}}
+          @value={{this.value}}
         />
       </template>
     );
@@ -572,7 +636,7 @@ module("Integration | Component | SelectKit | SingleSelect", function (hooks) {
 
     await render(
       <template>
-        <SingleSelect @value={{this.value}} @content={{this.content}} />
+        <SingleSelect @content={{this.content}} @value={{this.value}} />
       </template>
     );
 

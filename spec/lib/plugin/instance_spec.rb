@@ -21,6 +21,26 @@ TEXT
 
   after { DiscoursePluginRegistry.reset! }
 
+  describe "#register_navigation_destination" do
+    it "namespaces destinations and filters disabled plugins at lookup time" do
+      plugin_instance.enabled_site_setting(:discourse_sample_plugin_enabled)
+      plugin_instance.register_navigation_destination(
+        "example",
+        path: "/admin/example",
+        title: "example.title",
+        description: "example.description",
+      ) { |guardian| guardian.is_admin? }
+
+      SiteSetting.discourse_sample_plugin_enabled = true
+      expect(DiscoursePluginRegistry.navigation_destinations.map(&:id)).to eq(
+        ["discourse-sample-plugin:example"],
+      )
+
+      SiteSetting.discourse_sample_plugin_enabled = false
+      expect(DiscoursePluginRegistry.navigation_destinations).to eq([])
+    end
+  end
+
   # NOTE: sample_plugin_site_settings.yml is always loaded in tests in site_setting.rb
 
   describe ".humanized_name" do
@@ -113,6 +133,9 @@ TEXT
         :participating_users_last_day,
         :participating_users_7_days,
         :participating_users_30_days,
+        # onboarding stats are grouped under their stat type rather than being
+        # flat top-level keys
+        :onboarding,
       )
     end
 
@@ -391,11 +414,12 @@ TEXT
   describe "#add_report" do
     after { Report.remove_report("readers") }
 
-    it "adds a report" do
+    it "adds a report with admin-only related items" do
       plugin = Plugin::Instance.new nil, "/tmp/test.rb"
-      plugin.add_report("readers") {}
+      plugin.add_report("readers", admin_only_related_items: true) {}
 
       expect(Report.respond_to?(:report_readers)).to eq(true)
+      expect(Report.admin_only_related_items_report_types).to include("readers")
     end
   end
 
@@ -460,10 +484,12 @@ TEXT
       DiscoursePluginRegistry.serialized_current_user_fields << "has_car"
       user = Fabricate(:user)
       user.custom_fields["has_car"] = "true"
+      user.custom_fields["has_bike"] = "true"
       user.save!
 
       payload = JSON.parse(CurrentUserSerializer.new(user, scope: Guardian.new(user)).to_json)
       expect(payload["current_user"]["custom_fields"]["has_car"]).to eq("true")
+      expect(payload["current_user"]["custom_fields"]).not_to have_key("has_bike")
 
       payload = JSON.parse(UserSerializer.new(user, scope: Guardian.new(user)).to_json)
       expect(payload["user"]["custom_fields"]["has_car"]).to eq("true")
@@ -480,7 +506,7 @@ TEXT
   end
 
   describe ".register_seedfu_fixtures" do
-    it "should add the new path to SeedFu's fixtures path" do
+    it "adds the new path to SeedFu's fixture paths" do
       plugin = Plugin::Instance.new nil, "/tmp/test.rb"
       plugin.register_seedfu_fixtures(["some_path"])
       plugin.register_seedfu_fixtures("some_path2")
@@ -503,7 +529,7 @@ TEXT
       plugin
     end
 
-    it "should add the right callback" do
+    it "adds the expected callback" do
       called = 0
 
       plugin_instance.add_model_callback(User, :after_create) { called += 1 }
@@ -517,7 +543,7 @@ TEXT
       expect(called).to eq(1)
     end
 
-    it "should add the right callback with options" do
+    it "adds the expected callback with options" do
       called = 0
 
       plugin_instance.add_model_callback(User, :after_commit, on: :create) { called += 1 }
@@ -819,6 +845,21 @@ TEXT
         *actions,
       )
     end
+
+    it "retains path parameters and replaces conflicting mapping arrays" do
+      plugin_instance.add_api_key_scope(
+        :topics,
+        read: {
+          actions: %w[topics#show],
+          path_params: %i[topic_id],
+        },
+      )
+
+      mapping = ApiKeyScope.scope_mappings.dig(:topics, :read)
+
+      expect(mapping[:actions]).to eq(%w[topics#show])
+      expect(mapping[:path_params]).to eq(%i[topic_id])
+    end
   end
 
   describe "#add_directory_column" do
@@ -941,6 +982,7 @@ TEXT
 
   describe "#register_notification_consolidation_plan" do
     let(:plugin) { Plugin::Instance.new }
+
     fab!(:topic)
 
     after { DiscoursePluginRegistry.reset_register!(:notification_consolidation_plans) }
@@ -996,6 +1038,37 @@ TEXT
     end
   end
 
+  describe "#register_upcoming_change_conditional_display" do
+    let(:plugin) { Plugin::Instance.new }
+
+    before { allow(DiscoursePluginRegistry).to receive(:clear_modifiers!) }
+
+    after do
+      DiscoursePluginRegistry.reset_register!(:upcoming_change_conditional_display_callbacks)
+    end
+
+    it "requires a block" do
+      expect {
+        plugin.register_upcoming_change_conditional_display(:enable_upload_debug_mode)
+      }.to raise_error(ArgumentError, "block is required")
+    end
+
+    it "registers a conditional display callback" do
+      plugin.register_upcoming_change_conditional_display(:enable_upload_debug_mode) { false }
+
+      callback = DiscoursePluginRegistry.upcoming_change_conditional_display_callbacks.first
+      expect(callback[:setting_name]).to eq(:enable_upload_debug_mode)
+      expect(callback[:callback]).to be_a(Proc)
+    end
+
+    it "normalizes setting names to symbols" do
+      plugin.register_upcoming_change_conditional_display("enable_upload_debug_mode") { true }
+
+      callback = DiscoursePluginRegistry.upcoming_change_conditional_display_callbacks.first
+      expect(callback[:setting_name]).to eq(:enable_upload_debug_mode)
+    end
+  end
+
   describe "#register_email_unsubscriber" do
     let(:plugin) { Plugin::Instance.new }
 
@@ -1041,6 +1114,18 @@ TEXT
       plugin.register_stat("some_group") { stats }
       plugin.register_stat("some_group") { stats }
       expect(DiscoursePluginRegistry.stats.count).to eq(1)
+    end
+
+    it "allows the same name under different stat_types" do
+      stats = { count: 1 }
+      plugin.register_stat("total", stat_type: :foo) { stats }
+      plugin.register_stat("total", stat_type: :bar) { stats }
+      plugin.register_stat("total", stat_type: :foo) { stats }
+
+      expect(DiscoursePluginRegistry.stats.count).to eq(2)
+      expect(Stat.all_stats.with_indifferent_access).to match(
+        hash_including(foo: { total_count: 1 }, bar: { total_count: 1 }),
+      )
     end
   end
 
@@ -1133,6 +1218,198 @@ TEXT
     end
   end
 
+  describe "#register_homepage" do
+    before { plugin_instance.stubs(:enabled?).returns(true) }
+
+    it "registers a homepage while the plugin is enabled" do
+      plugin_instance.register_homepage(
+        :sample_homepage,
+        name: "sample_plugin.homepage.title",
+        path: "/sample-homepage",
+        route: "sample_plugin/homepage#index",
+        anonymous: true,
+      )
+
+      expect(DiscoursePluginRegistry.homepage_options).to contain_exactly(
+        {
+          id: "sample_homepage",
+          name: "sample_plugin.homepage.title",
+          path: "/sample-homepage",
+          route: "sample_plugin/homepage#index",
+          anonymous: true,
+          server_side: false,
+          enabled: nil,
+          available: nil,
+        },
+      )
+
+      plugin_instance.stubs(:enabled?).returns(false)
+      expect(DiscoursePluginRegistry.homepage_options).to be_empty
+    end
+
+    it "rejects invalid and duplicate registrations" do
+      expect do
+        plugin_instance.register_homepage(
+          "not valid",
+          name: "plugin.homepage",
+          path: "/plugin",
+          route: "plugin#index",
+        )
+      end.to raise_error(ArgumentError, /homepage id/)
+
+      expect do
+        plugin_instance.register_homepage(
+          "latest",
+          name: "plugin.latest",
+          path: "/plugin-latest",
+          route: "plugin#latest",
+        )
+      end.to raise_error(ArgumentError, /already registered/)
+
+      expect do
+        plugin_instance.register_homepage(
+          "other_homepage",
+          name: "plugin.other_homepage",
+          path: "/other",
+          route: "plugin#other",
+          server_side: nil,
+        )
+      end.to raise_error(ArgumentError, /server_side/)
+
+      expect do
+        plugin_instance.register_homepage(
+          "other_homepage",
+          name: "plugin.other_homepage",
+          path: "/other",
+          route: "plugin#other",
+          available: true,
+        )
+      end.to raise_error(ArgumentError, /available/)
+
+      expect do
+        plugin_instance.register_homepage(
+          "other_homepage",
+          name: "plugin.other_homepage",
+          path: "/other",
+          route: "plugin#other",
+          enabled: true,
+        )
+      end.to raise_error(ArgumentError, /enabled/)
+
+      plugin_instance.register_homepage(
+        "sample_homepage",
+        name: "plugin.homepage",
+        path: "/sample-homepage",
+        route: "plugin#index",
+      )
+
+      expect do
+        plugin_instance.register_homepage(
+          "sample_homepage",
+          name: "plugin.other_homepage",
+          path: "/other",
+          route: "plugin#other",
+        )
+      end.to raise_error(ArgumentError, /already registered/)
+    end
+
+    it "allows distinct IDs that normalize to the same Rails helper name" do
+      plugin_instance.register_homepage(
+        "sample-homepage",
+        name: "plugin.hyphenated",
+        path: "/hyphenated",
+        route: "plugin#hyphenated",
+      )
+      plugin_instance.register_homepage(
+        "sample_homepage",
+        name: "plugin.underscored",
+        path: "/underscored",
+        route: "plugin#underscored",
+      )
+
+      expect(DiscoursePluginRegistry.homepage_options.pluck(:id)).to include(
+        "sample-homepage",
+        "sample_homepage",
+      )
+    end
+  end
+
+  describe "#register_admin_dashboard_section" do
+    let(:plugin) { Plugin::Instance.new }
+
+    after do
+      DiscoursePluginRegistry._raw_admin_dashboard_sections.reject! do |entry|
+        entry[:value][:id] == "fake_section"
+      end
+    end
+
+    it "registers a section without settings" do
+      plugin.register_admin_dashboard_section(id: "fake_section") { {} }
+
+      entry = DiscoursePluginRegistry.admin_dashboard_sections.find { |s| s[:id] == "fake_section" }
+      expect(entry[:settings]).to be_nil
+    end
+
+    it "registers a section with settings, normalizing keys to strings" do
+      setting_class =
+        Class.new do
+          def self.permit
+            [:category_id]
+          end
+
+          def self.validate(attrs)
+            attrs
+          end
+        end
+
+      plugin.register_admin_dashboard_section(
+        id: "fake_section",
+        settings: {
+          category_id: setting_class,
+        },
+      ) { {} }
+
+      entry = DiscoursePluginRegistry.admin_dashboard_sections.find { |s| s[:id] == "fake_section" }
+      expect(entry[:settings]).to eq({ "category_id" => setting_class })
+    end
+
+    it "raises when a setting class doesn't respond to .validate" do
+      setting_class =
+        Class.new do
+          def self.permit
+            []
+          end
+        end
+
+      expect {
+        plugin.register_admin_dashboard_section(
+          id: "fake_section",
+          settings: {
+            "x" => setting_class,
+          },
+        ) { {} }
+      }.to raise_error(ArgumentError, /must respond to .permit and .validate/)
+    end
+
+    it "raises when a setting class doesn't respond to .permit" do
+      setting_class =
+        Class.new do
+          def self.validate(attrs)
+            attrs
+          end
+        end
+
+      expect {
+        plugin.register_admin_dashboard_section(
+          id: "fake_section",
+          settings: {
+            "x" => setting_class,
+          },
+        ) { {} }
+      }.to raise_error(ArgumentError, /must respond to .permit and .validate/)
+    end
+  end
+
   describe "#register_modifier" do
     let(:plugin) { Plugin::Instance.new }
 
@@ -1149,7 +1426,7 @@ TEXT
   describe "#add_request_rate_limiter" do
     after { Middleware::RequestTracker.reset_rate_limiters_stack }
 
-    it "should raise an error if `after` and `before` kwarg are provided" do
+    it "raises an error when both `after` and `before` are provided" do
       plugin = Plugin::Instance.new
 
       expect do
@@ -1163,7 +1440,7 @@ TEXT
       end.to raise_error(ArgumentError, "only one of `after` or `before` can be provided")
     end
 
-    it "should raise an error if value of `after` kwarg is invalid" do
+    it "raises an error when `after` is invalid" do
       plugin = Plugin::Instance.new
 
       expect {
@@ -1175,11 +1452,11 @@ TEXT
         )
       }.to raise_error(
         ArgumentError,
-        "0 is not a valid value. Must be one of RequestTracker::RateLimiters::User, RequestTracker::RateLimiters::IP",
+        "0 is not a valid value. Must be one of RequestTracker::RateLimiters::User, RequestTracker::RateLimiters::HealthCheck, RequestTracker::RateLimiters::IP",
       )
     end
 
-    it "should raise an error if value of `before` kwarg is invalid" do
+    it "raises an error when `before` is invalid" do
       plugin = Plugin::Instance.new
 
       expect {
@@ -1191,7 +1468,7 @@ TEXT
         )
       }.to raise_error(
         ArgumentError,
-        "0 is not a valid value. Must be one of RequestTracker::RateLimiters::User, RequestTracker::RateLimiters::IP",
+        "0 is not a valid value. Must be one of RequestTracker::RateLimiters::User, RequestTracker::RateLimiters::HealthCheck, RequestTracker::RateLimiters::IP",
       )
     end
 
@@ -1223,11 +1500,15 @@ TEXT
         RequestTracker::RateLimiters::User,
       )
 
-      expect(Middleware::RequestTracker.rate_limiters_stack[1].superclass).to eq(
+      expect(Middleware::RequestTracker.rate_limiters_stack[1]).to eq(
+        RequestTracker::RateLimiters::HealthCheck,
+      )
+
+      expect(Middleware::RequestTracker.rate_limiters_stack[2].superclass).to eq(
         RequestTracker::RateLimiters::Base,
       )
 
-      expect(Middleware::RequestTracker.rate_limiters_stack[2]).to eq(
+      expect(Middleware::RequestTracker.rate_limiters_stack[3]).to eq(
         RequestTracker::RateLimiters::IP,
       )
     end
@@ -1247,10 +1528,14 @@ TEXT
       )
 
       expect(Middleware::RequestTracker.rate_limiters_stack[1]).to eq(
+        RequestTracker::RateLimiters::HealthCheck,
+      )
+
+      expect(Middleware::RequestTracker.rate_limiters_stack[2]).to eq(
         RequestTracker::RateLimiters::IP,
       )
 
-      expect(Middleware::RequestTracker.rate_limiters_stack[2].superclass).to eq(
+      expect(Middleware::RequestTracker.rate_limiters_stack[3].superclass).to eq(
         RequestTracker::RateLimiters::Base,
       )
     end

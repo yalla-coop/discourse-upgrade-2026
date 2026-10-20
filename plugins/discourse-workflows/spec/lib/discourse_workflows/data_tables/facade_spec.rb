@@ -71,10 +71,6 @@ RSpec.describe DiscourseWorkflows::DataTables::Facade do
     )
   end
 
-  def build_row_input(data, fill_missing: false)
-    facade.build_row_input(data: data, fill_missing: fill_missing)
-  end
-
   describe "#build_query" do
     it "returns an invalid query when the filter is invalid" do
       query =
@@ -496,14 +492,17 @@ RSpec.describe DiscourseWorkflows::DataTables::Facade do
 
   describe "#insert" do
     it "inserts a row with cast data" do
-      row = facade.insert(build_row_input({ "email" => "test@test.com" }, fill_missing: true))
+      row =
+        facade.insert(
+          facade.build_row_input(data: { "email" => "test@test.com" }, fill_missing: true),
+        )
 
       expect(row["email"]).to eq("test@test.com")
       expect(row["score"]).to be_nil
     end
 
     it "inserts a default row when data is empty" do
-      row = facade.insert(build_row_input({}))
+      row = facade.insert(facade.build_row_input(data: {}))
 
       expect(row["id"]).to be_present
     end
@@ -512,20 +511,26 @@ RSpec.describe DiscourseWorkflows::DataTables::Facade do
   describe "#update_row" do
     it "updates a single row and returns it" do
       updated =
-        facade.update_row(row_id: row_1["id"], row_input: build_row_input({ "score" => 99 }))
+        facade.update_row(
+          row_id: row_1["id"],
+          row_input: facade.build_row_input(data: { "score" => 99 }),
+        )
 
       expect(updated["score"]).to eq(99)
       expect(updated["email"]).to eq("alice@example.com")
     end
 
     it "returns nil for a non-existent id" do
-      updated = facade.update_row(row_id: -1, row_input: build_row_input({ "score" => 99 }))
+      updated =
+        facade.update_row(row_id: -1, row_input: facade.build_row_input(data: { "score" => 99 }))
 
       expect(updated).to be_nil
     end
 
     it "returns nil when the row input is empty" do
-      expect(facade.update_row(row_id: row_1["id"], row_input: build_row_input({}))).to be_nil
+      expect(
+        facade.update_row(row_id: row_1["id"], row_input: facade.build_row_input(data: {})),
+      ).to be_nil
     end
   end
 
@@ -542,7 +547,7 @@ RSpec.describe DiscourseWorkflows::DataTables::Facade do
                 ],
               },
             ),
-          row_input: build_row_input({ "score" => 99 }),
+          row_input: facade.build_row_input(data: { "score" => 99 }),
         )
 
       expect(updated_count).to eq(1)
@@ -613,13 +618,24 @@ RSpec.describe DiscourseWorkflows::DataTables::Facade do
   end
 
   describe "statement timeout" do
-    it "raises StatementTimeout when a query exceeds the limit" do
-      stub_const(DiscourseWorkflows::DataTables::Facade, :STATEMENT_TIMEOUT_MS, 100) do
-        expect {
-          facade.send(:with_statement_timeout) do
-            ActiveRecord::Base.connection.execute("SELECT pg_sleep(1)")
-          end
-        }.to raise_error(described_class::StatementTimeout)
+    it "preserves the connection timeout after successful batch statistics" do
+      DB.exec("SET LOCAL statement_timeout = '2s'")
+
+      described_class.batch_stats([data_table.id])
+
+      expect(DB.query_single("SHOW statement_timeout").first).to eq("2s")
+    end
+
+    it "cancels slow counts and restores the connection timeout" do
+      table_name = DiscourseWorkflows::DataTables::Storage.quoted_table(data_table.id)
+      DB.exec("CREATE TEMP VIEW #{table_name} AS SELECT 1 AS id FROM pg_sleep(1)")
+      original_timeout = DB.query_single("SHOW statement_timeout").first
+
+      stub_const(described_class, :STATEMENT_TIMEOUT_MS, 50) do
+        [-> { described_class.batch_stats([data_table.id]) }, -> { facade.count }].each do |query|
+          expect { query.call }.to raise_error(described_class::StatementTimeout)
+          expect(DB.query_single("SHOW statement_timeout").first).to eq(original_timeout)
+        end
       end
     end
   end

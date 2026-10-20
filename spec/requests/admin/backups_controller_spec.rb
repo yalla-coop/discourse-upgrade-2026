@@ -23,7 +23,7 @@ RSpec.describe Admin::BackupsController do
 
   def map_preloaded
     JSON
-      .parse(Nokogiri.HTML5(response.body).at_css("[data-preloaded]")["data-preloaded"])
+      .parse(Nokogiri.HTML5(response.body).at_css("#data-preloaded").text)
       .map { |key, value| [key, JSON.parse(value)] }
       .to_h
   end
@@ -499,7 +499,7 @@ RSpec.describe Admin::BackupsController do
       before { sign_in(admin) }
 
       describe "when filename contains invalid characters" do
-        it "should raise an error" do
+        it "returns 415 for invalid filename characters" do
           ["灰色.tar.gz", '; echo \'haha\'.tar.gz'].each do |invalid_filename|
             described_class.any_instance.expects(:has_enough_space_on_disk?).returns(true)
 
@@ -517,7 +517,7 @@ RSpec.describe Admin::BackupsController do
       end
 
       describe "when resumableIdentifier is invalid" do
-        it "should raise an error" do
+        it "returns 400 for an invalid upload identifier" do
           filename = "test_site-0123456789.tar.gz"
           @paths = [backup_path(File.join("tmp", "test", "#{filename}.part1"))]
 
@@ -537,7 +537,7 @@ RSpec.describe Admin::BackupsController do
       end
 
       describe "when filename is valid" do
-        it "should upload the file successfully" do
+        it "uploads the file" do
           freeze_time
           described_class.any_instance.expects(:has_enough_space_on_disk?).returns(true)
 
@@ -702,6 +702,56 @@ RSpec.describe Admin::BackupsController do
           )
         end
       end
+
+      context "when the global request rate limiter trips" do
+        before do
+          described_class.any_instance.stubs(:has_enough_space_on_disk?).returns(true)
+
+          global_setting :max_reqs_per_ip_mode, "block"
+          global_setting :max_reqs_per_ip_per_10_seconds, 2
+          global_setting :max_reqs_rate_limit_on_private, true
+
+          RateLimiter.enable
+          RateLimiter.clear_all_global!
+          freeze_time_safe
+        end
+
+        def upload_chunk(number)
+          post "/admin/backups/upload.json",
+               params: {
+                 resumableFilename: "test_Site-0123456789.tar.gz",
+                 resumableTotalSize: 100.megabytes,
+                 resumableIdentifier: "test",
+                 resumableChunkNumber: number.to_s,
+                 resumableChunkSize: "1",
+                 resumableCurrentChunkSize: "1",
+                 file: fixture_file_upload(Tempfile.new),
+               }
+        end
+
+        it "returns a 429 with a Retry-After header" do
+          @paths =
+            (1..3).map do
+              backup_path(File.join("tmp", "test", "test_Site-0123456789.tar.gz.part#{_1}"))
+            end
+
+          upload_chunk(1)
+          expect(response.status).to eq(200)
+
+          upload_chunk(2)
+          expect(response.status).to eq(200)
+
+          upload_chunk(3)
+          expect(response.status).to eq(429)
+          expect(response.headers["Retry-After"]).to eq("10")
+          expect(response.headers["Discourse-Rate-Limit-Error-Code"]).to eq("user_10_secs_limit")
+          expect(response.body).to eq(<<~MSG)
+            Slow down, you're making too many requests.
+            Please retry again in 10 seconds.
+            Error code: user_10_secs_limit.
+          MSG
+        end
+      end
     end
 
     shared_examples "uploading backup chunk not allowed" do
@@ -753,7 +803,7 @@ RSpec.describe Admin::BackupsController do
       before { sign_in(admin) }
 
       describe "when resumableIdentifier is invalid" do
-        it "should raise an error" do
+        it "returns 400 for an invalid chunk identifier" do
           get "/admin/backups/upload",
               params: {
                 resumableidentifier: "../some_file",
@@ -763,6 +813,44 @@ RSpec.describe Admin::BackupsController do
               }
 
           expect(response.status).to eq(400)
+        end
+      end
+
+      describe "when resumableFilename contains path traversal characters" do
+        it "does not reveal the status of a chunk outside its upload directory" do
+          traversed_chunk = backup_path("traversed-backup.tar.gz.part1")
+          File.write(traversed_chunk, "secret")
+          @paths = [traversed_chunk]
+          chunk_directory = backup_path(File.join("tmp", "upload"))
+          FileUtils.mkdir_p(chunk_directory)
+
+          begin
+            get "/admin/backups/upload.json",
+                params: {
+                  resumableIdentifier: "upload",
+                  resumableFilename: "../../traversed-backup.tar.gz",
+                  resumableChunkNumber: "1",
+                  resumableCurrentChunkSize: File.size(traversed_chunk).to_s,
+                }
+
+            expect(response.status).to eq(400)
+            expect(response.parsed_body["errors"]).to contain_exactly(
+              I18n.t("invalid_params", message: "resumableFilename"),
+            )
+
+            get "/admin/backups/upload.json",
+                params: {
+                  resumableIdentifier: "upload",
+                  resumableFilename: "missing-backup.tar.gz",
+                  resumableChunkNumber: "1",
+                  resumableCurrentChunkSize: "6",
+                }
+
+            expect(response.status).to eq(404)
+            expect(response.body).to eq("")
+          ensure
+            FileUtils.rm_rf(chunk_directory)
+          end
         end
       end
     end
@@ -798,7 +886,7 @@ RSpec.describe Admin::BackupsController do
     context "when logged in as an admin" do
       before { sign_in(admin) }
 
-      it "should rollback the restore" do
+      it "rolls back the restore" do
         BackupRestore.expects(:rollback!)
 
         post "/admin/backups/rollback.json"
@@ -806,7 +894,7 @@ RSpec.describe Admin::BackupsController do
         expect(response.status).to eq(200)
       end
 
-      it "should not allow rollback via a GET request" do
+      it "rejects rollback through a GET request" do
         get "/admin/backups/rollback.json"
         expect(response.status).to eq(404)
       end
@@ -814,7 +902,7 @@ RSpec.describe Admin::BackupsController do
       context "when readonly mode is enabled" do
         before { Discourse.enable_readonly_mode }
 
-        it "should rollback the restore" do
+        it "rolls back the restore" do
           BackupRestore.expects(:rollback!)
           post "/admin/backups/rollback.json"
           expect(response.status).to eq(200)
@@ -848,7 +936,7 @@ RSpec.describe Admin::BackupsController do
     context "when logged in as an admin" do
       before { sign_in(admin) }
 
-      it "should cancel an backup" do
+      it "cancels the backup" do
         BackupRestore.expects(:cancel!)
 
         delete "/admin/backups/cancel.json"
@@ -856,7 +944,7 @@ RSpec.describe Admin::BackupsController do
         expect(response.status).to eq(200)
       end
 
-      it "should not allow cancel via a GET request" do
+      it "rejects cancellation through a GET request" do
         get "/admin/backups/cancel.json"
         expect(response.status).to eq(404)
       end
@@ -864,7 +952,7 @@ RSpec.describe Admin::BackupsController do
       context "when readonly mode is enabled" do
         before { Discourse.enable_readonly_mode }
 
-        it "should cancel an backup" do
+        it "cancels the backup" do
           BackupRestore.expects(:cancel!)
 
           delete "/admin/backups/cancel.json"

@@ -2,6 +2,8 @@
 
 require "sidekiq/web"
 require "mini_scheduler/web"
+require_relative "../lib/markdown_endpoint/accept_header"
+require_relative "../lib/markdown_endpoint/request_constraint"
 
 # The following constants have been replaced with `RouteFormat` and are deprecated.
 USERNAME_ROUTE_FORMAT = /[%\w.\-]+?/ unless defined?(USERNAME_ROUTE_FORMAT)
@@ -10,6 +12,50 @@ BACKUP_ROUTE_FORMAT = /.+\.(sql\.gz|tar\.gz|tgz)/i unless defined?(BACKUP_ROUTE_
 Discourse::Application.routes.draw do
   def patch(*)
   end # Disable PATCH requests
+
+  constraints MarkdownEndpoint::RequestConstraint.new do
+    get "/",
+        to: "list#latest",
+        format: false,
+        defaults: {
+          format: :md,
+        },
+        constraints: MarkdownEndpoint::RequestConstraint.new(accept: true)
+
+    scope format: false,
+          constraints: {
+            topic_id: /\d+/,
+            post_number: /\d+/,
+            tag_id: /\d+/,
+            category_slug_path_with_id: %r{.+/\d+},
+          } do
+      {
+        "latest" => "list#latest",
+        "new" => "list#new",
+        "unread" => "list#unread",
+        "hot" => "list#hot",
+        "top" => "list#top",
+        "categories" => "categories#index",
+        "tags" => "tags#index",
+        "c/*category_slug_path_with_id" => "list#category_default",
+        "tag/:tag_slug/:tag_id" => "tags#show",
+        "tag/:tag_name" => "tags#show",
+        "t/:topic_id/:post_number" => "topics#show",
+        "t/:topic_id" => "topics#show",
+        "t/:slug/:topic_id/:post_number" => "topics#show",
+        "t/:slug/:topic_id" => "topics#show",
+      }.each do |path, action|
+        # Require the format so HTML URL generation cannot select a Markdown route.
+        get "#{path}.:format", to: action, constraints: { format: /md/ }
+        get path,
+            to: action,
+            defaults: {
+              format: :md,
+            },
+            constraints: MarkdownEndpoint::RequestConstraint.new(accept: true)
+      end
+    end
+  end
 
   scope path: nil, constraints: { format: %r{(json|html|\*/\*)} } do
     relative_url_root =
@@ -109,6 +155,8 @@ Discourse::Application.routes.draw do
 
         put "user_count" => "site_settings#user_count"
       end
+
+      post "onboarding/events" => "onboarding_events#create"
 
       get "reports" => "reports#index"
       get "reports/bulk" => "reports#bulk"
@@ -325,7 +373,12 @@ Discourse::Application.routes.draw do
       get "version_check" => "versions#show"
 
       get "dashboard" => "dashboard#index"
+      get "dashboard/site-traffic-explorer" => "dashboard#traffic",
+          :constraints => AdminConstraint.new
       put "dashboard/configuration" => "dashboard#update_configuration",
+          :constraints => AdminConstraint.new
+      put "dashboard/sections/:section_id/settings/:setting_key" =>
+            "dashboard#update_section_settings",
           :constraints => AdminConstraint.new
       get "dashboard/general" => "dashboard#general"
       get "dashboard/moderation" => "dashboard#moderation"
@@ -418,6 +471,8 @@ Discourse::Application.routes.draw do
         get "content/posts-and-topics" => "site_settings#index"
         get "content/stats-and-thresholds" => "site_settings#index"
         get "developer" => "site_settings#index"
+        get "mcp" => "site_settings#index"
+        get "mcp/*path" => "site_settings#index"
         get "files" => "site_settings#index"
         get "interface" => "site_settings#index"
         get "legal" => "site_settings#index"
@@ -457,11 +512,16 @@ Discourse::Application.routes.draw do
         get "/welcome-banner" => "welcome_banner#index"
         put "/logo" => "logo#update"
         put "/fonts" => "fonts#update"
+        get "/design-wizard" => "design_wizard#index"
+        put "/design-wizard" => "design_wizard#update"
         get "colors/:id" => "color_palettes#show"
         get "colors" => "color_palettes#index"
         get "upcoming-changes" => "upcoming_changes#index"
         put "upcoming-changes/groups" => "upcoming_changes#update_groups"
         put "upcoming-changes/toggle" => "upcoming_changes#toggle_change"
+        get "category-management/categories" => "category_management#categories"
+        get "category-management" => "site_settings#index"
+        get "category-management/*path" => "site_settings#index"
 
         resources :flags, only: %i[index new create update destroy] do
           put "toggle"
@@ -503,9 +563,16 @@ Discourse::Application.routes.draw do
         get "user_fields/:id" => "user_fields#show"
         get "user_fields/:id/edit" => "user_fields#edit"
 
-        resources :emoji, only: %i[index create destroy], constraints: AdminConstraint.new
+        resources :emoji, only: %i[index create destroy], constraints: AdminConstraint.new do
+          collection do
+            post :export
+            post :import_preview
+            post :import_confirm
+          end
+        end
         get "emoji/new" => "emoji#index"
         get "emoji/settings" => "emoji#index"
+        get "emoji/import" => "emoji#index"
         resources :permalinks, only: %i[index new create show destroy]
       end
 
@@ -582,6 +649,7 @@ Discourse::Application.routes.draw do
     post "session/email-login/:token" => "session#email_login"
     post "session/login-code" => "session#create_login_code"
     post "session/login-code/verify" => "session#verify_login_code"
+    post "session/password-reset-code/verify" => "session#redeem_password_reset_code"
     get "session/otp/:token" => "session#one_time_password", :constraints => { token: /[0-9a-f]+/ }
     post "session/otp/:token" => "session#one_time_password", :constraints => { token: /[0-9a-f]+/ }
     get "session/2fa" => "session#second_factor_auth_show"
@@ -593,6 +661,8 @@ Discourse::Application.routes.draw do
     post "session/passkey/auth" => "session#passkey_login"
     get "session/scopes" => "session#scopes"
     get "composer/mentions" => "composer#mentions"
+    get "gifs/categories" => "gifs#categories"
+    get "gifs/search" => "gifs#search"
     get "composer_messages" => "composer_messages#index"
     get "composer_messages/user_not_seen_in_a_while" => "composer_messages#user_not_seen_in_a_while"
 
@@ -618,6 +688,8 @@ Discourse::Application.routes.draw do
     get "directory-columns" => "directory_columns#index", :format => :json
     get "edit-directory-columns" => "edit_directory_columns#index", :format => :json
     put "edit-directory-columns" => "edit_directory_columns#update", :format => :json
+    get "access-control/grantees/search" => "access_control_lists#search_grantees"
+    post "access-control/evaluate" => "access_control_lists#evaluate"
 
     %w[users u].each_with_index do |root_path, index|
       get "#{root_path}" => "users#index", :constraints => { format: "html" }
@@ -628,6 +700,8 @@ Discourse::Application.routes.draw do
           get "check_email"
         end
       end
+
+      get "#{root_path}/random-username" => "users#generate_random_username"
 
       get "#{root_path}/trusted-session" => "users#trusted_session"
       post "#{root_path}/confirm-session" => "users#confirm_session"
@@ -668,7 +742,7 @@ Discourse::Application.routes.draw do
       get "#{root_path}/search/users" => "users#search_users"
 
       get(
-        { "#{root_path}/account-created/" => "users#account_created" }.merge(
+        **{ "#{root_path}/account-created/" => "users#account_created" }.merge(
           index == 1 ? { as: :users_account_created } : { as: :old_account_created },
         ),
       )
@@ -676,7 +750,7 @@ Discourse::Application.routes.draw do
       get "#{root_path}/account-created/resent" => "users#account_created"
       get "#{root_path}/account-created/edit-email" => "users#account_created"
       get(
-        { "#{root_path}/password-reset/:token" => "users#password_reset_show" }.merge(
+        **{ "#{root_path}/password-reset/:token" => "users#password_reset_show" }.merge(
           index == 1 ? { as: :password_reset_token } : {},
         ),
       )
@@ -690,7 +764,7 @@ Discourse::Application.routes.draw do
             token: /[0-9a-f]+/,
           }
       put(
-        {
+        **{
           "#{root_path}/activate-account/:token" => "users#perform_account_activation",
           :constraints => {
             token: /[0-9a-f]+/,
@@ -705,7 +779,7 @@ Discourse::Application.routes.draw do
       put "#{root_path}/confirm-new-email/:token" => "users_email#confirm_new_email"
 
       get(
-        {
+        **{
           "#{root_path}/confirm-admin/:token" => "users#confirm_admin",
           :constraints => {
             token: /[0-9a-f]+/,
@@ -754,7 +828,7 @@ Discourse::Application.routes.draw do
             format: :json,
           }
       get(
-        {
+        **{
           "#{root_path}/:username" => "users#show",
           :constraints => {
             username: RouteFormat.username,
@@ -1291,10 +1365,12 @@ Discourse::Application.routes.draw do
     end
 
     get "/post_localizations/:id" => "post_localizations#show"
+    put "/post_localizations/:post_id/locale" => "post_localizations#update_locale"
     post "/post_localizations/create_or_update", to: "post_localizations#create_or_update"
     delete "/post_localizations/destroy", to: "post_localizations#destroy"
 
     get "topic_localizations/:topic_id/:locale" => "topic_localizations#show"
+    put "topic_localizations/:topic_id/locale" => "topic_localizations#update_locale"
     post "topic_localizations/create_or_update", to: "topic_localizations#create_or_update"
     delete "topic_localizations/destroy", to: "topic_localizations#destroy"
 
@@ -1347,6 +1423,7 @@ Discourse::Application.routes.draw do
     get "/c", to: redirect(relative_url_root + "categories")
 
     resources :categories, only: %i[index create update destroy]
+    post "categories/:id/convert_nested_replies" => "categories#convert_nested_replies"
     post "categories/reorder" => "categories#reorder"
     get "categories/types" => "categories#types"
     get "categories/find" => "categories#find"
@@ -1380,7 +1457,7 @@ Discourse::Application.routes.draw do
 
     get "c/*category_slug_path_with_id.rss" => "list#category_feed", :format => :rss
     scope path: "c/*category_slug_path_with_id" do
-      get "/none" => "list#category_none_latest"
+      get "/none" => "list#category_none_default", :as => "category_none_default"
 
       TopTopic.periods.each do |period|
         get "/none/l/top/#{period}", to: redirect("/none/l/top?period=#{period}", status: 301)
@@ -1862,30 +1939,79 @@ Discourse::Application.routes.draw do
     resources :tag_groups, constraints: StaffConstraint.new, except: [:edit]
     get "/tag_groups/filter/search" => "tag_groups#search", :format => :json
 
-    Discourse.filters.each do |filter|
-      root to: "list##{filter}",
-           constraints: HomePageConstraint.new("#{filter}"),
-           as: "list_#{filter}"
+    # Allow the controller to fall back to HTML when Markdown loses Accept negotiation.
+    scope constraints: { format: %r{(json|html|markdown|\*/\*)} } do
+      Discourse.filters.each do |filter|
+        root to: "list##{filter}",
+             constraints: HomePageConstraint.new("#{filter}"),
+             as: "list_#{filter}"
+      end
+
+      DiscoursePluginRegistry._raw_homepage_options.each do |registration|
+        option = registration[:value]
+        get "/", to: option[:route], constraints: HomePageConstraint.new(option[:id])
+      end
+
+      # special case for categories
+      root to: "categories#index",
+           constraints: HomePageConstraint.new("categories"),
+           as: "categories_index"
+
+      root to: "finish_installation#index",
+           constraints: HomePageConstraint.new("finish_installation"),
+           as: "installation_redirect"
+
+      root to: "home_page#custom",
+           constraints: HomePageConstraint.new("custom"),
+           as: "home_page_custom"
+
+      root to: "home_page#blank",
+           constraints: HomePageConstraint.new("blank"),
+           as: "home_page_blank"
     end
 
     get "/t/:topic_id/view-stats.json" => "topic_view_stats#index"
 
-    # special case for categories
-    root to: "categories#index",
-         constraints: HomePageConstraint.new("categories"),
-         as: "categories_index"
-
-    root to: "finish_installation#index",
-         constraints: HomePageConstraint.new("finish_installation"),
-         as: "installation_redirect"
-
-    root to: "home_page#custom",
-         constraints: HomePageConstraint.new("custom"),
-         as: "home_page_custom"
-
-    root to: "home_page#blank", constraints: HomePageConstraint.new("blank"), as: "home_page_blank"
-
     get "/custom" => "home_page#custom"
+
+    post "/mcp" => "mcp#create"
+    match "/mcp" => "mcp#method_not_allowed", :via => %i[get delete put patch options]
+
+    get "/.well-known/oauth-protected-resource/mcp" => "mcp_oauth_metadata#protected_resource"
+    get "/.well-known/oauth-authorization-server" => "mcp_oauth_metadata#authorization_server"
+    get "/.well-known/openid-configuration" => "mcp_oauth_metadata#authorization_server"
+
+    get "/oauth2/mcp/authorize" => "mcp_oauth_authorizations#show", :as => :oauth2_mcp_authorize
+    post "/oauth2/mcp/authorize" => "mcp_oauth_authorizations#create"
+    post "/oauth2/mcp/token" => "mcp_oauth_tokens#create"
+    post "/oauth2/mcp/revoke" => "mcp_oauth_tokens#revoke"
+
+    scope "/admin/mcp", constraints: AdminConstraint.new do
+      get "/overview" => "admin/mcp#overview"
+      get "/access" => "admin/mcp#access"
+      put "/access/:group_id" => "admin/mcp#update_access"
+      delete "/access/:group_id" => "admin/mcp#destroy_access"
+      get "/capabilities" => "admin/mcp#primitives"
+      put "/capabilities" => "admin/mcp#update_primitives"
+      put "/capabilities/emergency-block" => "admin/mcp#emergency_block"
+      get "/clients" => "admin/mcp_clients#index"
+      post "/clients" => "admin/mcp_clients#create"
+      get "/clients/:id" => "admin/mcp_clients#show"
+      put "/clients/:id/block" => "admin/mcp_clients#block"
+      post "/clients/:id/refresh" => "admin/mcp_clients#refresh"
+      get "/authorizations" => "admin/mcp_authorizations#index"
+      delete "/authorizations/:id" => "admin/mcp_authorizations#destroy"
+      get "/activity" => "admin/mcp_activity#index"
+    end
+
+    get "/u/:username/preferences/mcp-authorizations" => "mcp_user_authorizations#index",
+        :constraints => {
+          username: RouteFormat.username,
+        }
+    delete "/u/:username/preferences/mcp-authorizations/:id" => "mcp_user_authorizations#destroy",
+           :constraints => {
+             username: RouteFormat.username,
+           }
 
     get "/user-api-key/new" => "user_api_keys#new"
     post "/user-api-key" => "user_api_keys#create"
@@ -1945,8 +2071,10 @@ Discourse::Application.routes.draw do
     put "user-status" => "user_status#set"
     delete "user-status" => "user_status#clear"
 
-    resources :sidebar_sections, only: %i[index create update destroy]
+    resources :sidebar_sections, only: %i[index show create update destroy]
     put "/sidebar_sections/reset/:id" => "sidebar_sections#reset"
+    put "/sidebar_sections/:id/reorder" => "sidebar_sections#reorder"
+    put "/sidebar_sections/:id/move_link" => "sidebar_sections#move_link"
 
     get "/form-templates/:id" => "form_templates#show"
     get "/form-templates" => "form_templates#index"
@@ -1958,6 +2086,7 @@ Discourse::Application.routes.draw do
       # Routes that are only used for testing
       get "/test_net_http_timeouts" => "test_requests#test_net_http_timeouts"
       get "/test_net_http_headers" => "test_requests#test_net_http_headers"
+      get "/test_postgres_readonly" => "test_requests#test_postgres_readonly"
     end
 
     # This catch-all route should always be last

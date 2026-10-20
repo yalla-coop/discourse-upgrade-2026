@@ -33,7 +33,7 @@ RSpec.describe Migrations::Reporting::Tui do
       it "renders the percent, total count, elapsed, and rate" do
         row = screen.content_rows.first
         expect(row).to include("Categories")
-        expect(row).to include("47%") # 2000 / 4281
+        expect(row).to include("46%") # 2000 / 4281, floored
         expect(row).to include("4,281") # the total, not the running current
         expect(row).not_to include("2,000") # current is conveyed by the percent
         expect(row).to include("0:06") # elapsed
@@ -77,6 +77,31 @@ RSpec.describe Migrations::Reporting::Tui do
         expect(rows.first).to include("4,281")
         expect(rows.first).not_to include("/") # the count is not repeated as current/max
         expect(rows.first).not_to include("%") # no lingering percent
+      end
+
+      it "includes the counting time before progress_begin in the step's duration" do
+        renderer.apply([:start, "Posts", "Posts"]) # the clock reads 6.0 here
+        at(11.0) # planning/counting takes 5s before the progress bar starts
+        renderer.apply([:progress_begin, "Posts", 100])
+        at(13.0)
+        renderer.apply([:progress, "Posts", 100, 0, 0, 0])
+        renderer.apply([:finish, "Posts", :done])
+        renderer.repaint
+
+        row = screen.content_rows.find { |r| r.include?("Posts") }
+        expect(row).to include("0:07") # 5s counting + 2s work, not just the 2s
+      end
+
+      it "does not read 100% until the very last item — floors, never rounds up" do
+        renderer.apply([:progress, "Categories", 4280, 0, 0, 0]) # 4280/4281 = 99.98%
+        at(8.0)
+        renderer.repaint
+        expect(screen.content_rows.first).to include(" 99%")
+        expect(screen.content_rows.first).not_to include("100%")
+
+        renderer.apply([:progress, "Categories", 4281, 0, 0, 0]) # done
+        renderer.repaint
+        expect(screen.content_rows.first).to include("100%")
       end
     end
 
@@ -237,6 +262,91 @@ RSpec.describe Migrations::Reporting::Tui do
       end
     end
 
+    describe "the concurrency indicator" do
+      let(:count_indicator) { /\d+×/ }
+
+      def running_step(title, concurrency)
+        renderer.apply([:start, title, title])
+        renderer.apply([:progress_begin, title, 1000])
+        renderer.apply([:concurrency, title, concurrency]) if concurrency
+        renderer.apply([:progress, title, 500, 0, 0, 0])
+      end
+
+      it "renders the fork count, e.g. 4×, for a step using more than one fork" do
+        running_step("Posts", 4)
+        renderer.repaint
+        expect(screen.content_rows.first).to include("4×")
+      end
+
+      it "shows nothing in the column for a single-fork step" do
+        running_step("Posts", 1)
+        renderer.repaint
+        expect(screen.content_rows.first).not_to match(count_indicator)
+      end
+
+      it "shows nothing when the step never reports a count" do
+        running_step("Posts", nil)
+        renderer.repaint
+        expect(screen.content_rows.first).not_to match(count_indicator)
+      end
+
+      it "updates the count live when it's re-reported" do
+        running_step("Posts", 8)
+        renderer.repaint
+        expect(screen.content_rows.first).to include("8×")
+
+        renderer.apply([:concurrency, "Posts", 2])
+        renderer.repaint
+        row = screen.content_rows.first
+        expect(row).to include("2×")
+        expect(row).not_to include("8×")
+      end
+
+      it "colors the count when color is on" do
+        running_step("Posts", 8)
+        renderer.repaint
+        expect(io.string).to include("#{Migrations::Reporting::Tui::Ansi::MAGENTA}8×")
+      end
+
+      it "does not affect the count column shared with finished rows" do
+        renderer.apply([:start, "Done", "Done"])
+        renderer.apply([:progress_begin, "Done", 1_000_000])
+        renderer.apply([:progress, "Done", 1_000_000, 0, 0, 0])
+        renderer.apply([:finish, "Done", :done])
+        running_step("Busy", 8)
+        renderer.repaint
+
+        rows = screen.content_rows
+        done = rows.find { |r| r.include?("Done") }
+        busy = rows.find { |r| r.include?("Busy") }
+        # the count sits after the shared columns, so the totals still line up
+        expect(busy.index("1,000") + "1,000".length).to eq(
+          done.index("1,000,000") + "1,000,000".length,
+        )
+      end
+
+      describe "without color" do
+        around do |example|
+          original = ENV["NO_COLOR"]
+          ENV["NO_COLOR"] = "1"
+          example.run
+          original.nil? ? ENV.delete("NO_COLOR") : ENV["NO_COLOR"] = original
+        end
+
+        it "renders the count as plain text, with no color codes" do
+          no_color = described_class.new(output: io, width: 120, clock: -> { time[0] })
+          no_color.apply([:start, "Posts", "Posts"])
+          no_color.apply([:progress_begin, "Posts", 1000])
+          no_color.apply([:concurrency, "Posts", 8])
+          no_color.apply([:progress, "Posts", 500, 0, 0, 0])
+          no_color.repaint
+
+          expect(screen.content_rows.first).to include("8×")
+          expect(io.string).not_to include(Migrations::Reporting::Tui::Ansi::MAGENTA)
+        end
+      end
+    end
+
     describe "notices" do
       it "renders a permanent line prefixed with the step title" do
         renderer.apply([:start, "Posts", "Posts"])
@@ -247,10 +357,40 @@ RSpec.describe Migrations::Reporting::Tui do
         expect(notice).to start_with("Posts")
       end
 
-      it "renders an unattributed notice when there is no step title" do
+      it "renders a notice with no owning step" do
         renderer.apply([:notice, nil, "Run starting"])
         renderer.repaint
         expect(screen.content_rows).to include("Run starting")
+      end
+
+      it "splits a multi-line notice so it can't fuse with or strand the live rows" do
+        renderer.apply([:start, "Posts", "Posts"])
+        renderer.apply([:progress_begin, "Posts", 1000])
+        renderer.apply([:start, "Tags", "Tags"])
+        renderer.apply([:progress_begin, "Tags", 200])
+        at(1.0)
+        renderer.apply([:progress, "Posts", 100, 0, 0, 0])
+        renderer.apply([:progress, "Tags", 20, 0, 0, 0])
+        renderer.repaint
+
+        renderer.apply([:notice, "Posts", "RuntimeError: boom\n  from a.rb:1\n  from b.rb:2"])
+        at(2.0)
+        renderer.apply([:progress, "Posts", 300, 0, 0, 0])
+        renderer.repaint
+        at(3.0)
+        renderer.apply([:progress, "Posts", 500, 0, 0, 0])
+        renderer.repaint
+
+        rows = screen.content_rows
+        # Each notice line landed as its own permanent row.
+        expect(rows).to include(a_string_matching(/RuntimeError: boom/))
+        expect(rows).to include(a_string_matching(/from a\.rb:1/))
+        expect(rows).to include(a_string_matching(/from b\.rb:2/))
+        # No permanent notice text is fused onto a live row's percent.
+        expect(rows).to(be_none { |r| r.include?("from ") && r.match?(/%/) })
+        # The two live rows appear exactly once each — nothing stranded above.
+        expect(rows.count { |r| r.match?(/Posts.*%/) }).to eq(1)
+        expect(rows.count { |r| r.match?(/Tags.*%/) }).to eq(1)
       end
     end
 
@@ -269,8 +409,8 @@ RSpec.describe Migrations::Reporting::Tui do
         big = rows.find { |r| r.include?("Big") }
         # the count is right-aligned, so the duration after it starts at the same
         # screen column in both rows
-        expect(small.index("0:00")).to eq(big.index("0:00"))
-        expect(small.index("0:00")).to be > big.index("Big")
+        expect(small.index("<1s")).to eq(big.index("<1s"))
+        expect(small.index("<1s")).to be > big.index("Big")
       end
 
       it "reserves the title column so rows with different-length titles align" do
@@ -332,6 +472,46 @@ RSpec.describe Migrations::Reporting::Tui do
       end
     end
 
+    describe "repaint leftover accounting" do
+      def two_live_steps
+        renderer.apply([:start, "Posts", "Posts"])
+        renderer.apply([:progress_begin, "Posts", 1000])
+        renderer.apply([:start, "Tags", "Tags"])
+        renderer.apply([:progress_begin, "Tags", 200])
+        at(2.0)
+        renderer.apply([:progress, "Posts", 400, 0, 0, 0])
+        renderer.apply([:progress, "Tags", 50, 0, 0, 0])
+      end
+
+      it "emits no extra newlines when a frame both prints permanents and shrinks the live region" do
+        two_live_steps
+        renderer.repaint
+
+        mark = io.string.length
+        renderer.apply([:finish, "Posts", :done])
+        renderer.apply([:finish, "Tags", :done])
+        renderer.repaint
+
+        frame = io.string[mark..]
+        # Two permanent lines replace the two live rows: only their two newlines,
+        # not extra leftover erase pairs for a region that didn't actually shrink.
+        expect(frame.scan("\r\n").size).to eq(2)
+      end
+
+      it "leaves no stray blank rows below the interrupted lines on finalize" do
+        two_live_steps
+        renderer.repaint
+        renderer.finalize
+
+        rows = screen.rows
+        interrupted = rows.select { |r| r.include?("interrupted") }
+        expect(interrupted.size).to eq(2)
+        # Only the cursor's resting line sits below them, not a blank per shrunk row.
+        expect(rows[(rows.index(interrupted.last) + 1)..].reject(&:empty?)).to be_empty
+        expect(rows.count(&:empty?)).to eq(1)
+      end
+    end
+
     describe "out-of-order updates" do
       it "ignores progress for a step that already finished" do
         renderer.apply([:start, "Users", "Users"])
@@ -369,6 +549,25 @@ RSpec.describe Migrations::Reporting::Tui do
       end
     end
 
+    describe "NO_COLOR set to an empty string" do
+      around do |example|
+        original = ENV["NO_COLOR"]
+        ENV["NO_COLOR"] = ""
+        example.run
+        original.nil? ? ENV.delete("NO_COLOR") : ENV["NO_COLOR"] = original
+      end
+
+      it "still emits color, since NO_COLOR only disables it when non-empty" do
+        renderer = described_class.new(output: io, width: 120, clock: -> { time[0] })
+        renderer.apply([:start, "Users", "Users"])
+        renderer.apply([:progress_begin, "Users", 100])
+        renderer.apply([:progress, "Users", 40, 0, 0, 0])
+        renderer.repaint
+
+        expect(io.string).to match(/\e\[[0-9;]*m/)
+      end
+    end
+
     describe "the no-line-reaches-width invariant" do
       it "keeps every rendered line strictly narrower than the terminal" do
         narrow = described_class.new(output: io, width: 40, clock: -> { time[0] })
@@ -393,6 +592,47 @@ RSpec.describe Migrations::Reporting::Tui do
           .each do |row|
             expect(AnsiScreen.display_width(row)).to be <= 38 # width - 2
           end
+      end
+    end
+
+    describe "the finishing-up status and run summary" do
+      it "shows a transient finishing-up line while draining, replaced by the summary" do
+        renderer.apply([:finalizing_begin])
+        renderer.repaint
+        expect(screen.content_rows).to include(a_string_matching(/Finishing up/))
+
+        # the real flow ends `finalizing` and prints the summary in the same frame
+        renderer.apply([:finalizing_end])
+        renderer.apply([:summary, 5.0, 3, 0, 0])
+        renderer.repaint
+        expect(screen.content_rows).not_to include(a_string_matching(/Finishing up/))
+        expect(screen.content_rows).to include(a_string_matching(/Total.*3 steps/))
+      end
+
+      it "prints a summary with the runtime under the step-duration column" do
+        renderer.apply([:start, "Users", "Users"])
+        renderer.apply([:progress_begin, "Users", 1000])
+        renderer.apply([:progress, "Users", 1000, 0, 0, 0])
+        at(3.0)
+        renderer.apply([:finish, "Users", :done])
+        renderer.apply([:summary, 138.0, 24, 0, 0])
+        renderer.repaint
+
+        summary = screen.content_rows.find { |r| r.include?("Total") }
+        step = screen.content_rows.find { |r| r.include?("Users") }
+        expect(summary).to include("24 steps")
+        expect(summary).to include("2:18") # 138 seconds runtime
+        # the runtime lines up under the per-step durations
+        expect(summary.index(/\d+:\d\d/)).to eq(step.index(/\d+:\d\d/))
+      end
+
+      it "notes failed and skipped steps in the summary" do
+        renderer.apply([:summary, 60.0, 24, 2, 1])
+        renderer.repaint
+
+        row = screen.content_rows.find { |r| r.include?("Total") }
+        expect(row).to include("2 failed")
+        expect(row).to include("1 skipped")
       end
     end
   end
@@ -426,6 +666,23 @@ RSpec.describe Migrations::Reporting::Tui do
       expect(row).to include("800 warnings")
     end
 
+    it "coalesces progress instead of queuing one event per update" do
+      step = reporter.start_step("Users")
+      queue = reporter.instance_variable_get(:@queue)
+
+      step.with_progress(max_progress: 10_000) do |progress|
+        10_000.times { progress.update(increment_by: 1) }
+        # the 10k updates collapse into one coalesced slot, so the queue never
+        # fills and the render thread keeps repainting
+        expect(queue.size).to be < 50
+      end
+      step.finish
+      reporter.close
+
+      row = final_screen.content_rows.find { |r| r.start_with?("✓ Users") }
+      expect(row).to include("10,000")
+    end
+
     it "renders an interrupted line when finish runs during a SignalException" do
       step = reporter.start_step("Posts")
       step.with_progress(max_progress: 1000) { |progress| progress.update(increment_by: 410) }
@@ -457,6 +714,39 @@ RSpec.describe Migrations::Reporting::Tui do
       reporter.close
       expect { reporter.close }.not_to raise_error
       expect(io.string).to end_with(Migrations::Reporting::Tui::Ansi::SHOW_CURSOR)
+    end
+
+    it "does not raise, and warns, when the render thread's output breaks" do
+      broken = Object.new
+      def broken.write(*)
+        raise Errno::EPIPE
+      end
+
+      def broken.flush
+      end
+
+      reporter = described_class.new(fps: 60, output: broken)
+      reporter.start_step("Users").finish
+
+      expect { reporter.close }.to output(/TUI reporter crashed/).to_stderr
+    end
+
+    it "drops a coalesced progress report that lands after its step finished" do
+      # `apply_coalesced_progress` is private and normally only runs on the render
+      # thread; expose it through a subclass to drive a frame by hand.
+      reporter =
+        Class.new(described_class) { public :apply_coalesced_progress }.new(fps: 60, output: io)
+      reporter.start_step("Users").finish
+      reporter.close # drains the finish and joins the render thread
+
+      # A worker races the finish and reports progress for the now-finished step.
+      reporter.report_progress(1, 50, 0, 0, 0)
+      expect(reporter.instance_variable_get(:@progress)).not_to be_empty
+
+      # The next frame swaps the map out, so the stale entry can't linger and be
+      # re-applied as a no-op on every frame for the rest of the run.
+      reporter.apply_coalesced_progress
+      expect(reporter.instance_variable_get(:@progress)).to be_empty
     end
   end
 end

@@ -102,6 +102,10 @@ if topic.posts_count < 2
     topic_id: topic.id,
     raw: "Looking forward to it, I'll bring the reading list.",
     reply_to_post_number: 1,
+    # From Discourse 2026.9 the post alert runs as a delayed job; left to run,
+    # it later replaced the "replied" notification added below with "posted".
+    # Skip it and add the notification once, below.
+    skip_jobs: true,
   )
 end
 

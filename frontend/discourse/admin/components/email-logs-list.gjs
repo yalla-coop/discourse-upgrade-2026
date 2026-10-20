@@ -4,18 +4,25 @@ import { fn, get } from "@ember/helper";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
 import didInsert from "@ember/render-modifiers/modifiers/did-insert";
+import { service } from "@ember/service";
 import EmailLog from "discourse/admin/models/email-log";
 import HorizontalScrollSyncWrapper from "discourse/components/horizontal-scroll-sync-wrapper";
 import { addUniqueValuesToArray } from "discourse/lib/array-tools";
 import discourseDebounce from "discourse/lib/debounce";
 import { INPUT_DELAY } from "discourse/lib/environment";
 import { autoTrackedArray } from "discourse/lib/tracked-tools";
+import DiscourseURL, {
+  applyQueryParams,
+  searchParamsFromPath,
+} from "discourse/lib/url";
 import DConditionalLoadingSpinner from "discourse/ui-kit/d-conditional-loading-spinner";
 import DLoadMore from "discourse/ui-kit/d-load-more";
 import DTextField from "discourse/ui-kit/d-text-field";
 import { i18n } from "discourse-i18n";
 
 export default class EmailLogsList extends Component {
+  @service router;
+
   @tracked allLoaded = false;
   @tracked loading = false;
   @tracked filterValues = {};
@@ -43,21 +50,6 @@ export default class EmailLogsList extends Component {
       return 0;
     });
   };
-
-  @action
-  initializeComponent() {
-    if (!this.initialized) {
-      this.initialized = true;
-
-      const initialValues = {};
-      this.args.filters?.forEach((filter) => {
-        initialValues[filter.property] = "";
-      });
-      this.filterValues = initialValues;
-
-      this.loadLogs();
-    }
-  }
 
   get sourceModel() {
     return this.args.sourceModel || EmailLog;
@@ -88,6 +80,25 @@ export default class EmailLogsList extends Component {
       !this.allLoaded &&
       !this.loading
     );
+  }
+
+  @action
+  initializeComponent() {
+    if (!this.initialized) {
+      this.initialized = true;
+
+      // router.currentURL, unlike window.location, is also correct under the
+      // test environment's mock location
+      const params = searchParamsFromPath(this.router.currentURL);
+
+      const initialValues = {};
+      this.args.filters?.forEach((filter) => {
+        initialValues[filter.property] = params.get(filter.name) || "";
+      });
+      this.filterValues = initialValues;
+
+      this.loadLogs();
+    }
   }
 
   @action
@@ -133,8 +144,29 @@ export default class EmailLogsList extends Component {
         [filterConfig.property]: event.target.value,
       };
       this.loadMoreEnabled = false;
-      discourseDebounce(this, this.loadLogs, INPUT_DELAY);
+      discourseDebounce(this, this.applyFilters, INPUT_DELAY);
     }
+  }
+
+  applyFilters() {
+    this.syncFiltersToUrl();
+    this.loadLogs();
+  }
+
+  syncFiltersToUrl() {
+    // no currentURL means the router isn't live (e.g. rendering tests)
+    if (!this.router.currentURL) {
+      return;
+    }
+
+    const updates = {};
+    this.args.filters?.forEach(({ property, name }) => {
+      updates[name] = this.filterValues[property];
+    });
+
+    DiscourseURL.replaceState(
+      applyQueryParams(this.router.currentURL, updates)
+    );
   }
 
   @action
@@ -175,8 +207,8 @@ export default class EmailLogsList extends Component {
               {{#each @filters as |filter|}}
                 <td>
                   <DTextField
-                    @value={{get this.filterValues filter.property}}
                     @placeholderKey={{filter.placeholder}}
+                    @value={{get this.filterValues filter.property}}
                     {{on "input" (fn this.updateFilter filter.name)}}
                   />
                 </td>

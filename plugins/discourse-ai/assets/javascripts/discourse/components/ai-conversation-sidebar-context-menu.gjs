@@ -20,10 +20,6 @@ export default class AiConversationSidebarContextMenu extends Component {
     return this.args.data.manager;
   }
 
-  get canStarConversations() {
-    return this.manager.siteSettings.enable_ai_bot_starred_conversations;
-  }
-
   get canShare() {
     return this.currentUser?.can_share_ai_bot_conversations;
   }
@@ -44,7 +40,7 @@ export default class AiConversationSidebarContextMenu extends Component {
 
   @action
   async toggleStarred() {
-    if (!this.canStarConversations || !this.topic || this.isTogglingStarred) {
+    if (!this.topic || this.isTogglingStarred) {
       return;
     }
 
@@ -70,26 +66,24 @@ export default class AiConversationSidebarContextMenu extends Component {
 
   <template>
     <DDropdownMenu class="ai-conversation-sidebar-link-menu" as |dropdown|>
-      {{#if this.canStarConversations}}
-        <dropdown.item>
-          <DButton
-            @action={{this.toggleStarred}}
-            @disabled={{this.isTogglingStarred}}
-            @icon={{this.starIcon}}
-            @label={{this.starLabel}}
-            @title={{this.starLabel}}
-            class="ai-conversation-sidebar-link-menu__star-conversation"
-          />
-        </dropdown.item>
-      {{/if}}
+      <dropdown.item>
+        <DButton
+          class="ai-conversation-sidebar-link-menu__star-conversation"
+          @action={{this.toggleStarred}}
+          @disabled={{this.isTogglingStarred}}
+          @icon={{this.starIcon}}
+          @label={{this.starLabel}}
+          @title={{this.starLabel}}
+        />
+      </dropdown.item>
       {{#if this.canShare}}
         <dropdown.item>
           <DButton
+            class="ai-conversation-sidebar-link-menu__share-conversation"
             @action={{this.share}}
             @icon="share-nodes"
             @label="discourse_ai.ai_bot.share_ai_conversation.name"
             @title="discourse_ai.ai_bot.share_ai_conversation.title"
-            class="ai-conversation-sidebar-link-menu__share-conversation"
           />
         </dropdown.item>
       {{/if}}

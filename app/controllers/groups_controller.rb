@@ -129,8 +129,7 @@ class GroupsController < ApplicationController
       format.html do
         @title = group.full_name.present? ? group.full_name.capitalize : group.name
         @full_title = "#{@title} - #{SiteSetting.title}"
-        @description_meta =
-          group.bio_cooked.present? ? PrettyText.excerpt(group.bio_cooked, 300) : @title
+        @description_meta = group.bio_summary || @title
         render :show
       end
 
@@ -345,7 +344,7 @@ class GroupsController < ApplicationController
         "(SELECT value FROM user_custom_fields ucf WHERE ucf.user_id = users.id AND ucf.name = #{ActiveRecord::Base.connection.quote(params[:order_field])}) #{dir} NULLS LAST"
     end
 
-    users = group.users.human_users
+    users = group.listed_users
     total = users.count
 
     if (filter = params[:filter]).present?
@@ -468,8 +467,6 @@ class GroupsController < ApplicationController
 
       group.notify_added_to_group(user, owner: true) if params[:notify_users].to_s == "true"
     end
-
-    group.restore_user_count!
 
     render json: success_json.merge!(usernames: users.pluck(:username))
   end
@@ -693,13 +690,13 @@ class GroupsController < ApplicationController
 
   def search
     include_everyone =
-      params[:include_everyone] == "true" || params[:include_pseudogroups] == "true"
+      (params[:include_everyone] == "true" || params[:include_pseudogroups] == "true") &&
+        !SiteSetting.granular_anonymous_and_logged_in_groups_permissions
     include_pseudogroups = params[:include_pseudogroups] == "true"
-    order = ["name"]
     groups =
       Group.visible_groups(
         current_user,
-        order,
+        ["name"],
         include_everyone: include_everyone,
         include_pseudogroups: include_pseudogroups,
       ).includes(:flair_upload)
@@ -854,6 +851,19 @@ class GroupsController < ApplicationController
     if !automatic && current_user.staff?
       attributes.push(
         :incoming_email,
+        :title,
+        :primary_group,
+        :name,
+        :grant_trust_level,
+        :publish_read_state,
+      )
+
+      custom_fields = DiscoursePluginRegistry.editable_group_custom_fields
+      attributes << { custom_fields: custom_fields } if custom_fields.present?
+    end
+
+    if !automatic && current_user.admin
+      attributes.push(
         :smtp_server,
         :smtp_port,
         :smtp_ssl_mode,
@@ -863,16 +873,8 @@ class GroupsController < ApplicationController
         :email_username,
         :email_password,
         :email_from_alias,
-        :title,
-        :primary_group,
-        :name,
-        :grant_trust_level,
-        :publish_read_state,
         :allow_unknown_sender_topic_replies,
       )
-
-      custom_fields = DiscoursePluginRegistry.editable_group_custom_fields
-      attributes << { custom_fields: custom_fields } if custom_fields.present?
     end
 
     if !automatic && group && guardian.can_admin_group?(group)

@@ -67,6 +67,27 @@ describe "Composer - ProseMirror - Pasting content" do
     expect(composer).to have_value("not selected **[bold](www.example.com)** not selected")
   end
 
+  it "lets the user paste bold text as plain text inside backtick and tilde code fences" do
+    open_composer
+    composer.toggle_rich_editor
+    html = "<strong>bold</strong>"
+    plain_text = "bold"
+
+    composer.fill_content("```\nprefix \n```")
+    composer.move_cursor_after("prefix ")
+    cdp.copy_paste(html, html: true, plain_text: plain_text)
+    expect(composer).to have_value("```\nprefix bold\n```")
+
+    composer.fill_content("~~~console\nprefix \n~~~")
+    composer.move_cursor_after("prefix ")
+    cdp.copy_paste(html, html: true, plain_text: plain_text)
+    expect(composer).to have_value("~~~console\nprefix bold\n~~~")
+
+    composer.fill_content("```\n~~~\n```\n")
+    cdp.copy_paste(html, html: true, plain_text: plain_text)
+    expect(composer).to have_value("```\n~~~\n```\n**bold**")
+  end
+
   it "removes newlines from alt/title in pasted image" do
     cdp.allow_clipboard
     open_composer
@@ -128,6 +149,7 @@ describe "Composer - ProseMirror - Pasting content" do
 
   context "when unauthorized to upload" do
     before { SiteSetting.authorized_extensions = "" }
+
     it "allows pasting text" do
       cdp.allow_clipboard
       open_composer
@@ -264,6 +286,20 @@ describe "Composer - ProseMirror - Pasting content" do
     expect(rich).to have_css("kbd", text: "ctrl")
     composer.toggle_rich_editor
     expect(composer).to have_value("<mark>mark</mark> my <ins>words</ins> <kbd>ctrl</kbd> ")
+  end
+
+  it "pastes web page text without leaving literal span markup" do
+    cdp.allow_clipboard
+    open_composer
+    cdp.copy_paste(
+      # the space sits inside the first span, where a surviving span node eats it
+      %(<p><span class="sentence" lang="en">So I have heard. </span><span class="sentence" lang="en">At one time.</span></p>),
+      html: true,
+    )
+    expect(rich).to have_css("p", text: "So I have heard. At one time.")
+    expect(rich).to have_no_css("span[lang]")
+    composer.toggle_rich_editor
+    expect(composer).to have_value("So I have heard. At one time.")
   end
 
   it "converts newlines to hard breaks when parsing `white-space: pre` HTML" do

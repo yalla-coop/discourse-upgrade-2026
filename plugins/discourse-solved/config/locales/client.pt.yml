@@ -12,6 +12,16 @@ pt:
           kpi:
             accepted_solutions:
               label: "Soluções aceites"
+        sections:
+          support:
+            answerers:
+              staff: "Pessoal"
+              member: "Membros"
+              basic: "Básico"
+            response_time:
+              buckets:
+                lt_1h: "< 1 hora"
+                gt_24h: "> 24 horas"
   js:
     notifications:
       alt:
@@ -20,11 +30,11 @@ pt:
           topic_solved_notification: "resolvido"
     solved:
       title: "Resolvido"
-      allow_accepted_answers: "Permitir que o autor do tópico e a equipa marquem uma resposta como solução"
+      allow_accepted_answers: "Permitir que o autor do tópico e a equipa marquem uma resposta como a solução"
       solved_topics_auto_close_hours: "Fechar automaticamente o tópico (n) horas depois do tópico ser marcado como solução."
       accept_answer: "Selecionar se esta resposta resolver o problema"
       has_no_accepted_answer: "Este tópico não tem solução"
-      unaccept_answer: "Desselecionar se esta resposta já não resolver o problema"
+      unaccept_answer: "Desselecionar se esta resposta já não resolve o problema"
       accepted_answer: "Solução"
       solution: "Solução"
       solution_summary:
@@ -44,6 +54,12 @@ pt:
     topic_statuses:
       solved:
         help: "Este tópico tem uma solução"
+    admin:
+      reports:
+        related_items:
+          labels:
+            topic: "Tópico"
+            category: "Categoria"
     discourse_automation:
       triggerables:
         first_accepted_solution:

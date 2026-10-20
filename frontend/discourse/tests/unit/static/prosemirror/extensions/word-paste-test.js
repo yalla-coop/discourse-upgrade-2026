@@ -296,4 +296,11 @@ module("Unit | Static | ProseMirror | Extensions | word-paste", function () {
 
     assert.strictEqual(doc.querySelectorAll("a.msocomanchor").length, 0);
   });
+
+  test("does not treat a generic TextRun class as Word (no content loss)", function (assert) {
+    const html = `<p class="TextRun">Keep <del>this</del> too</p>`;
+    const doc = createDoc(transformWordHtml(html));
+
+    assert.strictEqual(doc.querySelectorAll("del").length, 1);
+  });
 });

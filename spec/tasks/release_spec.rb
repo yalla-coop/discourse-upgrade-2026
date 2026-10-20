@@ -444,8 +444,8 @@ RSpec.describe "tasks/release" do
         expect(versions_json["2026.1"]).to eq(
           {
             "developmentStartDate" => "2025-12-28",
-            "releaseDate" => "2026-01",
-            "supportEndDate" => "2026-09",
+            "releaseDate" => "2026-01-27",
+            "supportEndDate" => "2026-09-29",
             "released" => false,
             "esr" => true,
             "supported" => true,
@@ -477,18 +477,18 @@ RSpec.describe "tasks/release" do
     let(:pr_list_json) do
       [
         {
-          "number" => 1,
-          "title" => "Security fix one",
-          "body" =>
-            "Description for fix one\nhttps://github.com/discourse/discourse/security/advisories/GHSA-1111-2222-3333",
-          "headRefName" => "security-fix-one",
-        },
-        {
           "number" => 2,
           "title" => "Security fix two",
           "body" =>
             "https://github.com/discourse/discourse/security/advisories/GHSA-aaaa-bbbb-cccc",
           "headRefName" => "security-fix-two",
+        },
+        {
+          "number" => 1,
+          "title" => "Security fix one",
+          "body" =>
+            "Description for fix one\nhttps://github.com/discourse/discourse/security/advisories/GHSA-1111-2222-3333",
+          "headRefName" => "security-fix-one",
         },
       ].to_json
     end
@@ -515,7 +515,7 @@ RSpec.describe "tasks/release" do
         capture: true,
       ).and_return(pr_list_json)
 
-      ENV["SECURITY_FIX_GHSA_IDS"] = "GHSA-1111-2222-3333,GHSA-aaaa-bbbb-cccc"
+      ENV["SECURITY_FIX_GHSA_IDS"] = "ghsa-1111-2222-3333,GHSA-aaaa-bbbb-cccc"
 
       Dir.chdir(origin_path) do
         git "checkout", "-b", "security-fix-one"

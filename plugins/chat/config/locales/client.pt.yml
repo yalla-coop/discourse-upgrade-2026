@@ -32,6 +32,8 @@ pt:
       cancel: "Cancelar"
       cancel_reply: "Cancelar resposta"
       chat_channels: "Canais"
+      pinned_bar:
+        title: "Fixado"
       pinned: "Fixado"
       browse_all_channels: "Navegar todos os canais"
       move_to_channel:
@@ -67,7 +69,7 @@ pt:
         title: "Apagar canal"
       channels_list_popup:
         browse: "Navegar canais"
-        create: "Novo canal"
+        create: "Novo canal..."
       close: "Fechar"
       remove: "Remover"
       collapse: "Colapsar gaveta de Chat"
@@ -77,9 +79,6 @@ pt:
       edited: "editado"
       muted: "silenciado"
       joined: "juntou-se"
-      empty_state:
-        direct_message_cta: "Iniciar um Chat pessoal"
-        direct_message: "Você também pode iniciar um Chat pessoal com um ou mais utilizadores."
       email_frequency:
         never: "Nunca"
       header_indicator_preference:
@@ -88,8 +87,6 @@ pt:
       join: "Entrar"
       last_visit: "última visita"
       no_public_channels_cta: "Navegar canais"
-      only_chat_push_notifications:
-        title: "Enviar notificações push apenas para chat"
       reply: "Responder"
       edit: "Editar"
       copy_link: "Copiar link"
@@ -119,6 +116,8 @@ pt:
         filter_all: Tudo
         filter_open: Abrir
         filter_closed: Fechado
+        filter_joined_all: "Todos"
+        filter_joined_joined: "Juntou-se"
       chat_message_separator:
         today: Hoje
         yesterday: Ontem
@@ -143,6 +142,9 @@ pt:
       direct_message_creator:
         title: Nova Mensagem
         prefix: "Para:"
+      channel:
+        preview_card:
+          log_in: "Efetuar login"
       create_channel:
         description: "Descrição"
         title: "Novo canal"
@@ -181,8 +183,15 @@ pt:
         sort:
           relevance: "Relevância"
           latest: "Mais Recente"
+      direct_messages:
+        leave: "Sair do canal"
+        close: "Fechar canal"
       channel_list:
         title: "Canais"
+        options:
+          filter: "Filtrar"
+        filter:
+          mentions: "Menções"
       incoming_webhooks:
         back: "Retroceder"
         description: "Descrição"
@@ -244,10 +253,6 @@ pt:
       types:
         reviewable_chat_message:
           title: "Mensagem sinalizada em conversa"
-    sidebar:
-      start_new_dm:
-        text: Iniciar novo DM
-        title: Criar uma conversação pessoal
     discourse_workflows:
       chat_message_created:
         channel_id: "Canal"
@@ -256,4 +261,10 @@ pt:
         message: "Mensagem"
       chat_approval:
         message: "Mensagem"
+        buttons: "Botões"
+        value: "Valor"
+        style: "Estilo"
+        style_default: "Predefinição"
+        style_primary: "Principal"
+        icon: "Ícone"
         channel_id: "Canal"

@@ -3,8 +3,8 @@ import DPageHeader from "discourse/ui-kit/d-page-header";
 import { i18n } from "discourse-i18n";
 
 export default <template>
-  <div class="edit-category admin-new-category-setup">
+  <div class="edit-category">
     <DPageHeader @titleLabel={{i18n "category.choose_type.title"}} />
-    <CategoryTypeCards @types={{@model.types}} @counts={{@model.counts}} />
+    <CategoryTypeCards @counts={{@model.counts}} @types={{@model.types}} />
   </div>
 </template>

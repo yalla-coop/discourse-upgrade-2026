@@ -276,10 +276,7 @@ RSpec.describe DiscourseWorkflows::Workflow::Action::PopulateGraph do
           "typeVersion" => "1.0",
         )
       ensure
-        DiscoursePluginRegistry._raw_discourse_workflows_nodes.reject! do |entry|
-          entry[:value] == node_class
-        end
-        DiscourseWorkflows::Registry.reset_indexes!
+        unregister_workflow_nodes(node_class)
       end
     end
 
@@ -311,10 +308,50 @@ RSpec.describe DiscourseWorkflows::Workflow::Action::PopulateGraph do
         expect(result).to eq(true)
         expect(workflow.reload.nodes.first["typeVersion"]).to eq("2.0")
       ensure
-        DiscoursePluginRegistry._raw_discourse_workflows_nodes.reject! do |entry|
-          [v1, v2].include?(entry[:value])
-        end
+        unregister_workflow_nodes(v1, v2)
+      end
+
+      it "keeps an existing versionless node on the default version" do
+        v1 =
+          Class.new(DiscourseWorkflows::NodeType) do
+            description(name: "action:populate_versionless_test", version: "1.0")
+          end
+        v2 =
+          Class.new(DiscourseWorkflows::NodeType) do
+            description(name: "action:populate_versionless_test", version: "2.0")
+          end
+        plugin = Plugin::Instance.new
+        DiscoursePluginRegistry.register_discourse_workflows_node(v1, plugin)
+        DiscoursePluginRegistry.register_discourse_workflows_node(v2, plugin)
         DiscourseWorkflows::Registry.reset_indexes!
+        workflow.update!(
+          nodes: [
+            {
+              "id" => "node-1",
+              "type" => "action:populate_versionless_test",
+              "name" => "Versionless",
+              "parameters" => {
+              },
+            },
+          ],
+          connections: {
+          },
+        )
+
+        result =
+          described_class.call(
+            workflow: workflow,
+            nodes_data: [
+              { id: "node-1", type: "action:populate_versionless_test", name: "Updated" },
+            ],
+            connections_data: {
+            },
+          )
+
+        expect(result).to eq(true)
+        expect(workflow.reload.nodes.first["typeVersion"]).to eq("1.0")
+      ensure
+        unregister_workflow_nodes(v1, v2)
       end
     end
 

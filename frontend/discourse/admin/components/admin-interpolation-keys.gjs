@@ -23,7 +23,7 @@ function pillTitle(item) {
   return i18n("admin.site_text.interpolation_key_insert");
 }
 
-<template>
+export default <template>
   {{#if @keys.length}}
     <div class="interpolation-keys">
       {{#each @keys as |item|}}
@@ -36,9 +36,9 @@ function pillTitle(item) {
           </span>
         {{else}}
           <button
-            type="button"
             class={{dConcatClass "interpolation-keys__pill" (pillClass item)}}
             title={{pillTitle item}}
+            type="button"
             {{on "click" (fn @onInsertKey item.key)}}
           >
             {{item.key}}

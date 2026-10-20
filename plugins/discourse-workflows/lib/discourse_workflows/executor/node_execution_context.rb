@@ -3,6 +3,15 @@
 module DiscourseWorkflows
   class Executor
     class NodeExecutionContext
+      BYPASSED_PERMISSION_CHECKS_FIELD = "discourse_workflows_bypassed_permission_checks"
+      WORKFLOW_ID_FIELD = "discourse_workflows_workflow_id"
+      WORKFLOW_VERSION_ID_FIELD = "discourse_workflows_workflow_version_id"
+      NODE_ID_FIELD = "discourse_workflows_node_id"
+
+      # PostDestroyer leaves an author-deleted post as a stub unless this is below 1;
+      # a workflow delete should always actually delete
+      ALWAYS_TRASH = 0
+
       MISSING = ParameterResolver::MISSING
       RUN_CODE = CodeRunner::RUN_CODE
       RUN_ONCE_FOR_ALL_ITEMS = CodeRunner::RUN_ONCE_FOR_ALL_ITEMS
@@ -10,7 +19,7 @@ module DiscourseWorkflows
       JAVASCRIPT_UNDEFINED = CodeRunner::JAVASCRIPT_UNDEFINED
       JobResult = Data.define(:ok, :result, :error)
       WaitRequest =
-        Data.define(:waiting_until, :kind, :payload) do
+        Data.define(:waiting_until, :kind, :payload, :timeout_action) do
           def workflow_call?
             kind == "workflow_call"
           end
@@ -67,8 +76,9 @@ module DiscourseWorkflows
           @wait_request = nil
         end
 
-        def request_wait(waiting_until, kind: "default", payload: {})
-          @wait_request = WaitRequest.new(waiting_until, kind.to_s, payload.deep_stringify_keys)
+        def request_wait(waiting_until, kind: "default", payload: {}, timeout_action: nil)
+          @wait_request =
+            WaitRequest.new(waiting_until, kind.to_s, payload.deep_stringify_keys, timeout_action)
         end
 
         def add_condition_details(details)
@@ -107,6 +117,7 @@ module DiscourseWorkflows
         resolver: nil,
         vars: nil,
         workflow: nil,
+        workflow_version: nil,
         execution_id: nil,
         resume_token: nil,
         node_id: nil,
@@ -140,6 +151,7 @@ module DiscourseWorkflows
         @resolver = resolver
         @vars = vars
         @workflow = workflow
+        @workflow_version = workflow_version
         @execution_id = execution_id
         @resume_token = resume_token
         @node_id = node_id
@@ -236,6 +248,13 @@ module DiscourseWorkflows
         input_items(input_index)
       end
 
+      def get_timezone
+        DiscourseWorkflows::WorkflowTimezone.for(
+          workflow: @workflow,
+          workflow_version: @workflow_version,
+        )
+      end
+
       def continue_on_fail
         on_error = @node_settings["onError"]
         return %w[continueRegularOutput continueErrorOutput].include?(on_error) if on_error.present?
@@ -315,15 +334,26 @@ module DiscourseWorkflows
         HttpClient.new(self, item_index).request(method:, url:, headers:, body:, options:)
       end
 
-      def create_post(user:, raw:, topic_id:, reply_to_post_number: nil, whisper: false)
+      def create_post(
+        user:,
+        raw:,
+        topic_id:,
+        reply_to_post_number: nil,
+        whisper: false,
+        bypass_permission_checks: false
+      )
         topic = ::Topic.find(topic_id)
-        guardian = user.guardian
-        guardian.ensure_can_see!(topic)
-        raise Discourse::InvalidAccess if !guardian.can_create_post?(topic)
+        bypass_permission_checks = ActiveModel::Type::Boolean.new.cast(bypass_permission_checks)
+        guardian = bypass_permission_checks ? Discourse.system_user.guardian : user.guardian
 
-        if topic.closed? || topic.archived?
-          raise DiscourseWorkflows::NodeError,
-                I18n.t("discourse_workflows.errors.post.topic_closed_or_archived")
+        if !bypass_permission_checks
+          guardian.ensure_can_see!(topic)
+          raise Discourse::InvalidAccess if !guardian.can_create_post?(topic)
+
+          if topic.closed? || topic.archived?
+            raise DiscourseWorkflows::NodeError,
+                  I18n.t("discourse_workflows.errors.post.topic_closed_or_archived")
+          end
         end
 
         post_args = {
@@ -331,6 +361,7 @@ module DiscourseWorkflows
           raw: raw,
           reply_to_post_number: reply_to_post_number.presence,
           skip_workflows: true,
+          skip_rate_limits: true,
         }.compact
 
         if ActiveModel::Type::Boolean.new.cast(whisper)
@@ -345,20 +376,45 @@ module DiscourseWorkflows
           post_args[:post_type] = ::Post.types[:whisper]
         end
 
-        PostCreator.new(user, post_args).create!
+        if bypass_permission_checks
+          post_args[:guardian] = guardian
+          post_args[:skip_staff_author_pm_membership_sync] = true
+        end
+
+        post = PostCreator.new(user, post_args).create!
+        record_permission_bypass!(post) if bypass_permission_checks
+        post
       end
 
       def edit_post(user:, post_id:, raw:)
         post = ::Post.find(post_id)
         raise Discourse::InvalidAccess if !user.guardian.can_edit_post?(post)
 
-        if !PostRevisor.new(post).revise!(user, { raw: raw }, skip_workflows: true)
+        opts = { skip_workflows: true, force_new_version: true }
+
+        if !PostRevisor.new(post).revise!(user, { raw: raw }, opts)
           errors = post.errors.full_messages.presence
           raise DiscourseWorkflows::NodeError,
                 errors&.join(", ") || I18n.t("discourse_workflows.errors.post.edit_failed")
         end
 
         post.reload
+      end
+
+      def destroy_post(user:, post_id:)
+        post = ::Post.find(post_id)
+        raise Discourse::InvalidAccess if !user.guardian.can_delete_post_or_topic?(post)
+
+        post_destroyer(user, post).destroy
+        post
+      end
+
+      def recover_post(user:, post_id:)
+        post = ::Post.with_deleted.find(post_id)
+        raise Discourse::InvalidAccess if !user.guardian.can_recover_post?(post)
+
+        post_destroyer(user, post).recover
+        post
       end
 
       def serialize_post(
@@ -374,15 +430,26 @@ module DiscourseWorkflows
         self.class.serialize_topic(topic, guardian:, custom_field_names:)
       end
 
-      def put_execution_to_wait(waiting_until = nil, kind: "default", payload: {})
-        @runtime_state.request_wait(waiting_until, kind: kind, payload: payload)
+      def put_execution_to_wait(
+        waiting_until = nil,
+        kind: "default",
+        payload: {},
+        timeout_action: nil
+      )
+        @runtime_state.request_wait(
+          waiting_until,
+          kind: kind,
+          payload: payload,
+          timeout_action: timeout_action,
+        )
       end
 
-      def resume_action_id(action)
+      def resume_action_id(action, target_user_id: nil)
         DiscourseWorkflows::InteractiveResume.action_id(
           execution_id: execution_id,
           resume_token: @resume_token,
           action: action,
+          target_user_id: target_user_id,
         )
       end
 
@@ -448,6 +515,26 @@ module DiscourseWorkflows
 
       private
 
+      def post_destroyer(user, post)
+        PostDestroyer.new(
+          user,
+          post,
+          context: I18n.t("discourse_workflows.post.destroy_context"),
+          skip_workflows: true,
+          delete_removed_posts_after: ALWAYS_TRASH,
+        )
+      end
+
+      def record_permission_bypass!(post)
+        post.custom_fields[BYPASSED_PERMISSION_CHECKS_FIELD] = "true"
+        post.custom_fields[WORKFLOW_ID_FIELD] = @workflow.id if @workflow&.id
+        if @workflow&.active_version_id
+          post.custom_fields[WORKFLOW_VERSION_ID_FIELD] = @workflow.active_version_id
+        end
+        post.custom_fields[NODE_ID_FIELD] = @node_id if @node_id
+        post.save_custom_fields
+      end
+
       def fetch_credentials(slot, item_index)
         raise ArgumentError, "credential slot is required" if slot.blank?
 
@@ -481,7 +568,7 @@ module DiscourseWorkflows
 
         raw_value = get_node_parameter(field, item_index || 0, options: { raw_expressions: true })
         return :default if raw_value.nil?
-        return :expression if raw_value.is_a?(String) && raw_value.start_with?("=")
+        return :expression if Schema.expression_value?(raw_value)
 
         :static_config
       end

@@ -14,21 +14,24 @@ export default class AiAdminDashboardHighlight extends Component {
   @tracked loading = true;
   @tracked failed = false;
 
+  loadId = 0;
+
   get queryKey() {
     const { period, startDate, endDate } = this.args.outletArgs;
-    return `${period}:${startDate}:${endDate}`;
+    return `${period}:${this.formatDate(startDate)}:${this.formatDate(endDate)}`;
   }
 
-  isoDate(value) {
+  formatDate(value) {
     if (!value) {
       return value;
     }
-    const date = value instanceof Date ? value : new Date(value);
-    return isNaN(date) ? value : date.toISOString().slice(0, 10);
+    const date = moment(value);
+    return date.isValid() ? date.format("YYYY-MM-DD") : value;
   }
 
   @action
   async loadHighlight() {
+    const loadId = ++this.loadId;
     this.loading = true;
     this.failed = false;
 
@@ -40,31 +43,39 @@ export default class AiAdminDashboardHighlight extends Component {
         {
           data: {
             period,
-            start_date: this.isoDate(startDate),
-            end_date: this.isoDate(endDate),
+            start_date: this.formatDate(startDate),
+            end_date: this.formatDate(endDate),
           },
         }
       );
+      if (loadId !== this.loadId) {
+        return;
+      }
       this.highlight = result.highlight;
     } catch {
+      if (loadId !== this.loadId) {
+        return;
+      }
       this.failed = true;
     } finally {
-      this.loading = false;
+      if (loadId === this.loadId) {
+        this.loading = false;
+      }
     }
   }
 
   <template>
     {{#unless this.failed}}
       <div
-        class="ai-admin-dashboard-highlight"
         aria-live="polite"
+        class="ai-admin-dashboard-highlight"
         {{didInsert this.loadHighlight}}
         {{didUpdate this.loadHighlight this.queryKey}}
       >
         {{#if this.loading}}
           <div
-            class="ai-admin-dashboard-highlight__loading"
             aria-hidden="true"
+            class="ai-admin-dashboard-highlight__loading"
           ></div>
         {{else if this.highlight}}
           <p class="ai-admin-dashboard-highlight__text">{{this.highlight}}</p>

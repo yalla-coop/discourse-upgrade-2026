@@ -11,6 +11,7 @@ import CanCheckEmailsHelper from "discourse/lib/can-check-emails-helper";
 import discourseDebounce from "discourse/lib/debounce";
 import { bind } from "discourse/lib/decorators";
 import { INPUT_DELAY } from "discourse/lib/environment";
+import DiscourseURL from "discourse/lib/url";
 import { i18n } from "discourse-i18n";
 
 const MAX_BULK_SELECT_LIMIT = 100;
@@ -23,13 +24,15 @@ export default class AdminUsersListShowController extends Controller {
   @tracked displayBulkActions = false;
   @tracked bulkSelectedUsersMap = {};
 
+  @tracked activation = null;
+  @tracked refreshing = false;
+  @tracked listFilter = null;
+  @tracked initialFilter = null;
+
   query = null;
   order = null;
   asc = null;
-  activation = null;
   showEmails = false;
-  refreshing = false;
-  listFilter = null;
   lastSelected = null;
 
   _page = 1;
@@ -103,6 +106,19 @@ export default class AdminUsersListShowController extends Controller {
     return this.query === "new";
   }
 
+  get showEmptyState() {
+    return (
+      !this.refreshing &&
+      this.users.length === 0 &&
+      !this.listFilter &&
+      !this.activation
+    );
+  }
+
+  get bulkSelectedUsers() {
+    return Object.values(this.bulkSelectedUsersMap);
+  }
+
   resetFilters() {
     this._page = 1;
     this._results.length = 0;
@@ -118,37 +134,22 @@ export default class AdminUsersListShowController extends Controller {
     return doc.body.textContent || "";
   }
 
-  _refreshUsers() {
-    if (!this._canLoadMore) {
-      return;
-    }
-
-    const page = this._page;
-    this.set("refreshing", true);
-
-    return AdminUser.findAll(this.query, {
-      filter: this.listFilter,
-      show_emails: this.showEmails,
-      order: this.order,
-      asc: this.asc,
-      activation: this.activation,
-      page,
-    })
-      .then((result) => {
-        this._results[page] = result;
-        if (result.length === 0) {
-          this._canLoadMore = false;
-        }
-      })
-      .finally(() => {
-        this.set("refreshing", false);
-      });
+  @action
+  onListFilterChange(event) {
+    this.listFilter = event.target.value;
+    discourseDebounce(this, this.resetFilters, INPUT_DELAY);
   }
 
   @action
-  onListFilterChange(event) {
-    this.set("listFilter", event.target.value);
-    discourseDebounce(this, this.resetFilters, INPUT_DELAY);
+  onResetFilters() {
+    this.listFilter = null;
+    this.activation = null;
+    // `filter` is owned by the filter controls; drop the remaining params here
+    const url = new URL(window.location.href);
+    url.searchParams.delete("username");
+    url.searchParams.delete("activation");
+    DiscourseURL.replaceState(url.pathname + url.search);
+    this.resetFilters();
   }
 
   @action
@@ -175,8 +176,16 @@ export default class AdminUsersListShowController extends Controller {
   }
 
   @action
-  updateActivation(value) {
-    this.set("activation", value);
+  onActivationChange(value) {
+    this.activation = value === "all" ? null : value;
+    const url = new URL(window.location.href);
+    if (this.activation) {
+      url.searchParams.set("activation", this.activation);
+    } else {
+      url.searchParams.delete("activation");
+    }
+    DiscourseURL.replaceState(url.pathname + url.search);
+    this.resetFilters();
   }
 
   @action
@@ -250,33 +259,11 @@ export default class AdminUsersListShowController extends Controller {
     this.displayBulkActions = this.bulkSelectedUsers.length > 0;
   }
 
-  get bulkSelectedUsers() {
-    return Object.values(this.bulkSelectedUsersMap);
-  }
-
   @bind
   async afterBulkAction() {
     await this.resetFilters();
     this.bulkSelectedUsersMap = {};
     this.displayBulkActions = false;
-  }
-
-  #openBulkActionConfirmation({ canBeActioned, emptyMessageKey, modal }) {
-    const userIds = this.bulkSelectedUsers
-      .filter(canBeActioned)
-      .map((user) => user.id);
-
-    if (userIds.length === 0) {
-      this.toasts.error({
-        duration: "short",
-        data: { message: i18n(emptyMessageKey) },
-      });
-      return;
-    }
-
-    this.modal.show(modal, {
-      model: { userIds, afterBulkAction: this.afterBulkAction },
-    });
   }
 
   @action
@@ -294,6 +281,24 @@ export default class AdminUsersListShowController extends Controller {
       canBeActioned: (user) => user.can_be_suspended,
       emptyMessageKey: "admin.users.bulk_actions.no_users_can_be_suspended",
       modal: BulkUserSuspendConfirmation,
+    });
+  }
+
+  #openBulkActionConfirmation({ canBeActioned, emptyMessageKey, modal }) {
+    const userIds = this.bulkSelectedUsers
+      .filter(canBeActioned)
+      .map((user) => user.id);
+
+    if (userIds.length === 0) {
+      this.toasts.error({
+        duration: "short",
+        data: { message: i18n(emptyMessageKey) },
+      });
+      return;
+    }
+
+    this.modal.show(modal, {
+      model: { userIds, afterBulkAction: this.afterBulkAction },
     });
   }
 
@@ -316,5 +321,32 @@ export default class AdminUsersListShowController extends Controller {
         }),
       },
     });
+  }
+
+  _refreshUsers() {
+    if (!this._canLoadMore) {
+      return;
+    }
+
+    const page = this._page;
+    this.set("refreshing", true);
+
+    return AdminUser.findAll(this.query, {
+      filter: this.listFilter,
+      show_emails: this.showEmails,
+      order: this.order,
+      asc: this.asc,
+      activation: this.activation,
+      page,
+    })
+      .then((result) => {
+        this._results[page] = result;
+        if (result.length === 0) {
+          this._canLoadMore = false;
+        }
+      })
+      .finally(() => {
+        this.set("refreshing", false);
+      });
   }
 }

@@ -21,11 +21,11 @@ export default class Highlights extends Component {
 
   <template>
     <DashboardSection
-      @title={{i18n "admin.dashboard.sections.highlights.title"}}
+      ...attributes
+      @endDate={{@endDate}}
       @layout="row"
       @startDate={{@startDate}}
-      @endDate={{@endDate}}
-      ...attributes
+      @title={{i18n "admin.dashboard.sections.highlights.title"}}
     >
       <:intro>
         <PluginOutlet
@@ -40,19 +40,19 @@ export default class Highlights extends Component {
       </:intro>
       <:default>
         {{#if @fetchError}}
-          <div class="db-highlights__error" role="alert">
+          <div class="db-section__error" role="alert">
             {{i18n "admin.dashboard.highlights.fetch_error"}}
           </div>
         {{else}}
           {{#each @highlights.kpis as |kpi|}}
             <KpiTile
+              @comparisonLabel={{this.comparisonLabel}}
+              @percentChange={{kpi.percent_change}}
+              @previousValue={{kpi.previous_value}}
+              @reportQuery={{kpi.report_query}}
+              @reportType={{kpi.report_type}}
               @type={{kpi.type}}
               @value={{kpi.value}}
-              @previousValue={{kpi.previous_value}}
-              @percentChange={{kpi.percent_change}}
-              @reportType={{kpi.report_type}}
-              @reportQuery={{kpi.report_query}}
-              @comparisonLabel={{this.comparisonLabel}}
             />
           {{/each}}
         {{/if}}

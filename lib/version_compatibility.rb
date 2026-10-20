@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Discourse
-  VERSION_REGEXP = /\A\d+\.\d+\.\d+(\.beta\d+)?\z/
+  VERSION_REGEXP = /\A\d+\.\d+\.\d+(\.beta\d+|-latest(\.\d+)?)?\z/
   VERSION_COMPATIBILITY_FILENAME = ".discourse-compatibility"
 
   class InvalidVersionListError < StandardError
@@ -28,6 +28,8 @@ module Discourse
       version_list = YAML.safe_load(version_list)
     rescue Psych::SyntaxError, Psych::DisallowedClass
     end
+
+    return if version_list.blank?
 
     raise InvalidVersionListError unless version_list.is_a?(Hash)
 

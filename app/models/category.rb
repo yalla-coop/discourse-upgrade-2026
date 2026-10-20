@@ -16,6 +16,12 @@ class Category < ActiveRecord::Base
   SLUG_REF_SEPARATOR = ":"
   DEFAULT_TEXT_COLORS = %w[FFFFFF 000000]
 
+  # Set on a category that intentionally has no definition topic, so
+  # `ensure_consistency!` does not backfill one for it.
+  SKIP_DEFINITION_CUSTOM_FIELD = "skip_category_definition"
+
+  register_custom_field_type(SKIP_DEFINITION_CUSTOM_FIELD, :boolean)
+
   belongs_to :topic
   belongs_to :topic_only_relative_url,
              -> { select "id, title, slug" },
@@ -76,6 +82,22 @@ class Category < ActiveRecord::Base
   accepts_nested_attributes_for :category_setting, update_only: true
   accepts_nested_attributes_for :category_localizations, allow_destroy: true
 
+  def nested_replies_conversion_completed?
+    !!ActiveModel::Type::Boolean.new.cast(
+      custom_fields[NestedReplies::CONVERSION_COMPLETED_CUSTOM_FIELD],
+    )
+  end
+
+  def mark_nested_replies_conversion_completed!
+    custom_fields[NestedReplies::CONVERSION_COMPLETED_CUSTOM_FIELD] = true
+    save_custom_fields(true, run_validations: false)
+  end
+
+  def clear_nested_replies_conversion_completed!
+    custom_fields.delete(NestedReplies::CONVERSION_COMPLETED_CUSTOM_FIELD)
+    save_custom_fields(true, run_validations: false)
+  end
+
   validates :user_id, presence: true
 
   validates :name,
@@ -120,6 +142,7 @@ class Category < ActiveRecord::Base
   validates :text_color, format: { with: /\A(\h{6}|\h{3})\z/ }
 
   before_validation :normalize_default_top_period
+  before_validation :normalize_minimum_required_tags
 
   before_save :apply_permissions
   before_save :downcase_email
@@ -133,6 +156,7 @@ class Category < ActiveRecord::Base
   after_update :revise_category_definition, if: :saved_change_to_description?
   after_update :run_plugin_category_update_param_callbacks
   after_update :enqueue_category_hashtag_remap, if: :saved_change_to_hashtag_ref?
+  after_update :clear_page_not_found_topics_cache, if: :saved_change_to_read_restricted?
   after_destroy :trash_category_definition
   after_destroy :clear_related_site_settings
 
@@ -159,6 +183,7 @@ class Category < ActiveRecord::Base
     end
   end
 
+  after_commit :enqueue_upload_security_updates, on: :update, if: :saved_change_to_read_restricted?
   after_commit :trigger_category_created_event, on: :create
   after_commit :trigger_category_updated_event, on: :update
   after_commit :trigger_category_destroyed_event, on: :destroy
@@ -171,10 +196,7 @@ class Category < ActiveRecord::Base
 
   has_many :category_tags, dependent: :destroy
   has_many :tags, through: :category_tags
-  has_many :none_synonym_tags,
-           -> { where(target_tag_id: nil) },
-           through: :category_tags,
-           source: :tag
+  has_many :base_tags, -> { where(target_tag_id: nil) }, through: :category_tags, source: :tag
   has_many :category_tag_groups, dependent: :destroy
   has_many :tag_groups, through: :category_tag_groups
 
@@ -236,6 +258,44 @@ class Category < ActiveRecord::Base
     OR
     id IN (SELECT DISTINCT parent_category_id FROM categories WHERE id IN (:ids))
   SQL
+
+  scope :for_category_type,
+        ->(type_id, type = nil) do
+          if type_id == "all"
+            all
+          elsif type&.type_id == :discussion
+            where.not(id: Categories::TypeRegistry.non_discussion_category_ids)
+          else
+            where(id: type.find_matches.select(:id))
+          end
+        end
+
+  scope :matching_name_or_slug_ref,
+        ->(filter) do
+          filter = filter.to_s.strip.delete_prefix("#")
+          next all if filter.blank?
+
+          normalized_search =
+            filter.tr("/", SLUG_REF_SEPARATOR).gsub(
+              /#{Regexp.escape(SLUG_REF_SEPARATOR)}+/,
+              SLUG_REF_SEPARATOR,
+            )
+          normalized_filter = "%#{ActiveRecord::Base.sanitize_sql_like(normalized_search)}%"
+
+          where(
+            "#{normalize_sql("categories.name")} ILIKE #{normalize_sql("?")} OR " \
+              "#{normalize_sql("categories.slug")} ILIKE #{normalize_sql("?")} OR " \
+              "EXISTS (
+                SELECT 1
+                FROM categories parent_categories
+                WHERE parent_categories.id = categories.parent_category_id
+                  AND #{normalize_sql("parent_categories.slug || '#{SLUG_REF_SEPARATOR}' || categories.slug")} ILIKE #{normalize_sql("?")}
+              )",
+            normalized_filter,
+            normalized_filter,
+            normalized_filter,
+          )
+        end
 
   delegate :post_template, to: "self.class"
 
@@ -554,7 +614,7 @@ class Category < ActiveRecord::Base
   end
 
   def create_category_definition
-    return if skip_category_definition
+    return if skip_category_definition || custom_fields[SKIP_DEFINITION_CUSTOM_FIELD]
 
     Topic.transaction do
       t =
@@ -602,14 +662,28 @@ class Category < ActiveRecord::Base
     end
   end
 
+  def self.first_paragraph_description(cooked)
+    doc = Nokogiri::HTML5.fragment(cooked)
+    doc.css("img").remove
+    doc.css("p").first&.inner_html&.strip
+  end
+
   def description_text
     return nil unless description
 
     @@cache_text ||= LruRedux::ThreadSafeCache.new(1000)
     @@cache_text.getset(description) do
-      text = Nokogiri::HTML5.fragment(description).text.strip
-      ERB::Util.html_escape(text).html_safe
+      ERB::Util.html_escape(plain_text_description.to_s).html_safe
     end
+  end
+
+  def plain_text_description
+    return nil unless description
+
+    @@cache_plain_text ||= LruRedux::ThreadSafeCache.new(1000)
+    @@cache_plain_text
+      .getset(description) { Nokogiri::HTML5.fragment(description).text.strip }
+      .presence
   end
 
   def description_excerpt
@@ -1124,7 +1198,7 @@ class Category < ActiveRecord::Base
   end
 
   def subcategory_list_includes_topics?
-    subcategory_list_style.end_with?("with_featured_topics")
+    subcategory_list_style.to_s.end_with?("with_featured_topics")
   end
 
   %i[category_created category_updated category_destroyed].each do |event|
@@ -1225,6 +1299,10 @@ class Category < ActiveRecord::Base
     saved_change_to_slug? || saved_change_to_parent_category_id?
   end
 
+  def enqueue_upload_security_updates
+    Jobs.enqueue(:update_category_upload_security, category_id: id)
+  end
+
   def enqueue_category_hashtag_remap
     old_slug = saved_change_to_slug? ? slug_before_last_save : slug
     old_parent_category_id =
@@ -1234,28 +1312,26 @@ class Category < ActiveRecord::Base
         parent_category_id
       end
 
-    enqueue_category_hashtag_remap_job(
-      category_id: id,
-      old_ref:
-        Category.hashtag_ref_from(slug: old_slug, parent_category_id: old_parent_category_id),
-      new_ref: slug_ref,
-    )
+    type = CategoryHashtagDataSource.type
+    remaps = [
+      {
+        type:,
+        id:,
+        old_ref:
+          Category.hashtag_ref_from(slug: old_slug, parent_category_id: old_parent_category_id),
+      },
+    ]
 
     if saved_change_to_slug?
-      subcategories.find_each do |subcategory|
-        enqueue_category_hashtag_remap_job(
-          category_id: subcategory.id,
-          old_ref: [old_slug, subcategory.slug].join(Category::SLUG_REF_SEPARATOR),
-          new_ref: [slug, subcategory.slug].join(Category::SLUG_REF_SEPARATOR),
-        )
-      end
+      remaps +=
+        subcategories
+          .pluck(:id, :slug)
+          .map do |sub_id, sub_slug|
+            { type:, id: sub_id, old_ref: [old_slug, sub_slug].join(Category::SLUG_REF_SEPARATOR) }
+          end
     end
-  end
 
-  def enqueue_category_hashtag_remap_job(category_id:, old_ref:, new_ref:)
-    return if old_ref.blank? || new_ref.blank? || old_ref == new_ref
-
-    DB.after_commit { Jobs.enqueue(:remap_category_hashtag, category_id:, old_ref:, new_ref:) }
+    HashtagRemapper.enqueue(remaps)
   end
 
   def cannot_delete_reason
@@ -1317,6 +1393,10 @@ class Category < ActiveRecord::Base
 
   def normalize_default_top_period
     self.default_top_period = nil if TopTopic.periods.exclude?(default_top_period&.to_sym)
+  end
+
+  def normalize_minimum_required_tags
+    self.minimum_required_tags = 0 if minimum_required_tags.blank?
   end
 
   def group_based_posting_review_mode?(post_type)
@@ -1384,6 +1464,11 @@ class Category < ActiveRecord::Base
       SQL
 
     result.map { |row| [row.group_id, row.permission_type] }
+  end
+
+  def clear_page_not_found_topics_cache
+    Topic.clear_page_not_found_topics_cache!
+    DB.after_commit { Topic.clear_page_not_found_topics_cache! }
   end
 
   def clear_site_cache

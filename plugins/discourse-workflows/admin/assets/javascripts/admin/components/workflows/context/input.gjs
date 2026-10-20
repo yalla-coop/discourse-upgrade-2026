@@ -5,20 +5,26 @@ import { trustHTML } from "@ember/template";
 import dIcon from "discourse/ui-kit/helpers/d-icon";
 import { i18n } from "discourse-i18n";
 import {
-  ancestorOutputNodes,
-  inputConnectionsForNode,
-  inputFieldPrefixForConnection,
-  inputIndexForConnection,
   inputSummaryForNode,
-  nodeOutputJsonPath,
-  outputIndexForConnection,
   outputSummaryForNode,
-  previousNodeForConnection,
   schemaFieldsForNodeInput,
   schemaFieldsForNodeOutput,
-} from "../../../lib/workflows/data-schema";
+} from "../../../lib/workflows/data-preview";
+import {
+  inputFieldPrefixForConnection,
+  inputIndexForConnection,
+  nodeOutputJsonPath,
+  outputIndexForConnection,
+} from "../../../lib/workflows/expression-paths";
 import processFields from "../../../lib/workflows/field-processors";
 import { nodeTypeColor, nodeTypeIcon } from "../../../lib/workflows/node-types";
+import { schemaFieldsForItems } from "../../../lib/workflows/schema-fields";
+import {
+  ancestorOutputNodes,
+  inputConnectionsForNode,
+  previousNodeForConnection,
+  resolveDeclaredOutputSchemas,
+} from "../../../lib/workflows/schema-graph";
 import DragDropHint from "./drag-drop-hint";
 import SchemaField from "./schema-field";
 
@@ -110,6 +116,11 @@ export default class InputContext extends Component {
   }
 
   @cached
+  get declaredOutputSchemas() {
+    return resolveDeclaredOutputSchemas(this.graph);
+  }
+
+  @cached
   get inputConnections() {
     return inputConnectionsForNode(this.args.node, this.graph);
   }
@@ -120,6 +131,114 @@ export default class InputContext extends Component {
 
   get runData() {
     return this.args.session?.lastExecutionRunData || {};
+  }
+
+  get inputSections() {
+    return this.inputConnections
+      .map((connection) => {
+        const previousNode = previousNodeForConnection(connection, this.graph);
+        if (!previousNode) {
+          return null;
+        }
+
+        const inputIndex = inputIndexForConnection(connection);
+        const outputIndex = outputIndexForConnection(connection);
+        const pinnedItems =
+          outputIndex === 0
+            ? this.args.session?.pinnedItemsForNode(previousNode.name)
+            : undefined;
+        const recordedInputSummary = inputSummaryForNode(
+          this.runData,
+          this.args.node.name,
+          inputIndex,
+          {
+            node: this.args.node,
+            sourceNode: previousNode,
+            outputIndex,
+            pinnedItems,
+          }
+        );
+        const fields = schemaFieldsForNodeInput(
+          this.runData,
+          this.args.node.name,
+          {
+            inputIndex,
+            node: this.args.node,
+            sourceNode: previousNode,
+            outputIndex,
+            prefix: inputFieldPrefixForConnection(connection, previousNode, {
+              primaryConnection: this.primaryInputConnection,
+            }),
+            graph: this.graph,
+            pinnedItems,
+            declaredOutputSchemas: this.declaredOutputSchemas,
+          }
+        );
+
+        return {
+          node: previousNode,
+          inputIndex,
+          fields: processFields(fields, this.args.node, this.graph),
+          itemCountLabel: this.itemCountLabel(recordedInputSummary),
+          inputLabel: this.inputConnectionLabel(inputIndex),
+          emptyMessage: this.emptyMessage(recordedInputSummary),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  get environmentFields() {
+    return environmentFields(
+      this.workflowsNodeTypes.expressionContext,
+      this.args.nodes || [],
+      this.workflowsNodeTypes
+    );
+  }
+
+  get ancestorNodes() {
+    const directNodeIds = new Set(
+      this.inputSections.map((section) => section.node.clientId)
+    );
+
+    return ancestorOutputNodes(this.args.node, this.graph)
+      .filter((ancestor) => !directNodeIds.has(ancestor.node.clientId))
+      .map((ancestor) => {
+        const pinnedItems =
+          ancestor.outputIndex === 0
+            ? this.args.session?.pinnedItemsForNode(ancestor.node.name)
+            : undefined;
+        const prefix = nodeOutputJsonPath(this.runData, ancestor.node.name, {
+          outputIndex: ancestor.outputIndex,
+          node: ancestor.node,
+          itemCount: pinnedItems?.length,
+        });
+        const fields = pinnedItems
+          ? schemaFieldsForItems(pinnedItems, { prefix })
+          : schemaFieldsForNodeOutput(this.runData, ancestor.node.name, {
+              outputIndex: ancestor.outputIndex,
+              node: ancestor.node,
+              prefix,
+              graph: this.graph,
+              declaredOutputSchemas: this.declaredOutputSchemas,
+            });
+        const summary = pinnedItems
+          ? { itemCount: pinnedItems.length, truncated: false }
+          : outputSummaryForNode(
+              this.runData,
+              ancestor.node.name,
+              ancestor.outputIndex,
+              { node: ancestor.node }
+            );
+        return {
+          name: ancestor.node.name,
+          type:
+            this.workflowsNodeTypes.findNodeType(ancestor.node.type) ||
+            ancestor.node.type,
+          fields,
+          itemCountLabel: this.itemCountLabel(summary),
+        };
+      })
+      .filter((ancestor) => ancestor.fields.length);
   }
 
   itemCountLabel(summary) {
@@ -140,52 +259,6 @@ export default class InputContext extends Component {
     return i18n("discourse_workflows.configurator.no_input_context");
   }
 
-  get inputSections() {
-    return this.inputConnections
-      .map((connection) => {
-        const previousNode = previousNodeForConnection(connection, this.graph);
-        if (!previousNode) {
-          return null;
-        }
-
-        const inputIndex = inputIndexForConnection(connection);
-        const outputIndex = outputIndexForConnection(connection);
-        const recordedInputSummary = inputSummaryForNode(
-          this.runData,
-          this.args.node.name,
-          inputIndex,
-          {
-            node: this.args.node,
-            sourceNode: previousNode,
-            outputIndex,
-          }
-        );
-        const fields = schemaFieldsForNodeInput(
-          this.runData,
-          this.args.node.name,
-          {
-            inputIndex,
-            node: this.args.node,
-            sourceNode: previousNode,
-            outputIndex,
-            prefix: inputFieldPrefixForConnection(connection, previousNode, {
-              primaryConnection: this.primaryInputConnection,
-            }),
-          }
-        );
-
-        return {
-          node: previousNode,
-          inputIndex,
-          fields: processFields(fields, this.args.node, this.graph),
-          itemCountLabel: this.itemCountLabel(recordedInputSummary),
-          inputLabel: this.inputConnectionLabel(inputIndex),
-          emptyMessage: this.emptyMessage(recordedInputSummary),
-        };
-      })
-      .filter(Boolean);
-  }
-
   inputConnectionLabel(inputIndex) {
     if (this.inputConnections.length < 2 && inputIndex === 0) {
       return null;
@@ -194,53 +267,6 @@ export default class InputContext extends Component {
     return i18n("discourse_workflows.configurator.schema_input_label", {
       number: inputIndex + 1,
     });
-  }
-
-  get environmentFields() {
-    return environmentFields(
-      this.workflowsNodeTypes.expressionContext,
-      this.args.nodes || [],
-      this.workflowsNodeTypes
-    );
-  }
-
-  get ancestorNodes() {
-    const directNodeIds = new Set(
-      this.inputSections.map((section) => section.node.clientId)
-    );
-
-    return ancestorOutputNodes(this.args.node, this.graph)
-      .filter((ancestor) => !directNodeIds.has(ancestor.node.clientId))
-      .map((ancestor) => {
-        const fields = schemaFieldsForNodeOutput(
-          this.runData,
-          ancestor.node.name,
-          {
-            outputIndex: ancestor.outputIndex,
-            node: ancestor.node,
-            prefix: nodeOutputJsonPath(this.runData, ancestor.node.name, {
-              outputIndex: ancestor.outputIndex,
-              node: ancestor.node,
-            }),
-          }
-        );
-        return {
-          name: ancestor.node.name,
-          type:
-            this.workflowsNodeTypes.findNodeType(ancestor.node.type) ||
-            ancestor.node.type,
-          fields,
-          itemCountLabel: this.itemCountLabel(
-            outputSummaryForNode(
-              this.runData,
-              ancestor.node.name,
-              ancestor.outputIndex,
-              { node: ancestor.node }
-            )
-          ),
-        };
-      })
-      .filter((ancestor) => ancestor.fields.length);
   }
 
   <template>
@@ -269,7 +295,7 @@ export default class InputContext extends Component {
           {{#if section.fields.length}}
             <ul class="workflows-schema-field-list">
               {{#each section.fields as |field|}}
-                <SchemaField @field={{field}} @draggable={{true}} />
+                <SchemaField @draggable={{true}} @field={{field}} />
               {{/each}}
             </ul>
           {{else}}
@@ -288,7 +314,7 @@ export default class InputContext extends Component {
 
         <ul class="workflows-schema-field-list">
           {{#each this.environmentFields as |field|}}
-            <SchemaField @field={{field}} @draggable={{true}} />
+            <SchemaField @draggable={{true}} @field={{field}} />
           {{/each}}
         </ul>
       </div>
@@ -309,7 +335,7 @@ export default class InputContext extends Component {
 
           <ul class="workflows-schema-field-list">
             {{#each ancestor.fields as |field|}}
-              <SchemaField @field={{field}} @draggable={{true}} />
+              <SchemaField @draggable={{true}} @field={{field}} />
             {{/each}}
           </ul>
         </div>

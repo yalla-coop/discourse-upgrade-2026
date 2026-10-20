@@ -319,6 +319,29 @@ class StaffActionLogger
     )
   end
 
+  def log_admin_onboarding_step_completed(step, opts = {})
+    raise Discourse::InvalidParameters.new(:step) if step.blank?
+
+    UserHistory.create!(
+      params(opts).merge(
+        action: UserHistory.actions[:admin_onboarding_step_completed],
+        subject: step,
+      ),
+    )
+  end
+
+  def log_admin_onboarding_completed(opts = {})
+    UserHistory.create!(
+      params(opts).merge(action: UserHistory.actions[:admin_onboarding_completed]),
+    )
+  end
+
+  def log_admin_onboarding_dismissed(opts = {})
+    UserHistory.create!(
+      params(opts).merge(action: UserHistory.actions[:admin_onboarding_dismissed]),
+    )
+  end
+
   def log_update_site_setting_localizations(locale:, setting_names:, opts: {})
     raise Discourse::InvalidParameters.new(:locale) if locale.blank?
     raise Discourse::InvalidParameters.new(:setting_names) if setting_names.blank?
@@ -892,6 +915,13 @@ class StaffActionLogger
     )
   end
 
+  def log_removed_avatar(user, opts = {})
+    raise Discourse::InvalidParameters.new(:user) unless user
+    UserHistory.create!(
+      params(opts).merge(action: UserHistory.actions[:removed_avatar], target_user_id: user.id),
+    )
+  end
+
   def log_user_deactivate(user, reason, opts = {})
     raise Discourse::InvalidParameters.new(:user) unless user
     UserHistory.create!(
@@ -1135,6 +1165,18 @@ class StaffActionLogger
     UserHistory.create!(
       acting_user_id: @admin.id,
       action: UserHistory.actions[:delete_group],
+      details: details.join(", "),
+    )
+  end
+
+  def log_group_creation(group)
+    raise Discourse::InvalidParameters.new(:group) if group.nil?
+
+    details = ["name: #{group.name}", "full_name: #{group.full_name}", "id: #{group.id}"]
+
+    UserHistory.create!(
+      acting_user_id: @admin.id,
+      action: UserHistory.actions[:create_group],
       details: details.join(", "),
     )
   end

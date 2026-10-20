@@ -7,6 +7,7 @@ import DSegmentedControl from "discourse/components/d-segmented-control";
 import dConcatClass from "discourse/ui-kit/helpers/d-concat-class";
 import { i18n } from "discourse-i18n";
 import {
+  caretOffsetFromPoint,
   resolveVariableId,
   WORKFLOW_VARIABLE_MIME,
 } from "../../../lib/workflows/expression-context";
@@ -127,6 +128,11 @@ function plainValueForModeToggle(value, schema = {}) {
     return plainArrayValueForModeToggle(value);
   }
 
+  if (type === "boolean") {
+    const literal = wholeExpressionBody(value) ?? value.slice(1);
+    return ["true", "1"].includes(literal.trim().toLowerCase());
+  }
+
   const body = wholeExpressionBody(value);
   if (body) {
     const parsedLiteral = parseJsonLiteral(body);
@@ -153,24 +159,11 @@ export default class ExpressionWrapper extends Component {
   }
 
   get expressionMode() {
-    if (this.args.expressionMode !== undefined) {
-      return Boolean(this.args.expressionMode);
-    }
-
     return isExpression(this.args.field?.value);
-  }
-
-  get modeItems() {
-    return this.args.modeItems || MODE_ITEMS;
   }
 
   @action
   toggleMode(value) {
-    if (this.args.onModeChange) {
-      this.args.onModeChange(value);
-      return;
-    }
-
     const wantsDynamic = value === "dynamic";
     if (wantsDynamic === this.expressionMode) {
       return;
@@ -246,6 +239,21 @@ export default class ExpressionWrapper extends Component {
       this.workflowsNodeTypes.expressionContext.item_prefix || "$json";
     const variableId = resolveVariableId(variable, prefix);
 
+    const control = event.currentTarget.querySelector(
+      "textarea, input[type='text']"
+    );
+    if (control && schemaType(this.args.schema) === "string") {
+      const value = control.value ?? "";
+      const offset =
+        caretOffsetFromPoint(control, event.clientX, event.clientY) ??
+        value.length;
+      const expression = `{{ ${variableId} }}`;
+      this.args.field.set(
+        `=${value.slice(0, offset)}${expression}${value.slice(offset)}`
+      );
+      return;
+    }
+
     this.args.field.set(`={{ ${variableId} }}`);
   }
 
@@ -262,10 +270,12 @@ export default class ExpressionWrapper extends Component {
     >
       {{#if this.expressionMode}}
         <ExpressionInput
+          @autofocus={{true}}
           @field={{@field}}
+          @inputId={{@inputId}}
+          @inputLabel={{@inputLabel}}
           @placeholder={{@placeholder}}
           @session={{@session}}
-          @autofocus={{true}}
         />
         {{#if @dynamicValueHint}}
           <p class="workflows-property-engine__dynamic-hint">
@@ -278,11 +288,11 @@ export default class ExpressionWrapper extends Component {
 
       {{#if @supportsExpression}}
         <DSegmentedControl
-          @items={{this.modeItems}}
-          @value={{if this.expressionMode "dynamic" "plain"}}
+          class="workflows-property-engine__mode-control"
+          @items={{MODE_ITEMS}}
           @onSelect={{this.toggleMode}}
           @size="small"
-          class="workflows-property-engine__mode-control"
+          @value={{if this.expressionMode "dynamic" "plain"}}
         />
       {{/if}}
     </div>

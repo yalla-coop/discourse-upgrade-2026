@@ -15,12 +15,12 @@ describe "Admin Customize Themes" do
   before { sign_in(admin) }
 
   describe "when visiting the page to customize a single theme" do
-    it "should keep sidebar navigation link active" do
+    it "keeps the sidebar navigation link active" do
       theme_page.visit(theme)
       expect(sidebar).to have_active_link("admin_themes_and_components")
     end
 
-    it "should allow admin to update the light color scheme of the theme" do
+    it "allows admins to update the theme's light color scheme" do
       theme_page.visit(theme)
 
       color_scheme_settings = find(".theme-settings__light-color-scheme")
@@ -42,7 +42,7 @@ describe "Admin Customize Themes" do
       )
     end
 
-    it "should allow admin to update the dark color scheme of the theme" do
+    it "allows admins to update the theme's dark color scheme" do
       theme_page.visit(theme)
 
       color_scheme_settings = find(".theme-settings__dark-color-scheme")
@@ -105,6 +105,16 @@ describe "Admin Customize Themes" do
       visit("/admin/customize/themes/#{theme.id}/common/js/edit")
 
       expect(find(".ace_content")).to have_content("console.log('second test')")
+    end
+
+    it "shows the description of the field the admin switches to" do
+      theme_page.visit_editor(theme)
+
+      expect(theme_page).to have_editor_field_description("scss")
+
+      theme_page.click_editor_field("head_tag")
+
+      expect(theme_page).to have_editor_field_description("head_tag")
     end
   end
 
@@ -172,7 +182,7 @@ describe "Admin Customize Themes" do
   end
 
   describe "when editing theme translations" do
-    it "should allow admin to edit and save the theme translations" do
+    it "allows admins to edit and save theme translations" do
       theme.set_field(
         target: :translations,
         name: "en",
@@ -194,7 +204,7 @@ describe "Admin Customize Themes" do
       expect(theme_translations_settings_editor.get_input_value).to have_content("Hello World")
     end
 
-    it "should allow admin to edit and save the theme translations from other languages" do
+    it "allows admins to edit and save theme translations in other languages" do
       theme.set_field(
         target: :translations,
         name: "en",
@@ -224,7 +234,7 @@ describe "Admin Customize Themes" do
       theme_translations_settings_editor.save
     end
 
-    it "should match the current user locale translation" do
+    it "uses translations matching the current user's locale" do
       SiteSetting.allow_user_locale = true
       SiteSetting.set_locale_from_accept_language_header = true
       SiteSetting.default_locale = "fr"
@@ -332,6 +342,38 @@ describe "Admin Customize Themes" do
     it "does not show the change source button for local themes" do
       theme_page.visit(theme)
       expect(page).to have_no_button(I18n.t("admin_js.admin.customize.theme.change_source.button"))
+    end
+  end
+
+  describe "editing an icon type theme setting" do
+    let(:icon_picker) do
+      PageObjects::Components::DIconGridPicker.new(".setting[data-setting='icon_setting']")
+    end
+
+    before do
+      SiteSetting.svg_icon_subset = "gamepad"
+
+      theme.set_field(
+        target: :settings,
+        name: "yaml",
+        value: "icon_setting:\n  type: icon\n  default: heart\n",
+      )
+      theme.save!
+    end
+
+    it "allows admin to pick an icon from the dropdown and save it" do
+      theme_page.visit(theme)
+
+      expect(icon_picker).to have_selected_icon("heart")
+
+      icon_picker.expand
+      icon_picker.filter("gamepad")
+      icon_picker.select_icon("gamepad")
+
+      find(".setting[data-setting='icon_setting'] .setting-controls__ok").click
+
+      expect(page).to have_no_css(".setting[data-setting='icon_setting'] .setting-controls__ok")
+      expect(theme.reload.settings[:icon_setting].value).to eq("gamepad")
     end
   end
 

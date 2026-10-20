@@ -15,6 +15,7 @@ module Migrations
         YELLOW = "\e[33m"
         RED = "\e[31m"
         CYAN = "\e[36m"
+        MAGENTA = "\e[35m"
         DIM = "\e[90m"
         ERASE_LINE = "\e[2K" # erase the whole line (also clears the terminal's wrap flag)
         ERASE_BELOW = "\e[0J" # erase from the cursor to the end of the screen
@@ -44,9 +45,11 @@ module Migrations
 
           out = +""
           used = 0
+          emitted_sgr = false
           line.scan(/#{SGR}|\X/) do |token|
             if token.start_with?("\e")
               out << token
+              emitted_sgr = true
               next
             end
             w = Unicode::DisplayWidth.of(token)
@@ -54,7 +57,8 @@ module Migrations
             out << token
             used += w
           end
-          out << RESET
+          out << RESET if emitted_sgr
+          out
         end
 
         # Pad to a display width (wide characters count as 2; SGR codes ignored).

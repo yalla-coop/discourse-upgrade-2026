@@ -36,6 +36,22 @@ RSpec.describe DiscourseWorkflows::Executor do
         expect(topic.reload.tags).to include(tag)
       end
 
+      it "publishes step and terminal progress" do
+        messages =
+          MessageBus.track_publish { described_class.new(workflow, "trigger-1", trigger_data).run }
+        progress_messages =
+          messages.select do |message|
+            message.channel.start_with?("/discourse-workflows/execution/")
+          end
+
+        expect(progress_messages.map { |message| message.data.dig(:step, "status") }.compact).to eq(
+          %w[success running success],
+        )
+        expect(progress_messages.last.data).to include(type: "execution_progress", refresh: true)
+        expect(progress_messages.last.data[:execution]).to include(status: "success")
+        expect(progress_messages.map(&:group_ids).uniq).to eq([[Group::AUTO_GROUPS[:admins]]])
+      end
+
       it "creates an execution record" do
         expect { described_class.new(workflow, "trigger-1", trigger_data).run }.to change {
           DiscourseWorkflows::Execution.count
@@ -677,7 +693,7 @@ RSpec.describe DiscourseWorkflows::Executor do
 
       let(:plugin) do
         p = Plugin::Instance.new
-        p.enabled_site_setting(:discourse_workflows_enabled)
+        p.enabled_site_setting(:enable_discourse_workflows)
         p
       end
 
@@ -686,12 +702,7 @@ RSpec.describe DiscourseWorkflows::Executor do
         DiscourseWorkflows::Registry.reset_indexes!
       end
 
-      after do
-        DiscoursePluginRegistry._raw_discourse_workflows_nodes.reject! do |h|
-          h[:value] == unavailable_node_class
-        end
-        DiscourseWorkflows::Registry.reset_indexes!
-      end
+      after { unregister_workflow_nodes(unavailable_node_class) }
 
       it "passes data through and records a skipped step" do
         graph =
@@ -766,12 +777,7 @@ RSpec.describe DiscourseWorkflows::Executor do
         DiscourseWorkflows::Registry.reset_indexes!
       end
 
-      after do
-        DiscoursePluginRegistry._raw_discourse_workflows_nodes.reject! do |entry|
-          [v1_node_class, v2_node_class].include?(entry[:value])
-        end
-        DiscourseWorkflows::Registry.reset_indexes!
-      end
+      after { unregister_workflow_nodes(v1_node_class, v2_node_class) }
 
       it "dispatches execution to the saved node type version" do
         graph =
@@ -854,15 +860,12 @@ RSpec.describe DiscourseWorkflows::Executor do
       end
 
       after do
-        DiscoursePluginRegistry._raw_discourse_workflows_nodes.reject! do |entry|
-          [
-            raw_array_node_class,
-            named_outputs_node_class,
-            malformed_array_node_class,
-            oversized_output_node_class,
-          ].include?(entry[:value])
-        end
-        DiscourseWorkflows::Registry.reset_indexes!
+        unregister_workflow_nodes(
+          raw_array_node_class,
+          named_outputs_node_class,
+          malformed_array_node_class,
+          oversized_output_node_class,
+        )
       end
 
       it "accepts positional output arrays" do

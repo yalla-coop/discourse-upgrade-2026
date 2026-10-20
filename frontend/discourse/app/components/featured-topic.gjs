@@ -6,26 +6,15 @@ import {
   classNameBindings,
 } from "@ember-decorators/component";
 import TopicPostBadges from "discourse/components/topic-post-badges";
-import domUtils from "discourse/lib/dom-utils";
 import dAgeWithTooltip from "discourse/ui-kit/helpers/d-age-with-tooltip";
 import TopicStatus from "./topic-status";
 
 @classNameBindings(":featured-topic")
 @attributeBindings("topic.id:data-topic-id")
 export default class FeaturedTopic extends Component {
-  click(e) {
-    if (e.target.closest(".last-posted-at")) {
-      this.appEvents.trigger("topic-entrance:show", {
-        topic: this.topic,
-        position: domUtils.offset(e.target),
-      });
-      return false;
-    }
-  }
-
   <template>
-    <TopicStatus @topic={{this.topic}} @disableActions={{true}} />
-    <a href={{this.topic.lastUnreadUrl}} class="title">{{trustHTML
+    <TopicStatus @disableActions={{true}} @topic={{this.topic}} />
+    <a class="title" href={{this.topic.lastUnreadUrl}}>{{trustHTML
         this.topic.fancyTitle
       }}</a>
     <TopicPostBadges
@@ -34,7 +23,7 @@ export default class FeaturedTopic extends Component {
       @url={{this.topic.lastUnreadUrl}}
     />
 
-    <a href={{this.topic.lastPostUrl}} class="last-posted-at">{{dAgeWithTooltip
+    <a class="last-posted-at" href={{this.topic.lastPostUrl}}>{{dAgeWithTooltip
         this.topic.last_posted_at
       }}</a>
   </template>

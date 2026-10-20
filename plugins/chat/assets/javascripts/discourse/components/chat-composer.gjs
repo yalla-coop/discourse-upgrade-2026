@@ -23,6 +23,7 @@ import UpsertHyperlink from "discourse/components/modal/upsert-hyperlink";
 import PluginOutlet from "discourse/components/plugin-outlet";
 import UserAutocompleteResults from "discourse/components/user-autocomplete-results";
 import lazyHash from "discourse/helpers/lazy-hash";
+import { SEND_SHORTCUT_META_ENTER } from "discourse/lib/constants";
 import { hashtagAutocompleteOptions } from "discourse/lib/hashtag-autocomplete";
 import loadEmojiSearchAliases from "discourse/lib/load-emoji-search-aliases";
 import { cloneJSON } from "discourse/lib/object";
@@ -35,7 +36,6 @@ import {
   initUserStatusHtml,
   renderUserStatusHtml,
 } from "discourse/lib/user-status-on-autocomplete";
-import { optionalRequire } from "discourse/lib/utilities";
 import virtualElementFromTextRange from "discourse/lib/virtual-element-from-text-range";
 import { waitForClosedKeyboard } from "discourse/lib/wait-for-keyboard";
 import forceScrollingElementPosition from "discourse/modifiers/force-scrolling-element-position";
@@ -53,6 +53,9 @@ import ChatReplyingIndicator from "discourse/plugins/chat/discourse/components/c
 import { chatComposerButtons } from "discourse/plugins/chat/discourse/lib/chat-composer-buttons";
 import ChatMessageInteractor from "discourse/plugins/chat/discourse/lib/chat-message-interactor";
 import TextareaInteractor from "discourse/plugins/chat/discourse/lib/textarea-interactor";
+import LocalDatesCreateModal from "discourse/plugins/discourse-local-dates/discourse/components/modal/local-dates-create" with {
+  discourseImport: "optional",
+};
 
 const CHAT_PRESENCE_KEEP_ALIVE = 5 * 1000; // 5 seconds
 
@@ -98,6 +101,30 @@ export default class ChatComposer extends Component {
       this.siteSettings.chat_allow_uploads &&
       isPresent(this.args.uploadDropZone)
     );
+  }
+
+  get hasContent() {
+    const minLength = this.siteSettings.chat_minimum_message_length || 1;
+    return (
+      this.draft?.message?.length >= minLength ||
+      (this.canAttachUploads && this.hasUploads)
+    );
+  }
+
+  get hasUploads() {
+    return this.draft?.uploads?.length > 0;
+  }
+
+  get sendEnabled() {
+    return (
+      (this.hasContent || this.draft?.editing) &&
+      !this.pane.sending &&
+      !this.inProgressUploadsCount > 0
+    );
+  }
+
+  get disabled() {
+    return !this.currentUser || this.args.disabled;
   }
 
   @action
@@ -155,30 +182,6 @@ export default class ChatComposer extends Component {
     buttonAction();
   }
 
-  get hasContent() {
-    const minLength = this.siteSettings.chat_minimum_message_length || 1;
-    return (
-      this.draft?.message?.length >= minLength ||
-      (this.canAttachUploads && this.hasUploads)
-    );
-  }
-
-  get hasUploads() {
-    return this.draft?.uploads?.length > 0;
-  }
-
-  get sendEnabled() {
-    return (
-      (this.hasContent || this.draft?.editing) &&
-      !this.pane.sending &&
-      !this.inProgressUploadsCount > 0
-    );
-  }
-
-  get disabled() {
-    return !this.currentUser || this.args.disabled;
-  }
-
   @action
   focusOrPromptLogin() {
     if (!this.currentUser) {
@@ -217,10 +220,6 @@ export default class ChatComposer extends Component {
 
   @action
   insertDiscourseLocalDate() {
-    const LocalDatesCreateModal = optionalRequire(
-      "discourse/plugins/discourse-local-dates/discourse/components/modal/local-dates-create"
-    );
-
     this.modal.show(LocalDatesCreateModal, {
       model: {
         insertDate: (markup) => {
@@ -416,10 +415,9 @@ export default class ChatComposer extends Component {
     }
 
     if (event.key === "Enter") {
-      const shortcutPreference =
-        this.currentUser.user_option.chat_send_shortcut;
+      const shortcutPreference = this.currentUser.user_option.send_shortcut;
       const send =
-        (shortcutPreference === "enter" && !event.shiftKey) ||
+        (shortcutPreference !== SEND_SHORTCUT_META_ENTER && !event.shiftKey) ||
         event.ctrlKey ||
         event.metaKey;
 
@@ -759,13 +757,12 @@ export default class ChatComposer extends Component {
     <div class="chat-composer__wrapper">
       {{#if this.shouldRenderMessageDetails}}
         <ChatComposerMessageDetails
-          @message={{if this.draft.editing this.draft this.draft.inReplyTo}}
           @cancelAction={{this.resetDraft}}
+          @message={{if this.draft.editing this.draft this.draft.inReplyTo}}
         />
       {{/if}}
 
       <div
-        role="region"
         aria-label={{i18n "chat.aria_roles.composer"}}
         class={{dConcatClass
           "chat-composer"
@@ -775,6 +772,7 @@ export default class ChatComposer extends Component {
           (if this.disabled "is-disabled" "is-enabled")
           (if this.draft.draftSaved "is-draft-saved" "is-draft-unsaved")
         }}
+        role="region"
         {{didUpdate this.didUpdateMessage this.draft}}
         {{didUpdate this.didUpdateInReplyTo this.draft.inReplyTo}}
         {{didInsert this.setup}}
@@ -802,33 +800,33 @@ export default class ChatComposer extends Component {
               {{on "click" this.focusOrPromptLogin}}
             >
               <DTextarea
-                {{preventScrollOnFocus}}
-                {{forceScrollingElementPosition}}
-                id={{this.composerId}}
-                value={{readonly this.draft.message}}
-                type="text"
-                class="chat-composer__input"
-                disabled={{this.disabled}}
-                autocorrect="on"
                 autocapitalize="sentences"
+                autocorrect="on"
+                class="chat-composer__input"
+                data-chat-composer-context={{this.context}}
+                disabled={{this.disabled}}
+                id={{this.composerId}}
                 placeholder={{this.placeholder}}
                 rows={{1}}
+                type="text"
+                value={{readonly this.draft.message}}
+                {{preventScrollOnFocus}}
+                {{forceScrollingElementPosition}}
                 {{didInsert this.setupTextareaInteractor}}
                 {{on "input" this.onInput}}
                 {{on "keydown" this.onKeyDown}}
                 {{on "focusin" this.onTextareaFocusIn}}
                 {{on "focusout" this.onTextareaFocusOut}}
                 {{didInsert this.setupAutocomplete}}
-                data-chat-composer-context={{this.context}}
               />
             </div>
 
             {{#each this.inlineButtons as |button|}}
               <DButton
-                @icon={{button.icon}}
                 class="-{{button.id}}"
                 disabled={{or this.disabled button.disabled}}
                 tabindex={{if button.disabled -1 0}}
+                @icon={{button.icon}}
                 {{on "click" (fn this.handleInlineButtonAction button.action)}}
                 {{on "focus" (fn this.computeIsFocused true)}}
                 {{on "blur" (fn this.computeIsFocused false)}}
@@ -842,11 +840,11 @@ export default class ChatComposer extends Component {
 
             {{#if this.site.desktopView}}
               <DButton
-                @icon="paper-plane"
                 class="-send"
-                title={{i18n "chat.composer.send"}}
                 disabled={{or this.disabled (not this.sendEnabled)}}
                 tabindex={{if this.sendEnabled 0 -1}}
+                title={{i18n "chat.composer.send"}}
+                @icon="paper-plane"
                 {{on "click" this.onSend}}
                 {{on "mousedown" this.trapMouseDown}}
                 {{on "focus" (fn this.computeIsFocused true)}}
@@ -856,11 +854,11 @@ export default class ChatComposer extends Component {
           </div>
           {{#if this.site.mobileView}}
             <DButton
-              @icon="paper-plane"
               class="-send"
-              title={{i18n "chat.composer.send"}}
               disabled={{or this.disabled (not this.sendEnabled)}}
               tabindex={{if this.sendEnabled 0 -1}}
+              title={{i18n "chat.composer.send"}}
+              @icon="paper-plane"
               {{on "click" this.onSend}}
               {{on "mousedown" this.trapMouseDown}}
               {{on "focus" (fn this.computeIsFocused true)}}
@@ -872,11 +870,11 @@ export default class ChatComposer extends Component {
 
       {{#if this.canAttachUploads}}
         <ChatComposerUploads
+          @composerInputEl={{this.composer.textarea.element}}
+          @existingUploads={{this.draft.uploads}}
           @fileUploadElementId={{this.fileUploadElementId}}
           @onUploadChanged={{this.onUploadChanged}}
-          @existingUploads={{this.draft.uploads}}
           @uploadDropZone={{@uploadDropZone}}
-          @composerInputEl={{this.composer.textarea.element}}
         />
       {{/if}}
 

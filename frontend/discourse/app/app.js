@@ -6,6 +6,7 @@ import "./loader-shims";
 import "./ui-kit-shims";
 import "./module-shims";
 import "./discourse-common-loader-shims";
+import "@warp-drive/ember/install";
 import embroiderCompatModules from "@embroider/virtual/compat-modules";
 import { registerDiscourseImplicitInjections } from "discourse/lib/implicit-injections";
 import { registerSettings } from "discourse/lib/theme-settings-store";
@@ -22,7 +23,10 @@ import { importSync } from "@embroider/macros";
 import { normalizeEmberEventHandling } from "discourse/lib/ember-events";
 import { isRailsTesting, isTesting } from "discourse/lib/environment";
 import { withPluginApi } from "discourse/lib/plugin-api";
-import { populatePreloadStore } from "discourse/lib/preload-store";
+import {
+  populatePreloadStore,
+  readPreloadedData,
+} from "discourse/lib/preload-store";
 import { buildResolver } from "discourse/resolver";
 
 populatePreloadStore();
@@ -49,18 +53,45 @@ const _pluginCallbacks = [];
 let _unhandledThemeErrors = [];
 
 window.moduleBroker = {
-  lookup(moduleName) {
+  lookup(moduleName, optional = false) {
+    if (optional && !require.has(moduleName)) {
+      return {};
+    }
     return require(moduleName);
   },
 };
 
+// `Resolver#addModules` expects the same namespacing as the eager modules.
+function registerRouteBundles(bundle, prefix) {
+  window._embroiderRouteBundles_ ??= [];
+
+  for (const { names, load } of bundle.routes ?? []) {
+    window._embroiderRouteBundles_.push({
+      names,
+      load: async () => {
+        const routeModules = (await load()).default;
+
+        return {
+          default: Object.fromEntries(
+            Object.entries(routeModules).map(([key, mod]) => [
+              `${prefix}/${key}`,
+              mod,
+            ])
+          ),
+        };
+      },
+    });
+  }
+}
+
 async function loadThemeFromModulePreload(link) {
   const themeId = link.dataset.themeId;
   try {
-    const compatModules = (await import(/* @vite-ignore */ link.href)).default;
-    for (const [key, mod] of Object.entries(compatModules)) {
+    const bundle = await import(/* @vite-ignore */ link.href);
+    for (const [key, mod] of Object.entries(bundle.compatModules)) {
       define(`discourse/theme-${themeId}/${key}`, () => mod);
     }
+    registerRouteBundles(bundle, `discourse/theme-${themeId}`);
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error(
@@ -69,7 +100,7 @@ async function loadThemeFromModulePreload(link) {
     );
 
     if (DEBUG && (isRailsTesting() || isTesting())) {
-      throw new Error(error);
+      throw new Error(error, { cause: error });
     }
 
     fireThemeErrorEvent({ themeId: link.dataset.themeId, error });
@@ -79,32 +110,32 @@ async function loadThemeFromModulePreload(link) {
 async function loadPluginFromModulePreload(link) {
   const pluginName = link.dataset.pluginName;
   try {
-    const compatModules = (await import(/* @vite-ignore */ link.href)).default;
-    for (const [key, mod] of Object.entries(compatModules)) {
+    const bundle = await import(/* @vite-ignore */ link.href);
+    for (const [key, mod] of Object.entries(bundle.compatModules)) {
       define(`discourse/plugins/${pluginName}/${key}`, () => mod);
     }
+    registerRouteBundles(bundle, `discourse/plugins/${pluginName}`);
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(
-      `Failed to load plugin ${link.dataset.pluginName} from ${link.href}`,
-      String(error)
-    );
-
     if (DEBUG) {
       if (isRailsTesting() || isTesting()) {
-        throw new Error(error);
+        throw new Error(error, { cause: error });
       }
 
       let { addError } = importSync("discourse/static/development-error");
       addError(error, link.dataset.pluginName, link.href);
     }
+
+    // eslint-disable-next-line no-console
+    console.error(
+      `Failed to load plugin ${link.dataset.pluginName} from ${link.href}`,
+      String(error)
+    );
   }
 }
 
 function registerPreloadedThemeSettings() {
   try {
-    const element = document.getElementById("data-preloaded");
-    const preloaded = JSON.parse(element.dataset.preloaded);
+    const preloaded = readPreloadedData();
     const activatedThemes = JSON.parse(preloaded.activatedThemes);
     for (const [themeId, info] of Object.entries(activatedThemes)) {
       registerSettings(parseInt(themeId, 10), info.settings);
@@ -175,12 +206,12 @@ class Discourse extends Application {
     loadInitializers(this);
   }
 
-  _registerPluginCode(version, code) {
-    _pluginCallbacks.push({ version, code });
-  }
-
   ready() {
     performance.mark("discourse-ready");
+  }
+
+  _registerPluginCode(version, code) {
+    _pluginCallbacks.push({ version, code });
   }
 }
 

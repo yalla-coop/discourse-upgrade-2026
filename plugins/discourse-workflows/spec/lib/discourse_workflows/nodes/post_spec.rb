@@ -44,6 +44,29 @@ RSpec.describe DiscourseWorkflows::Nodes::Post::V1 do
       )
     end
 
+    it "creates as an author who just posted, without tripping their rate limit" do
+      author = Fabricate(:user, refresh_auto_groups: true, trust_level: TrustLevel[4])
+      topic = Fabricate(:post, user: user, raw: "First post", post_number: 1).topic
+
+      RateLimiter.enable
+      SiteSetting.rate_limit_create_post = 5
+      PostCreator.create!(author, topic_id: topic.id, raw: "The author's own post")
+
+      expect do
+        execute_node(
+          configuration: {
+            "operation" => "create",
+            "topic_id" => topic.id.to_s,
+            "raw" => "Mirrored moments later",
+            "author_username" => author.username,
+          },
+          item: item,
+        )
+      end.to change { topic.posts.count }.by(1)
+
+      expect(topic.posts.order(:id).last.user_id).to eq(author.id)
+    end
+
     it "raises when creating a post as the anonymous actor" do
       first_post = Fabricate(:post, user: user, raw: "First post", post_number: 1)
       topic = first_post.topic
@@ -194,6 +217,141 @@ RSpec.describe DiscourseWorkflows::Nodes::Post::V1 do
       end.to raise_error(Discourse::InvalidAccess).and not_change { hidden_topic.posts.count }
     end
 
+    it "creates a PM reply as a TL0 user when bypassing permission checks", :aggregate_failures do
+      tl0_user = Fabricate(:user, trust_level: 0, refresh_auto_groups: true)
+      private_message = Fabricate(:private_message_topic, user: user, recipient: other_user)
+      Fabricate(
+        :post,
+        topic: private_message,
+        user: user,
+        raw: "Please help with my account.",
+        post_number: 1,
+      )
+      item = { "json" => { "topic" => { "id" => private_message.id } } }
+      result = nil
+
+      expect do
+        result =
+          execute_node(
+            configuration: {
+              "operation" => "create",
+              "topic_id" => private_message.id.to_s,
+              "raw" => "Automated reply from a TL0 user.",
+              "author_username" => tl0_user.username,
+              "bypass_permission_checks" => true,
+            },
+            item: item,
+          )
+      end.to change { private_message.posts.count }.by(1)
+
+      reply = private_message.posts.order(:id).last
+      expect(reply.user_id).to eq(tl0_user.id)
+      expect(reply.raw).to eq("Automated reply from a TL0 user.")
+      expect(private_message.topic_allowed_users.where(user_id: tl0_user.id)).to be_blank
+      expect(reply.custom_fields).to include(
+        DiscourseWorkflows::Executor::NodeExecutionContext::BYPASSED_PERMISSION_CHECKS_FIELD =>
+          "true",
+      )
+      expect(result["post"]).to include("id" => reply.id, "username" => tl0_user.username)
+    end
+
+    it "creates a secure category reply as a TL0 user when bypassing permission checks",
+       :aggregate_failures do
+      tl0_user = Fabricate(:user, trust_level: 0, refresh_auto_groups: true)
+      group = Fabricate(:group)
+      private_category = Fabricate(:private_category, group: group)
+      first_post =
+        create_post(user: admin, category: private_category, raw: "Secure category topic.")
+      topic = first_post.topic
+      item = { "json" => { "post" => { "topic_id" => topic.id } } }
+      result = nil
+
+      expect do
+        result =
+          execute_node(
+            configuration: {
+              "operation" => "create",
+              "topic_id" => topic.id.to_s,
+              "raw" => "Secure category automated reply.",
+              "author_username" => tl0_user.username,
+              "bypass_permission_checks" => true,
+            },
+            item: item,
+          )
+      end.to change { topic.posts.count }.by(1)
+
+      reply = topic.posts.order(:id).last
+      expect(reply.user_id).to eq(tl0_user.id)
+      expect(reply.raw).to eq("Secure category automated reply.")
+      expect(group.users.exists?(tl0_user.id)).to eq(false)
+      expect(result["post"]).to include("id" => reply.id, "username" => tl0_user.username)
+    end
+
+    it "creates a whisper as a TL0 user when bypassing permission checks", :aggregate_failures do
+      SiteSetting.whispers_allowed_groups = Group::AUTO_GROUPS[:staff].to_s
+      tl0_user = Fabricate(:user, trust_level: 0, refresh_auto_groups: true)
+      private_message = Fabricate(:private_message_topic, user: user, recipient: other_user)
+      Fabricate(
+        :post,
+        topic: private_message,
+        user: user,
+        raw: "Please help with my account.",
+        post_number: 1,
+      )
+      item = { "json" => { "topic" => { "id" => private_message.id } } }
+      result = nil
+
+      expect do
+        result =
+          execute_node(
+            configuration: {
+              "operation" => "create",
+              "topic_id" => private_message.id.to_s,
+              "raw" => "Staff-only automated note from a TL0 user.",
+              "author_username" => tl0_user.username,
+              "bypass_permission_checks" => true,
+              "whisper" => true,
+            },
+            item: item,
+          )
+      end.to change { private_message.posts.count }.by(1)
+
+      reply = private_message.posts.order(:id).last
+      expect(reply.user_id).to eq(tl0_user.id)
+      expect(reply.raw).to eq("Staff-only automated note from a TL0 user.")
+      expect(reply.post_type).to eq(Post.types[:whisper])
+      expect(private_message.topic_allowed_users.where(user_id: tl0_user.id)).to be_blank
+      expect(result["post"]).to include(
+        "id" => reply.id,
+        "username" => tl0_user.username,
+        "post_type" => Post.types[:whisper],
+      )
+    end
+
+    it "creates a post in a closed topic when bypassing permission checks", :aggregate_failures do
+      tl0_user = Fabricate(:user, trust_level: 0, refresh_auto_groups: true)
+      first_post = Fabricate(:post, user: user, raw: "First post", post_number: 1)
+      topic = first_post.topic
+      topic.update!(closed: true)
+
+      expect do
+        execute_node(
+          configuration: {
+            "operation" => "create",
+            "topic_id" => topic.id.to_s,
+            "raw" => "System authorization can reply to closed topics.",
+            "author_username" => tl0_user.username,
+            "bypass_permission_checks" => true,
+          },
+          item: item,
+        )
+      end.to change { topic.posts.count }.by(1)
+
+      reply = topic.posts.order(:id).last
+      expect(reply.user_id).to eq(tl0_user.id)
+      expect(reply.raw).to eq("System authorization can reply to closed topics.")
+    end
+
     it "raises when creating in a closed or archived topic" do
       first_post = Fabricate(:post, user: user, raw: "First post", post_number: 1)
       topic = first_post.topic
@@ -212,6 +370,95 @@ RSpec.describe DiscourseWorkflows::Nodes::Post::V1 do
         DiscourseWorkflows::NodeError,
         /Cannot create a post in a closed or archived topic/,
       )
+    end
+
+    it "deletes a post as the configured actor" do
+      post = Fabricate(:post, user: user, raw: "Original post")
+      topic_title = post.topic.title
+      result = nil
+
+      expect do
+        result =
+          execute_node(
+            configuration: {
+              "operation" => "delete",
+              "post_id" => post.id.to_s,
+              "actor_username" => admin.username,
+            },
+            item: item,
+          )
+      end.to change { post.reload.deleted_at }.from(nil)
+
+      expect(post.deleted_by_id).to eq(admin.id)
+      expect(result["post"]).to include(
+        "id" => post.id,
+        "topic_id" => post.topic_id,
+        "topic_title" => topic_title,
+      )
+    end
+
+    it "really deletes even when the actor is the post author" do
+      post = Fabricate(:post, user: user, raw: "Original post")
+      reply = Fabricate(:post, topic: post.topic, user: user)
+
+      execute_node(
+        configuration: {
+          "operation" => "delete",
+          "post_id" => reply.id.to_s,
+          "actor_username" => user.username,
+        },
+        item: item,
+      )
+
+      expect(reply.reload.deleted_at).to be_present
+    end
+
+    it "recovers a deleted post as the configured actor" do
+      post = Fabricate(:post, user: user, raw: "Original post")
+      PostDestroyer.new(admin, post).destroy
+      result = nil
+
+      expect do
+        result =
+          execute_node(
+            configuration: {
+              "operation" => "recover",
+              "post_id" => post.id.to_s,
+              "actor_username" => admin.username,
+            },
+            item: item,
+          )
+      end.to change { post.reload.deleted_at }.to(nil)
+
+      expect(result["post"]).to include("id" => post.id, "raw" => "Original post")
+    end
+
+    it "raises when the actor may not delete or recover the post", :aggregate_failures do
+      post = Fabricate(:post, user: admin, raw: "Original post")
+
+      expect do
+        execute_node(
+          configuration: {
+            "operation" => "delete",
+            "post_id" => post.id.to_s,
+            "actor_username" => other_user.username,
+          },
+          item: item,
+        )
+      end.to raise_error(Discourse::InvalidAccess)
+
+      PostDestroyer.new(admin, post).destroy
+
+      expect do
+        execute_node(
+          configuration: {
+            "operation" => "recover",
+            "post_id" => post.id.to_s,
+            "actor_username" => other_user.username,
+          },
+          item: item,
+        )
+      end.to raise_error(Discourse::InvalidAccess)
     end
 
     it "edits a post for the configured editor" do
@@ -260,6 +507,24 @@ RSpec.describe DiscourseWorkflows::Nodes::Post::V1 do
       end.to raise_error(Discourse::InvalidAccess)
 
       expect(hidden_post.reload.raw).not_to eq("Hidden edit")
+    end
+
+    it "records a separate revision for each edit" do
+      post = Fabricate(:post, user: user, raw: "Original post")
+
+      expect do
+        2.times do
+          execute_node(
+            configuration: {
+              "operation" => "edit",
+              "post_id" => post.id.to_s,
+              "raw" => "Workflow edit #{SecureRandom.hex(4)}",
+              "editor_username" => admin.username,
+            },
+            item: item,
+          )
+        end
+      end.to change { post.reload.version }.by(2)
     end
 
     it "gets a visible post with selected body fields" do
@@ -578,7 +843,7 @@ RSpec.describe DiscourseWorkflows::Nodes::Post::V1 do
           },
           item: item,
         )
-      end.to raise_error(DiscourseWorkflows::NodeError, /Invalid post filter fragment/)
+      end.to raise_error(DiscourseWorkflows::NodeError, /Invalid post filter/)
     end
   end
 end

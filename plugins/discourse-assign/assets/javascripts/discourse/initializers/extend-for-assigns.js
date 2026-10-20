@@ -1,11 +1,9 @@
-import { computed } from "@ember/object";
 import { getOwner } from "@ember/owner";
 import { trustHTML } from "@ember/template";
 import getURL from "discourse/lib/get-url";
 import { iconHTML } from "discourse/lib/icon-library";
 import { withPluginApi } from "discourse/lib/plugin-api";
 import { registerTopicFooterDropdown } from "discourse/lib/register-topic-footer-dropdown";
-import { applyValueTransformer } from "discourse/lib/transformer";
 import { escapeExpression } from "discourse/lib/utilities";
 import { renderAvatar } from "discourse/ui-kit/helpers/d-user-avatar";
 import { i18n } from "discourse-i18n";
@@ -322,21 +320,12 @@ function initialize(api) {
       : {}
   );
 
-  api.modifyClass(
-    "model:bookmark",
-    (Superclass) =>
-      class extends Superclass {
-        @computed("assigned_to_user")
-        get assignedToUserPath() {
-          return assignedToUserPath(this.assigned_to_user);
-        }
-
-        @computed("assigned_to_group")
-        get assignedToGroupPath() {
-          return assignedToGroupPath(this.assigned_to_group);
-        }
-      }
-  );
+  api.addModelGetter("bookmark", "assignedToUserPath", function () {
+    return assignedToUserPath(this.assigned_to_user);
+  });
+  api.addModelGetter("bookmark", "assignedToGroupPath", function () {
+    return assignedToGroupPath(this.assigned_to_group);
+  });
 
   api.modifyClass(
     "component:topic-notifications-button",
@@ -425,40 +414,10 @@ function initialize(api) {
       )}">${escapeExpression(name)}</span></${tagName}>`;
     };
 
-    // is there's one assignment just return the tag
-    if (assignedTo.length === 1) {
-      return createTagHtml(assignedTo[0]);
-    }
-
-    // join multiple assignments with a separator
-    let result = "";
-    assignedTo.forEach((assignment, index) => {
-      result += createTagHtml(assignment);
-
-      // add separator if not the last tag
-      if (index < assignedTo.length - 1) {
-        const separator = applyValueTransformer("tag-separator", ",", {
-          topic,
-          index,
-        });
-        result += `<span class="discourse-tags__tag-separator">${separator}</span>`;
-      }
-    });
-
-    return result;
+    return assignedTo.map((assignment) => createTagHtml(assignment));
   });
 
-  api.modifyClass(
-    "model:group",
-    (Superclass) =>
-      class extends Superclass {
-        asJSON() {
-          return Object.assign({}, super.asJSON(...arguments), {
-            assignable_level: this.assignable_level,
-          });
-        }
-      }
-  );
+  api.addModelSaveProperty("group", "assignable_level");
 
   api.modifyClass(
     "controller:topic",
@@ -549,26 +508,12 @@ function customizePost(api, siteSettings) {
     "can_assign"
   );
 
-  api.modifyClass(
-    "model:post",
-    (Superclass) =>
-      class extends Superclass {
-        get can_edit() {
-          return isAssignSmallAction(this.action_code) ? true : super.can_edit;
-        }
+  api.registerValueTransformer("post-can-edit", ({ value, context }) =>
+    isAssignSmallAction(context.post.action_code) ? true : value
+  );
 
-        // overriding tracked properties requires overriding both the getter and the setter.
-        // otherwise the superclass will throw an error when the application sets the field value
-        set can_edit(value) {
-          super.can_edit = value;
-        }
-
-        get isSmallAction() {
-          return isAssignSmallAction(this.action_code)
-            ? true
-            : super.isSmallAction;
-        }
-      }
+  api.registerValueTransformer("post-is-small-action", ({ value, context }) =>
+    isAssignSmallAction(context.post.action_code) ? true : value
   );
 
   api.renderAfterWrapperOutlet(
@@ -713,8 +658,8 @@ export default {
         class: "assign-topics",
         description: "topics.bulk.assign_description",
         confirmButtonTranslationKey: "topics.bulk.confirm_assign_topics",
-        action({ setComponent }) {
-          setComponent(BulkActionsAssignUser);
+        action({ setComponent, performAndRefresh }) {
+          setComponent(BulkActionsAssignUser, { onPerform: performAndRefresh });
         },
         actionType: "setComponent",
       });

@@ -22,7 +22,7 @@ module DiscourseWorkflows
       end
 
       def run!(run_id:)
-        return unless SiteSetting.discourse_workflows_enabled
+        return unless SiteSetting.enable_discourse_workflows
 
         run = WorkflowCallRun.find_by(id: run_id)
         return if run.blank?
@@ -122,7 +122,11 @@ module DiscourseWorkflows
           )
         execution = executor.run
 
-        claimed.update!(child_execution_id: execution.id, status: :waiting) if execution.waiting?
+        if execution.waiting?
+          claimed.update!(child_execution_id: execution.id, status: :waiting)
+        elsif execution.error? || execution.rate_limited?
+          child_failed!(execution)
+        end
       rescue => e
         fail_run!(claimed || run, e.message)
       end

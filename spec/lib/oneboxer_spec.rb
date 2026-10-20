@@ -16,8 +16,34 @@ RSpec.describe Oneboxer do
     expect(Oneboxer.onebox("http://boom.com")).to eq("")
   end
 
+  it "shows the bot challenge error message when the response is a verification challenge" do
+    url = "https://challenged.example.com/page"
+    %i[head get].each do |method|
+      stub_request(method, url).to_return(
+        status: 202,
+        headers: {
+          "x-amzn-waf-action" => "challenge",
+        },
+      )
+    end
+
+    expect(Oneboxer.preview(url, invalidate_oneboxes: true)).to include(
+      I18n.t("errors.onebox.bot_challenge").sub(" :cry:", ""),
+    )
+  end
+
+  it "shows the status code error message for a plain error response" do
+    url = "https://error.example.com/page"
+    %i[head get].each { |method| stub_request(method, url).to_return(status: 403) }
+
+    expect(Oneboxer.preview(url, invalidate_oneboxes: true)).to include(
+      I18n.t("errors.onebox.error_response", status_code: 403).sub(" :cry:", ""),
+    )
+  end
+
   describe "#invalidate" do
     let(:url) { "http://test.com" }
+
     it "clears the cached preview for the onebox URL and the failed URL cache" do
       Discourse.cache.write(Oneboxer.onebox_cache_key(url), "test")
       Discourse.cache.write(Oneboxer.onebox_failed_cache_key(url), true)
@@ -140,13 +166,15 @@ RSpec.describe Oneboxer do
 
     it "links to an user profile" do
       user = Fabricate(:user)
+      user.user_stat.update!(post_count: 1)
 
       expect(preview("/u/does-not-exist")).to match_html(link("/u/does-not-exist"))
       expect(preview("/u/#{user.username}")).to include(user.name)
     end
 
-    it "should respect enable_names site setting" do
+    it "respects the enable_names site setting" do
       user = Fabricate(:user)
+      user.user_stat.update!(post_count: 1)
 
       SiteSetting.enable_names = true
       expect(preview("/u/#{user.username}")).to include(user.name)
@@ -164,6 +192,7 @@ RSpec.describe Oneboxer do
 
     it "strips HTML from user profile location" do
       user = Fabricate(:user)
+      user.user_stat.update!(post_count: 1)
       profile = user.reload.user_profile
 
       expect(preview("/u/#{user.username}")).not_to include("<span class=\"location\">")
@@ -357,7 +386,7 @@ RSpec.describe Oneboxer do
   end
 
   describe ".onebox_raw" do
-    it "should escape the onebox URL before processing" do
+    it "escapes the onebox URL before processing" do
       post = Fabricate(:post, raw: Discourse.base_url + "/new?'class=black")
       cpp = CookedPostProcessor.new(post, invalidate_oneboxes: true)
       cpp.post_process_oneboxes

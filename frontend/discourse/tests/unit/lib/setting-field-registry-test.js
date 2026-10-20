@@ -1,9 +1,10 @@
 import { module, test } from "qunit";
+import CategoryControl from "discourse/components/setting-field/category";
 import CategoryListControl from "discourse/components/setting-field/category-list";
 import CompactListControl from "discourse/components/setting-field/compact-list";
 import DurationControl from "discourse/components/setting-field/duration";
+import GroupControl from "discourse/components/setting-field/group";
 import GroupListControl from "discourse/components/setting-field/group-list";
-import StringControl from "discourse/components/setting-field/string";
 import {
   resolveSettingFieldType,
   settingFieldValidation,
@@ -26,12 +27,17 @@ module("Unit | Lib | setting-field-registry", function () {
       );
     });
 
-    test("falls back to the string control for unknown/missing types", function (assert) {
+    test("falls back to the default text input for unknown/missing types", function (assert) {
       assert.strictEqual(
-        resolveSettingFieldType({ type: "not_a_real_type" }).renderer,
-        StringControl
+        resolveSettingFieldType({ type: "not_a_real_type" }).type,
+        "input"
       );
-      assert.strictEqual(resolveSettingFieldType({}).renderer, StringControl);
+      assert.strictEqual(resolveSettingFieldType({}).type, "input");
+      assert.strictEqual(
+        resolveSettingFieldType({}).renderer,
+        undefined,
+        "the default entry has no custom renderer; the field renders a bare control"
+      );
     });
 
     test("matches a registered subtype before the base type", function (assert) {
@@ -69,6 +75,46 @@ module("Unit | Lib | setting-field-registry", function () {
       assert.strictEqual(
         resolveSettingFieldType({ type: "category_list" }).renderer,
         CategoryListControl
+      );
+    });
+
+    test("a single-value type does not shadow its list counterpart", function (assert) {
+      assert.strictEqual(
+        resolveSettingFieldType({ type: "category" }).renderer,
+        CategoryControl
+      );
+      assert.strictEqual(
+        resolveSettingFieldType({ type: "group" }).renderer,
+        GroupControl
+      );
+    });
+
+    test("the converted types are admin-ready, the fallback never is", function (assert) {
+      for (const type of [
+        "string",
+        "float",
+        "username",
+        "email",
+        "textarea",
+        "password",
+        "enum",
+        "locale_enum",
+        "category",
+        "group",
+        "tag_list",
+        "tag_group_list",
+        "icon",
+      ]) {
+        assert.true(
+          resolveSettingFieldType({ type }).adminReady,
+          `${type} renders with FormKit on the admin page`
+        );
+      }
+
+      assert.strictEqual(
+        resolveSettingFieldType({ type: "not_a_real_type" }).adminReady,
+        undefined,
+        "types without an explicit entry keep their legacy control instead of degrading to a bare text input"
       );
     });
   });

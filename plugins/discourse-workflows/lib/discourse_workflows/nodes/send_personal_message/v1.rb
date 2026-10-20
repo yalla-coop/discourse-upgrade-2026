@@ -15,6 +15,9 @@ module DiscourseWorkflows
           capabilities: {
             run_scope: "per_item",
           },
+          output_contracts: [
+            { schema: Schema.merge(Schema::TOPIC_LIST_ITEM_SCHEMA, Schema::POST_SCHEMA) },
+          ],
           properties: {
             recipient_usernames: {
               type: :array,
@@ -101,7 +104,7 @@ module DiscourseWorkflows
           post = PostCreator.new(sender, post_args).create!
 
           {
-            topic: topic_data(post.topic, sender.guardian),
+            topic: topic_data(post.topic, scope: sender.guardian),
             post:
               exec_ctx.serialize_post(
                 post,
@@ -139,10 +142,6 @@ module DiscourseWorkflows
             .map(&:strip)
             .reject(&:blank?)
             .join(",")
-        end
-
-        def topic_data(topic, guardian)
-          serialize_record(topic, TopicListItemSerializer, scope: guardian)
         end
       end
     end

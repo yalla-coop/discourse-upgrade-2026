@@ -24,6 +24,8 @@ class User < ActiveRecord::Base
   has_many :category_users, dependent: :destroy
   has_many :tag_users, dependent: :destroy
   has_many :user_api_keys, dependent: :destroy
+  has_many :mcp_oauth_authorizations, dependent: :destroy
+  has_many :mcp_oauth_access_tokens, dependent: :destroy
   has_many :topic_allowed_users, dependent: :destroy
   has_many :user_archived_messages, dependent: :destroy
   has_many :email_change_requests, dependent: :destroy
@@ -194,6 +196,12 @@ class User < ActiveRecord::Base
   after_update :trigger_user_automatic_group_refresh, if: :saved_change_to_staged?
   after_update :change_display_name, if: :saved_change_to_name?
 
+  after_destroy :clear_acls
+
+  def clear_acls
+    Jobs.enqueue(:cleanup_acls_for_deleted, user_id: id)
+  end
+
   after_save :expire_tokens_if_password_changed
   after_save :clear_global_notice_if_needed
   after_save :refresh_avatar
@@ -245,6 +253,7 @@ class User < ActiveRecord::Base
 
   # Skip validating email, for example from a particular auth provider plugin
   attr_accessor :skip_email_validation
+  attr_accessor :enforce_username_restrictions
 
   # Whether we need to be sending a system message after creation
   attr_accessor :send_welcome_message
@@ -389,7 +398,7 @@ class User < ActiveRecord::Base
   def all_sidebar_sections
     sidebar_sections
       .or(SidebarSection.public_sections)
-      .includes(:sidebar_urls)
+      .includes(:localizations, sidebar_urls: :localizations)
       .order("(section_type IS NOT NULL) DESC, (public IS TRUE) DESC")
   end
 
@@ -403,11 +412,8 @@ class User < ActiveRecord::Base
   def visible_sidebar_tags(user_guardian = nil)
     user_guardian ||= guardian
 
-    DiscourseTagging.filter_visible(
-      Tag.where(
-        id: SidebarSectionLink.where(user_id: id, linkable_type: "Tag").select(:linkable_id),
-      ),
-      user_guardian,
+    Tag.browsable(user_guardian).where(
+      id: sidebar_section_links.where(linkable_type: "Tag").select(:linkable_id),
     )
   end
 
@@ -1047,8 +1053,24 @@ class User < ActiveRecord::Base
   def new_user_posting_on_first_day?
     return false if staff?
     return false if trust_level >= TrustLevel[2]
-    return false if first_post_created_at.present? && first_post_created_at <= 24.hours.ago
+    return false if created_at <= 24.hours.ago
     true
+  end
+
+  def first_day_topics_limit
+    if trust_level == TrustLevel[1]
+      SiteSetting.tl1_max_topics_in_first_day
+    else
+      SiteSetting.max_topics_in_first_day
+    end
+  end
+
+  def first_day_replies_limit
+    if trust_level == TrustLevel[1]
+      SiteSetting.tl1_max_replies_in_first_day
+    else
+      SiteSetting.max_replies_in_first_day
+    end
   end
 
   def new_user?
@@ -1183,12 +1205,13 @@ class User < ActiveRecord::Base
       return if !User.should_update_last_seen?(id, now)
     end
 
+    previous_seen_at = last_seen_at
     update_previous_visit(now)
     # using update_column to avoid the AR transaction
     update_column(:last_seen_at, now)
     update_column(:first_seen_at, now) unless first_seen_at
 
-    DiscourseEvent.trigger(:user_seen, self)
+    DiscourseEvent.trigger(:user_seen, self, previous_seen_at)
   end
 
   def self.gravatar_template(email)
@@ -1282,6 +1305,17 @@ class User < ActiveRecord::Base
     else
       self.class.avatar_template(username, uploaded_avatar_id)
     end
+  end
+
+  def remove_avatar!(actor)
+    return if uploaded_avatar_id.blank?
+
+    self.class.transaction do
+      update!(uploaded_avatar_id: nil)
+      user_avatar&.update!(custom_upload_id: nil, gravatar_upload_id: nil)
+    end
+
+    StaffActionLogger.new(actor).log_removed_avatar(self)
   end
 
   # The following count methods are somewhat slow - definitely don't use them in a loop.
@@ -1492,6 +1526,10 @@ class User < ActiveRecord::Base
     if reviewable = ReviewableUser.pending.find_by(target: self)
       reviewable.perform(performed_by, :delete_user)
     end
+  end
+
+  def revoke_approval!
+    update!(approved: false, approved_by: nil, approved_at: nil)
   end
 
   def change_trust_level!(level, opts = nil)
@@ -1741,7 +1779,8 @@ class User < ActiveRecord::Base
   end
 
   def set_random_avatar
-    if SiteSetting.selectable_avatars_mode != "disabled"
+    if SiteSetting.selectable_avatars_random_on_signup &&
+         SiteSetting.selectable_avatars_mode != "disabled"
       if upload = SiteSetting.selectable_avatars.sample
         update_column(:uploaded_avatar_id, upload.id)
         UserAvatar.create!(user_id: id, custom_upload_id: upload.id)
@@ -2118,6 +2157,14 @@ class User < ActiveRecord::Base
     username_format_validator ||
       begin
         if will_save_change_to_username?
+          if enforce_username_restrictions &&
+               (
+                 User.reserved_username?(username) ||
+                   UsernameValidator.clashing_with_existing_route?(username)
+               )
+            errors.add(:username, I18n.t("login.reserved_username"))
+          end
+
           existing =
             DB.query(USERNAME_EXISTS_SQL, username: self.class.normalize_username(username))
 
@@ -2328,7 +2375,7 @@ class User < ActiveRecord::Base
   end
 
   def trigger_user_updated_event
-    DiscourseEvent.trigger(:user_updated, self)
+    DiscourseEvent.trigger(:user_updated, self, %w[uploaded_avatar_id])
     true
   end
 

@@ -46,21 +46,28 @@ export default class SelectedChoice extends Component {
     return this.mandatoryValuesArray.includes(this.item.id);
   }
 
+  @computed("mandatoryValueTitle")
+  get readOnlyTitle() {
+    return (
+      this.mandatoryValueTitle || i18n("admin.site_settings.mandatory_group")
+    );
+  }
+
   <template>
     {{#if this.readOnly}}
       <button
         class="btn btn-default disabled tag-choice"
-        title={{i18n "admin.site_settings.mandatory_group"}}
+        title={{this.readOnlyTitle}}
       >{{this.itemName}}</button>
     {{else}}
       <button
-        {{on "click" (fn this.selectKit.deselect this.item)}}
         aria-label={{i18n "select_kit.delete_item" name=this.itemName}}
-        data-value={{this.itemValue}}
-        data-name={{this.itemName}}
-        type="button"
-        id="{{this.id}}-choice"
         class="btn btn-default selected-choice tag-choice {{this.extraClass}}"
+        data-name={{this.itemName}}
+        data-value={{this.itemValue}}
+        id="{{this.id}}-choice"
+        type="button"
+        {{on "click" (fn this.selectKit.deselect this.item)}}
       >
         {{dIcon "xmark"}}
         {{#if (has-block)}}

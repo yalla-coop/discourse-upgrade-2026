@@ -52,8 +52,9 @@ module Chat
     model :uploads, optional: true
     step :enforce_membership
     model :membership
-    policy :can_modify_channel_message
-    policy :can_modify_message
+    policy :can_edit_message
+    policy :channel_allows_message_modification,
+           class_name: Chat::Channel::Policy::MessageModification
 
     transaction do
       step :modify_message
@@ -103,12 +104,9 @@ module Chat
         .where(user_uploads: { user: guardian.user })
     end
 
-    def can_modify_channel_message(guardian:, message:)
-      guardian.can_modify_channel_message?(message.chat_channel)
-    end
-
-    def can_modify_message(guardian:, message:)
-      guardian.can_edit_chat?(message)
+    def can_edit_message(guardian:, message:)
+      guardian.can_post_in_chatable?(message.chat_channel.chatable) &&
+        guardian.can_edit_chat?(message)
     end
 
     def modify_message(params:, message:, guardian:, uploads:)

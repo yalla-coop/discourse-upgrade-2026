@@ -1,4 +1,4 @@
-import { click, fillIn, visit } from "@ember/test-helpers";
+import { click, currentURL, fillIn, visit } from "@ember/test-helpers";
 import { test } from "qunit";
 import { acceptance } from "discourse/tests/helpers/qunit-helpers";
 import { i18n } from "discourse-i18n";
@@ -61,9 +61,11 @@ acceptance("Admin - Users List", function (needs) {
   test("searching users with no matches", async function (assert) {
     await visit("/admin/users/list/active");
 
-    await fillIn(".admin-users-list__search input", "doesntexist");
+    await fillIn(".d-filter-controls__input", "doesntexist");
 
-    assert.dom(".users-list-container").hasText(i18n("search.no_results"));
+    assert
+      .dom(".d-filter-controls__no-results p")
+      .hasText(i18n("search.no_results"));
   });
 
   test("sorts users", async function (assert) {
@@ -158,10 +160,10 @@ acceptance("Admin - Users List", function (needs) {
 
   test("activation filter is only shown on the new tab", async function (assert) {
     await visit("/admin/users/list/active");
-    assert.dom(".admin-users-list__activation-filter").doesNotExist();
+    assert.dom(".d-filter-controls__dropdown").doesNotExist();
 
     await visit("/admin/users/list/new");
-    assert.dom(".admin-users-list__activation-filter").exists();
+    assert.dom(".d-filter-controls__dropdown").exists();
   });
 
   test("filters the new tab by activation status", async function (assert) {
@@ -169,7 +171,7 @@ acceptance("Admin - Users List", function (needs) {
 
     assert.dom(".users-list .user").exists({ count: 2 });
 
-    await fillIn(".admin-users-list__activation-filter", "not_activated");
+    await fillIn(".d-filter-controls__dropdown", "not_activated");
 
     assert.strictEqual(
       lastActivationFilter,
@@ -180,5 +182,104 @@ acceptance("Admin - Users List", function (needs) {
     assert
       .dom(".users-list .user:nth-child(1) .username")
       .includesText("notactivated");
+  });
+});
+
+acceptance("Admin - Users List - bulk search", function (needs) {
+  needs.user();
+
+  let lastFilter;
+
+  needs.pretender((server, helper) => {
+    const respond = (request) => {
+      lastFilter = request.queryParams.filter;
+
+      const users = [
+        { id: 2, username: "sam" },
+        { id: 3, username: "bob" },
+      ];
+
+      if (!lastFilter) {
+        return helper.response(users);
+      }
+
+      const terms = lastFilter.split(/[,\s]+/).filter(Boolean);
+      return helper.response(
+        users.filter((user) =>
+          terms.some((term) => user.username.includes(term))
+        )
+      );
+    };
+
+    server.get("/admin/users/list/active.json", respond);
+    server.get("/admin/users/list/new.json", respond);
+  });
+
+  test("searches multiple users at once and reflects the search in the URL", async function (assert) {
+    await visit("/admin/users/list/active");
+
+    await fillIn(".d-filter-controls__input", "sam,bob");
+
+    assert.strictEqual(
+      lastFilter,
+      "sam,bob",
+      "sends the whole list to the server"
+    );
+    assert.dom(".users-list .user").exists({ count: 2 });
+    assert.true(
+      decodeURIComponent(currentURL()).includes("filter=sam,bob"),
+      "reflects the search in the URL"
+    );
+    assert
+      .dom(".d-filter-controls__input")
+      .isFocused("keeps focus while the URL updates");
+
+    await fillIn(".d-filter-controls__input", "");
+
+    assert.false(
+      currentURL().includes("filter="),
+      "clearing the search removes it from the URL"
+    );
+  });
+
+  test("prefills and applies the search from the URL", async function (assert) {
+    await visit("/admin/users/list/active?filter=sam");
+
+    assert.dom(".d-filter-controls__input").hasValue("sam");
+    assert.strictEqual(lastFilter, "sam", "sends the filter from the URL");
+    assert.dom(".users-list .user").exists({ count: 1 });
+  });
+
+  test("prefills the search from the legacy username query param", async function (assert) {
+    await visit("/admin/users/list/active?username=sam");
+
+    assert.dom(".d-filter-controls__input").hasValue("sam");
+    assert.strictEqual(lastFilter, "sam", "sends the filter from the URL");
+  });
+
+  test("clears the search when switching tabs", async function (assert) {
+    await visit("/admin/users/list/active");
+
+    await fillIn(".d-filter-controls__input", "sam");
+    assert.dom(".users-list .user").exists({ count: 1 });
+
+    await click('a[href="/admin/users/list/new"]');
+
+    assert.dom(".d-filter-controls__input").hasValue("");
+    assert.strictEqual(
+      lastFilter,
+      undefined,
+      "does not filter the new tab results"
+    );
+
+    await click('a[href="/admin/users/list/active"]');
+
+    assert
+      .dom(".d-filter-controls__input")
+      .hasValue("", "does not restore the search when returning to the tab");
+    assert.false(
+      currentURL().includes("filter="),
+      "does not restore the search in the URL"
+    );
   });
 });

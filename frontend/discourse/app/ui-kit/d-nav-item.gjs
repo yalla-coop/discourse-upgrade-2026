@@ -6,6 +6,7 @@ import { trustHTML } from "@ember/template";
 import { isPresent } from "@ember/utils";
 import getURL from "discourse/lib/get-url";
 import { iconHTML } from "discourse/lib/icon-library";
+import { applyValueTransformer } from "discourse/lib/transformer";
 import dConcatClass from "discourse/ui-kit/helpers/d-concat-class";
 import { i18n } from "discourse-i18n";
 
@@ -73,13 +74,20 @@ export default class DNavItem extends Component {
   }
 
   get refreshHref() {
-    if (!this.session.requiresRefresh || !this.args.route) {
+    if (!this.args.route) {
       return null;
     }
     try {
-      return this.args.routeParam
+      const href = this.args.routeParam
         ? getURL(this.router.urlFor(this.args.route, this.args.routeParam))
         : getURL(this.router.urlFor(this.args.route));
+
+      const shouldRefresh = applyValueTransformer(
+        "full-page-refresh-on-navigation",
+        this.session.requiresRefresh,
+        { url: href }
+      );
+      return shouldRefresh ? href : null;
     } catch {
       return null;
     }
@@ -91,17 +99,17 @@ export default class DNavItem extends Component {
         <a href={{this.refreshHref}}>{{this.contents}}</a>
       {{else if @routeParam}}
         <LinkTo
-          @route={{@route}}
-          @model={{@routeParam}}
           @current-when={{this.active}}
+          @model={{@routeParam}}
+          @route={{@route}}
         >{{this.contents}}</LinkTo>
       {{else if @route}}
         <LinkTo
-          @route={{@route}}
           @current-when={{this.active}}
+          @route={{@route}}
         >{{this.contents}}</LinkTo>
       {{else}}
-        <a href={{getURL @path}} data-auto-route="true">{{this.contents}}</a>
+        <a data-auto-route="true" href={{getURL @path}}>{{this.contents}}</a>
       {{/if}}
     </li>
   </template>

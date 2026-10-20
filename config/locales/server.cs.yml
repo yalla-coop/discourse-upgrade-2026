@@ -5,6 +5,33 @@
 # https://translate.discourse.org/
 
 cs:
+  markdown_endpoints:
+    latest: "Nejnovější"
+    categories: "Kategorie"
+    tags: "Tagy"
+    previous_page: "Předchozí strana"
+    next_page: "Další strana"
+    replies: "Odpovědi"
+    last_updated: "Poslední aktualizace"
+  mcp:
+    errors:
+      draft_too_long: "Koncept je příliš dlouhý"
+      topic_not_found: "Téma nenalezeno"
+    oauth:
+      deny: "Odmítnout"
+      approve: "Autorizovat"
+  llms_txt:
+    sections:
+      optional: "Volitelné"
+    links:
+      search:
+        label: "Vyhledat"
+      categories:
+        label: "Kategorie"
+      about:
+        label: "O tomto webu"
+      guidelines:
+        label: "Pokyny"
   dates:
     short_date_no_year: "D MMM"
     short_date: "D MMM, YYYY"
@@ -316,7 +343,6 @@ cs:
       exclusion: je rezervováno
       greater_than: musí být větší než %{count}
       greater_than_or_equal_to: musí být větší nebo rovno %{count}
-      has_already_been_used: "již byl použit"
       in: musí být v %{count}
       inclusion: není zahrnutý v seznamu
       invalid: je neplatný
@@ -1099,16 +1125,15 @@ cs:
   email_login:
     invalid_token: 'Jejda! Odkaz, který jste použili, již nefunguje. Nyní se můžete <a href="%{base_url}/login">Přihlásit</a> . Pokud jste zapomněli heslo, můžete <a href="%{base_url}/password-reset">požádat o odkaz</a> pro jeho obnovení.'
     title: "Přihlášení e-mailem"
+  browsers:
+    chrome: "Google Chrome"
+    discoursehub: "Aplikace DiscourseHub"
+    edge: "Microsoft Edge"
+    firefox: "Firefox"
+    ie: "Internet Explorer"
+    opera: "Opera"
+    safari: "Safari"
   user_auth_tokens:
-    browser:
-      chrome: "Google Chrome"
-      discoursehub: "Aplikace DiscourseHub"
-      edge: "Microsoft Edge"
-      firefox: "Firefox"
-      ie: "Internet Explorer"
-      opera: "Opera"
-      safari: "Safari"
-      unknown: "neznámý prohlížeč"
     device:
       android: "Zařízení Android"
       chromebook: "Chrome OS"
@@ -1128,6 +1153,10 @@ cs:
       macos: "macOS"
       windows: "Microsoft Windows"
       unknown: "neznámý operační systém"
+  admin_site_traffic_explorer:
+    unknown: "Neznámá"
+    traffic_types:
+      anonymous: "Anonymní"
   change_email:
     error: "Nastala chyba běhěm změny emailové adresy. Není nová adresa již někým používána?"
     doesnt_exist: "Tato e-mailová adresa není spojena s vaším účtem."
@@ -1275,7 +1304,7 @@ cs:
   uploads:
     marked_insecure_from_theme_component_reason: "nahraný soubor použitý v komponentě motivu"
   unsubscribe:
-    title: "Odhlášení"
+    unsubscribe: "Odhlásit z odběru emailů"
     stop_watching_topic: "Přestat sledovat toto téma, %{link}"
     mute_topic: "Ztlumit všechna oznámení pro toto téma, %{link}"
     unwatch_category: "Přestat sledovat všechna témata v %{category}"
@@ -1416,12 +1445,18 @@ cs:
         share: "Sdílet"
       types:
         staff: "Redakce"
+    posters_by_member_type_members:
+      labels:
+        user: "Uživatel"
+        count: "Příspěvky"
+        share: "Sdílet"
     trust_level_pipeline:
       description_link: "https://meta.discourse.cz/t/vysvetleni-urovni-duvery-v-discourse/29"
       labels:
         level: "Úroveň důvěry"
         count: "Členové"
         share: "Sdílet"
+        signups: "Registrace"
       levels:
         "0": "Nový"
         "1": "Základní"
@@ -1588,6 +1623,9 @@ cs:
         num_topics: "Témata"
       description: "Uživatelé uvedení podle počtu kliknutí na odkazy, které sdíleli."
     top_countries_by_browser_pageviews:
+      labels:
+        count: "Návštěv"
+    top_entry_urls:
       labels:
         count: "Návštěv"
     top_referrers_by_browser_pageviews:
@@ -1784,12 +1822,6 @@ cs:
       host_names: "Vaše konfigurace v souboru config/database.yml používá 'localhost' jako jméno hostitele. Změňte toto nastavení na doménu vašeho webu."
       queue_size: "Počet čekajících úloh je %{queue_size}, což je příliš mnoho. Mohlo by to indikovat problém se službou Sidekiq, nebo je zapotřebí spustit více Sidekiq worker procesů."
       ram: "Váš server má méně než 1 GB paměti. Doporučená konfigurace je alespoň 1 GB paměti."
-      google_oauth2_config: 'Server je nakonfigurován tak, aby umožňoval registraci a přihlášení pomocí Google OAuth2 (enable_google_oauth2_logins), ale hodnoty client id a client secret nejsou nastaveny. Přejděte do <a href="%{base_path}/admin/site_settings">nastavení webu</a> a aktualizujte nastavení. <a href="https://meta.discourse.org/t/configuring-google-login-for-discourse/15858" target="_blank">Více informací naleznete v této příručce</a>.'
-      facebook_config: 'Server je nakonfigurován tak, aby umožňoval registraci a přihlášení pomocí Facebooku (enable_facebook_logins), ale hodnoty app id a app secret nejsou nastaveny. Přejděte na <a href="%{base_path}/admin/site_settings">Nastavení webu</a> a aktualizujte nastavení. <a href="https://meta.discourse.org/t/configuring-facebook-login-for-discourse/13394" target="_blank">Více informací naleznete v této příručce</a>.'
-      twitter_config: 'Server je nakonfigurován tak, aby umožňoval přihlášení a přihlášení pomocí Twitteru (enable_twitter_logins), ale hodnoty key a secret nejsou nastaveny. Přejděte na <a href="%{base_path}/admin/site_settings">Nastavení webu</a> a aktualizujte nastavení. <a href="https://meta.discourse.org/t/configuring-twitter-login-for-discourse/13395" target="_blank">Více informací naleznete v této příručce</a>.'
-      github_config: 'Server je nakonfigurován tak, aby umožňoval přihlášení a přihlášení pomocí GitHubu (enable_github_logins), ale hodnoty client id a secret nejsou nastaveny. Přejděte na <a href="%{base_path}/admin/site_settings">Nastavení webu</a> a aktualizujte nastavení. <a href="https://meta.discourse.org/t/configuring-github-login-for-discourse/13745" target="_blank">Více informací naleznete v této příručce</a>.'
-      s3_upload_config: 'Server je nakonfigurován k odesílání souborů do S3, ale alespoň jedno z následujících nastavení není nastaveno: s3_access_key_id, s3_secret_access_key, s3_use_iam_profile nebo s3_upload_bucket. Přejděte na <a href="%{base_path}/admin/site_settings">Nastavení webu</a> a aktualizujte nastavení. <a href="https://meta.discourse.org/t/how-to-set-up-image-uploads-to-s3/7229" target="_blank">Viz "Jak nastavit odesílání obrázků do S3?"</a>.'
-      s3_backup_config: 'Server je nakonfigurován pro nahrávání záloh do S3, ale není nastaveno alespoň jedno z následujících nastavení: s3_access_key_id, s3_secret_access_key, s3_use_iam_profile nebo s3_backup_bucket. Přejděte na <a href="%{base_path}/admin/site_settings">Nastavení webu</a> a aktualizujte nastavení. <a href="https://meta.discourse.org/t/how-to-set-up-image-uploads-to-s3/7229" target="_blank">Viz "Jak nastavit odesílání obrázků do S3?"</a>.'
       s3_cdn: 'Server je nakonfigurován pro odesílání souborů do S3, ale není nakonfigurováno žádné S3 CDN. To může vést k vysokým nákladům na S3 a pomalejšímu výkonu webu. <a href="https://meta.discourse.org/t/-/148916" target="_blank">Další informace naleznete v části „Použití úložiště objektů pro nahrávání“</a>.'
       image_magick: 'Server je nakonfigurován pro vytváření miniatur velkých obrázků, ale není nainstalován ImageMagick. Nainstalujte ImageMagick pomocí svého oblíbeného správce balíčků nebo <a href="https://www.imagemagick.org/script/download.php" target="_blank">si stáhněte nejnovější verzi</a>.'
       failing_emails: 'Existuje %{num_failed_jobs} e-mailových úloh, které se nezdařily. Zkontrolujte svůj app.yml a ujistěte se, že nastavení poštovního serveru je správné. <a href="%{base_path}/sidekiq/retries" target="_blank">Podívejte se na neúspěšné úlohy v Sidekiq</a>.'
@@ -1869,7 +1901,6 @@ cs:
     staff_edit_locks_post: "Příspěvky budou zablokovány pro úpravy, pokud je upraví členové redakce."
     post_edit_time_limit: "Autor úrovně důvěry 0 nebo 1 může svůj příspěvek upravovat po dobu (n) minut po zveřejnění. Nastavte na 0 pro neomezené úpravy."
     tl2_post_edit_time_limit: "Autor úrovně důvěry 2 a vyšší může svůj příspěvek upravovat po dobu (n) minut po zveřejnění. Nastavte na 0 pro neomezené úpravy."
-    edit_history_visible_to_public: "Umožnit všem zobrazit předchozí verze upraveného příspěvku. Pokud je tato možnost zakázána, mohou je zobrazit pouze členové redakce."
     delete_removed_posts_after: "Příspěvky odstraněné autorem budou automaticky smazány po (n) hodinách. Pokud je nastaveno na 0, příspěvky budou smazány okamžitě."
     notify_users_after_responses_deleted_on_flagged_post: "Když je příspěvek nahlášen a poté odstraněn, budou o tom informováni všichni uživatelé, kteří na příspěvek reagovali a jejichž reakce byly odstraněny."
     max_image_width: "Maximální šířka miniatur obrázků v příspěvku. Šiřší obrázky budou zmenšeny a zobrazeny jako lightbox."
@@ -1918,8 +1949,6 @@ cs:
     silence_new_user_sensitivity: "Pravděpodobnost, že nový uživatel bude ztišen na základě nahlášení spamu."
     auto_close_topic_sensitivity: "Pravděpodobnost, že nahlášené téma bude automaticky uzavřeno"
     cooldown_minutes_after_hiding_posts: "Počet minut, které musí uživatel čekat, než bude moci upravit příspěvek skrytý prostřednictvím nahlášení komunitou"
-    max_topics_in_first_day: "Maximální počet témat, která může uživatel vytvořit během 24 hodin od vytvoření svého prvního příspěvku"
-    max_replies_in_first_day: "Maximální počet odpovědí, které může uživatel vytvořit během 24 hodin od vytvoření svého prvního příspěvku"
     tl2_additional_likes_per_day_multiplier: "Zvyšte denní limit Líbí se pro úroveň důvěry 2 (člen) vynásobením tohoto čísla"
     tl3_additional_likes_per_day_multiplier: "Zvyšte denní limit Líbí se pro úroveň důvěry 3 (stálý) vynásobením tohoto čísla"
     tl4_additional_likes_per_day_multiplier: "Zvyšte denní limit Líbí se pro úroveň důvěry 4 (leader) vynásobením tohoto čísla"
@@ -1973,13 +2002,12 @@ cs:
     suppress_secured_categories_from_admin: "Potlačit soukromá témata a SZ v některých částech uživatelského rozhraní pro administrátory. Obsah bude na některých místech stále viditelný. Toto není bezpečnostní funkce: administrátoři mají vždy přístup k celému obsahu tohoto webu."
     include_secure_categories_in_tag_counts: "Pokud je tato možnost povolena, počet témat pro daný štítek bude zahrnovat i témata, která jsou v kategoriích s omezeným čtením pro všechny uživatele. Pokud je tato možnost zakázána, běžným uživatelům se zobrazí pouze počet témat pro štítek, u kterého jsou všechna témata ve veřejných kategoriích."
     display_personal_messages_tag_counts: "Pokud je tato možnost povolena, zobrazí se počet soukromých zpráv označených daným štítkem."
-    top_menu: "Určete, které položky se zobrazují v navigaci na domovské stránce a v jakém pořadí."
     post_menu: "Nastavení viditelnosti a pořadí výchozích položek nabídky příspěvků. Další položky přidané pluginy nebo motivy jsou spravovány samostatně a v tomto seznamu se nezobrazí."
     post_menu_hidden_items: "Položky nabídky, které se mají ve výchozím nastavení skrýt v nabídce příspěvku, pokud se na ně neklikne rozbalením menu tlačítkem s třemi tečkami. Další položky přidané pluginy nebo motivy jsou spravovány samostatně a v tomto seznamu se nezobrazí."
     share_links: "Určete, které položky se zobrazí v dialogovém okně sdílení a v jakém pořadí."
     allow_username_in_share_links: "Povolit zahrnutí uživatelských jmen do odkazů pro sdílení. To je užitečné pro odměňování odznaky na základě unikátních návštěvníků."
     site_contact_username: "Platné uživatelské jméno člena redakce, ze kterého lze odesílat všechny automatizované zprávy. Pokud zůstane prázdné, použije se výchozí systémový účet."
-    site_contact_group_name: "Platný název skupiny, která bude zvána do všech automaticky zasílaných soukromých zpráv."
+    site_contact_group_name: "Skupina, která dostane pozvánku ke všem automaticky zasílaným soukromým zprávám."
     send_welcome_message: "Poslat všem novým uživatelům uvítací zprávu s rychlým návodem jak začít."
     send_tl1_welcome_message: "Pslat novým uživatelům úrovně důvěry 1 uvítací zprávu."
     send_tl2_promotion_message: "Poslat novým uživatelům s úrovní důvěry 2 zprávu o povýšení."
@@ -2243,7 +2271,6 @@ cs:
     user_profile_view_duration_hours: "Počítat nová zobrazení uživatelského profilu jednou za IP/uživatele každých N hodin"
     levenshtein_distance_spammer_emails: "Rozdíl v počtu znaků, které stále umožňují přibližnou shodu při testování e-mailu na spam"
     max_new_accounts_per_registration_ip: "Přestat přijímat nové registrace z dané IP adresy, pokud z této IP adresy již existuje (n) účtů s úrovní důvěry 0 (a žádný z nich není členem redakce ani na úrovni TL2 či vyšší). Nastavením na 0 limit deaktivujete."
-    min_ban_entries_for_roll_up: "Po kliknutí na tlačítko Sloučit se vytvoří nová položka zákazu, která sloučí jednotlivé blokované IP adresy do záznamu subnet, pokud existuje alespoň (N) položek."
     max_age_unmatched_emails: "Smazat neshodující se blokované e-maily po (N) dnech."
     max_age_unmatched_ips: "Smazat neshodné záznamy o filtrovaných IP adresách po (N) dnech."
     num_flaggers_to_close_topic: "Minimální počet unikátních nahlašovatelů potřebný k automatickému pozastavení tématu za účelem intervence"
@@ -2353,8 +2380,6 @@ cs:
       tags_any: "Zobrazit témata s kterýmkoli ze zadaných štítků (oddělených čárkami)"
       tags_all: "Zobrazit témata se všemi zadanými štítky (oddělenými plusem)"
       exclude_tag: "Vyloučit témata s konkrétním štítkem"
-      exclude_tags_any: "Vyloučit témata s kterýmkoli ze zadaných štítků (oddělenými čárkou)"
-      exclude_tags_all: "Vyloučit témata se všemi zadanými štítky (oddělenými plusem)"
       tag_group: "Zobrazit témata se štítky z konkrétní skupiny štítků"
       exclude_tag_group: "Vyloučit témata se štítky z konkrétní skupiny štítků"
       activity_before: "Zobrazit témata s poslední činností před datem (RRRR-MM-DD nebo před x dny)"
@@ -2573,6 +2598,7 @@ cs:
     wrong_invite_code: "Zadaný kód pozvánky byl nesprávný."
     reserved_username: "Toto uživatelské jméno není povoleno."
     missing_user_field: "Nevyplnili jste všechna požadovaná uživatelská pole"
+    missing_username: "Zadejte uživatelské jméno"
     auth_complete: "Ověřování je dokončeno."
     click_to_continue: "Pro pokračování klikněte zde."
     already_logged_in: "Promiňte! Tato pozvánka je určena pro nové uživatele, kteří ještě nemají existující účet."
@@ -3712,7 +3738,7 @@ cs:
         Člen redakce schválil váš účet do %{site_name}.
 
         Ke svému novému účtu se nyní můžete přihlásit na adrese:
-        %{base_url}
+        %{login_url}
 
         Pokud na výše uvedený odkaz nelze kliknout, zkuste jej zkopírovat a vložit do adresního řádku webového prohlížeče.
 
@@ -3961,89 +3987,6 @@ cs:
     title: "Podmínky služby"
   privacy_topic:
     title: "Ochrana soukromí"
-    body: |
-      ## [Správče fóra, níže naleznete příklad výchozí šablony zásad ochrany osobních údajů, kterou byste měli přizpůsobit svým stránkám.]
-
-      <a name="collect"></a>
-
-      ## [Jaké informace shromažďujeme?](#collect)
-
-      Informace od vás shromažďujeme, když se na našich stránkách zaregistrujete, a údaje sbíráme, když se účastníte fóra tím, že čtete, píšete a hodnotíte zde sdílený obsah.
-
-      Při registraci na našich stránkách můžete být požádáni o zadání jména a e-mailové adresy. Naše stránky však můžete navštívit i bez registrace. Vaše e-mailová adresa bude ověřena e-mailem obsahujícím jedinečný odkaz. Pokud tento odkaz navštívíte, víme, že touto e-mailovou adresou disponujete.
-
-      Při registraci a odesílání příspěvků zaznamenáváme IP adresu, ze které příspěvek pochází. Můžeme také uchovávat protokoly serveru, které obsahují IP adresu každého požadavku na náš server.
-
-      <a name="use"></a>
-
-      ## [K čemu vaše údaje používáme?](#use)
-
-      Veškeré údaje, které od vás shromažďujeme, mohou být použity jedním z následujících způsobů:
-
-      * K personalizaci vašich zkušeností &mdash; vaše informace nám pomáhají lépe reagovat na vaše individuální potřeby.
-      * Ke zlepšení našich stránek &mdash; neustále se snažíme zlepšovat funkce našich stránek na základě informací a zpětné vazby, které od vás získáváme.
-      * Pro zlepšení služeb zákazníkům &mdash; vaše informace nám pomáhají efektivněji reagovat na vaše požadavky na služby zákazníkům a potřeby podpory.
-      * K zasílání pravidelných e-mailů &mdash; Vámi poskytnutá e-mailová adresa může být použita k zasílání informací, oznámení, která si vyžádáte, o změnách témat nebo v reakci na vaše uživatelské jméno, k odpovědím na dotazy a/nebo jiné žádosti či otázky.
-
-      <a name="protect"></a>
-
-      ## [Jak chráníme vaše údaje?](#protect)
-
-      Při zadávání, odesílání nebo přístupu k vašim osobním údajům uplatňujeme různá bezpečnostní opatření, abychom zachovali bezpečnost vašich osobních údajů.
-
-      <a name="data-retention"></a>
-
-      ## [Jaké jsou vaše zásady uchovávání údajů?](#data-retention)
-
-      V dobré víře se budeme snažit:
-
-      * Uchovávat protokoly serveru obsahující IP adresy všech požadavků na tento server nejdéle [POČET DNÍ] dnů.
-
-      <a name="cookies"></a>
-
-      ## [Používáme soubory cookie?](#cookies)
-
-      Ano. Soubory cookie jsou malé soubory, které web nebo jeho poskytovatel služeb přenáší na pevný disk vašeho počítače prostřednictvím webového prohlížeče (pokud to povolíte). Tyto soubory cookie umožňují webu rozpoznat váš prohlížeč a v případě, že máte registrovaný účet, jej spojit s vaším registrovaným účtem.
-
-      Soubory cookie používáme k pochopení a uložení vašich preferencí pro budoucí návštěvy a ke shromažďování souhrnných údajů o návštěvnosti webu a interakci s webem, abychom mohli v budoucnu nabízet lepší služby a nástroje. Můžeme uzavřít smlouvu s poskytovateli služeb třetích stran, aby nám pomohli lépe porozumět návštěvníkům našich stránek. Tito poskytovatelé služeb nesmějí používat informace shromážděné naším jménem jinak, než aby nám pomohli provádět a zlepšovat naši činnost.
-
-      <a name="disclose"></a>
-
-      ## [Poskytujeme nějaké informace externím stranám?](#disclose)
-
-      Vaše osobní údaje neprodáváme, neobchodujeme s nimi ani je jinak nepředáváme třetím stranám. To se netýká důvěryhodných třetích stran, které nám pomáhají s provozem našich stránek, vedením naší činnosti nebo poskytováním služeb, pokud tyto strany souhlasí s tím, že budou tyto informace uchovávat v tajnosti. Vaše údaje můžeme také zveřejnit, pokud se domníváme, že je to vhodné pro dodržení zákona, prosazení zásad našich stránek nebo ochranu našich nebo cizích práv, majetku nebo bezpečnosti. Neosobní informace o návštěvnících však mohou být poskytnuty jiným stranám pro marketingové, reklamní nebo jiné účely.
-
-      <a name="third-party"></a>
-
-      ## [Odkazy na třetí strany](#third-party)
-
-      Příležitostně můžeme na našich stránkách podle našeho uvážení zahrnout nebo nabízet produkty nebo služby třetích stran. Tyto stránky třetích stran mají samostatné a nezávislé zásady ochrany osobních údajů. Proto neneseme žádnou odpovědnost za obsah a činnost těchto odkazovaných stránek. Přesto se snažíme chránit integritu našich stránek a uvítáme jakoukoli zpětnou vazbu o těchto stránkách.
-
-      <a name="coppa"></a>
-
-      ## [Dodržování zákona o ochraně soukromí dětí na internetu](#coppa)
-
-      Naše stránky, produkty a služby jsou určeny osobám starším 13 let. Pokud se tento server nachází v USA a vy jste mladší 13 let, podle požadavků COPPA ([Children's Online Privacy Protection Act](https://en.wikipedia.org/wiki/Children%27s_Online_Privacy_Protection_Act)) tyto stránky nepoužívejte.
-
-      <a name="online"></a>
-
-      ## [Pouze online zásady ochrany osobních údajů](#online)
-
-      Tyto online zásady ochrany osobních údajů se vztahují pouze na informace shromážděné prostřednictvím našich stránek, nikoli na informace shromážděné offline.
-
-      <a name="consent"></a>
-
-      ## [Váš souhlas](#consent)
-
-      Používáním našich stránek souhlasíte s našimi zásadami ochrany osobních údajů na webu.
-
-      <a name="changes"></a>
-
-      ## [Změny našich zásad ochrany osobních údajů](#změny)
-
-      Pokud se rozhodneme změnit naše zásady ochrany osobních údajů, zveřejníme tyto změny na této stránce.
-
-      Tento dokument je chráněn licencí CC-BY-SA. Naposledy byl aktualizován [ZDE VLOŽTE DATUM POSLEDNÍ AKTUALIZACE].
   badges:
     mass_award:
       errors:
@@ -4304,6 +4247,12 @@ cs:
   performance_report:
     initial_post_raw: Toto téma zahrnuje denní přehledy výkonu vašeho webu.
     initial_topic_title: Zprávy o výkonu webových stránek
+  watched_words:
+    upload_too_many_csv_entries:
+      one: "Příliš mnoho položek v souboru CSV. Poskytněte prosím soubor CSV s maximálně %{count} záznamem."
+      few: "Příliš mnoho položek v souboru CSV. Poskytněte prosím soubor CSV s maximálně %{count} záznamy."
+      many: "Příliš mnoho položek v souboru CSV. Poskytněte prosím soubor CSV s maximálně %{count} záznamy."
+      other: "Příliš mnoho položek v souboru CSV. Poskytněte prosím soubor CSV s maximálně %{count} záznamy."
   tags:
     title: "Štítky"
     restricted_tag_disallowed: 'Nelze použít štítek "%{tag}".'
@@ -4363,6 +4312,10 @@ cs:
     deprecation_error_label: Umožnit, aby zastaralé Javascripty vyvolaly chybu
     enter: "Vstoupit do bezpečného režimu"
     must_select: "Chcete-li vstoupit do bezpečného režimu, musíte vybrat alespoň jednu možnost."
+  design_wizard:
+    palette_pairs:
+      default: "Výchozí"
+      dracula: "Drákula"
   wizard:
     title: "Nastavení Discourse"
     step:
@@ -4453,6 +4406,11 @@ cs:
       group: "Uživatelé, kteří nejsou v uvedených skupinách, musí mít odpovědi schválené redakcí. Viz %{link}."
       new_topics_unless_trust_level: "Uživatelé s nízkou úrovní důvěry musí mít témata schválená redakcí. Viz %{link}."
       fast_typer: "Nový uživatel napsal svůj první příspěvek podezřele rychle, podezření na chování bota nebo spammera. Viz %{link}."
+      fast_typer_time:
+        one: "%{count} vteřinu"
+        few: "%{count} vteřiny"
+        many: "%{count} vteřin"
+        other: "%{count} vteřin"
       auto_silence_regex: "Nový uživatel, jehož první příspěvek odpovídá nastavení %{link} ."
       watched_word:
         one: "Tento příspěvek obsahoval sledované slovo, označené slovo je: %{words}. Více informací naleznete v %{link} ."
@@ -4484,6 +4442,8 @@ cs:
         title: "Ponechat příspěvek skrytý"
         description: "Souhlasit s nahlášením a nechat příspěvek skrytý."
         complete: "Příspěvek zůstal skryt."
+      agree_and_keep_deleted:
+        title: "Ponechat příspěvek smazaný"
       agree_and_suspend:
         title: "Pozastavit uživatele"
         description: "Schválit nahlášení a pozastavit uživatele."
@@ -4502,8 +4462,6 @@ cs:
         complete: "Příspěvek byl skryt a uživatel byl upozorněn."
       agree_and_edit:
         title: "Upravit příspěvek"
-        description: "Souhlasit s nahlášením a otevřít okno editoru pro úpravu příspěvku."
-        complete: "Nahlášení potvrzeno, nyní můžete příspěvek upravit."
       delete:
         title: "Smazat"
         complete: "Příspěvek smazán."
@@ -4524,6 +4482,8 @@ cs:
       disagree_and_restore:
         title: "Obnovit příspěvek"
         complete: "Příspěvek obnoven."
+      disagree_and_keep_deleted:
+        title: "Ponechat příspěvek smazaný"
       disagree_bundle:
         title: "Ne"
       disagree:
@@ -4568,7 +4528,6 @@ cs:
           complete: "Uživatel smazán."
         block:
           title: "Odstranit a blokovat uživatele"
-          description: "Uživatel bude smazán a zablokujeme jeho IP a e-mailovou adresu."
           complete: "Uživatel smazán a zablokován."
       confirm_spam:
         title: "Ano"
@@ -4597,38 +4556,12 @@ cs:
       approve_and_unhide:
         title: "Ano"
         complete: "Příspěvek schválen a zviditelněn"
-      post_actions:
-        bundle_title: "Co chcete s příspěvkem udělat?"
-      delete_post:
-        title: "Odstranit příspěvek"
-        description: "Smazat příspěvek"
-        complete: "Příspěvek smazán"
-      hide_post:
-        title: "Skrýt příspěvek"
-        description: "Skrýt tento příspěvek z veřejného zobrazení"
-        complete: "Příspěvek byl skryt"
-      unhide_post:
-        title: "Zviditelnit příspěvek"
-        description: "Zviditelnit tento příspěvek všem uživatelům"
-        complete: "Příspěvek byl zviditelněn"
-      restore_post:
-        title: "Obnovit příspěvek"
-        description: "Obnovit tento smazaný příspěvek"
-        complete: "Příspěvek obnoven"
-      edit_post:
-        title: "Upravit příspěvek"
-        description: "Upravit obsah tohoto příspěvku"
-        complete: "Příspěvek upraven"
-      user_actions:
-        bundle_title: "Co chcete udělat s tímto uživatelem?"
       silence_user:
         title: "Ztišit uživatele"
-        description: "Zabránit uživateli v publikování příspěvků"
         complete: "Uživatel ztišen"
         reason: "Uživatel ztišen prostřednictvím fronty revizí"
       suspend_user:
         title: "Pozastavit uživatele"
-        description: "Pozastavit uživatelský účet"
         complete: "Uživatel pozastaven"
         reason: "Pozastavení uživatele prostřednictvím fronty revizí"
       delete_user:

@@ -19,15 +19,19 @@ export default class SidebarNewTopicButton extends Component {
   @service router;
   @service header;
   @service appEvents;
+  @service sidebarState;
   @controller application;
 
   @tracked category;
   @tracked tag;
 
+  // Keyed on the panel that owns the sidebar rather than on the path: every takeover displaces
+  // the forum navigation this button is part of, and most have no distinguishing URL prefix.
+  // `isForcingSidebar` is not equivalent, since a panel can take over without setting it.
   get shouldRender() {
     return (
       this.currentUser &&
-      !this.router.currentURL.startsWith("/admin") &&
+      this.sidebarState.showMainPanel &&
       this.application.sidebarEnabled
     );
   }
@@ -117,18 +121,18 @@ export default class SidebarNewTopicButton extends Component {
     {{#if this.shouldRender}}
       {{bodyClass "horizon-new-topic-button-enabled"}}
       <CreateTopicButton
+        class="sidebar-new-topic-button__wrapper"
+        @action={{this.createNewTopic}}
+        @btnClass="sidebar-new-topic-button"
+        @btnTypeClass="btn-primary"
+        @canCreateTopic={{this.canCreateTopic}}
+        @icon={{this.createTopicIcon}}
+        @label={{this.createTopicLabel}}
+        @showDrafts={{gt this.draftCount 0}}
         {{didInsert this.getCategoryAndTag}}
         {{didUpdate this.getCategoryAndTag this.router.currentRoute}}
         {{didInsert this.watchForComposer}}
         {{willDestroy this.stopWatchingForComposer}}
-        @canCreateTopic={{this.canCreateTopic}}
-        @action={{this.createNewTopic}}
-        @label={{this.createTopicLabel}}
-        @icon={{this.createTopicIcon}}
-        @btnClass="sidebar-new-topic-button"
-        @btnTypeClass="btn-primary"
-        @showDrafts={{gt this.draftCount 0}}
-        class="sidebar-new-topic-button__wrapper"
       />
     {{/if}}
   </template>

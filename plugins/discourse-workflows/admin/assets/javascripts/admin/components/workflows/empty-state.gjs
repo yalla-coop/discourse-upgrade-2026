@@ -1,7 +1,7 @@
 import DButton from "discourse/ui-kit/d-button";
 import dEmoji from "discourse/ui-kit/helpers/d-emoji";
 
-<template>
+export default <template>
   <div class="workflows-empty-state">
     {{#if @emoji}}
       <span class="workflows-empty-state__icon">{{dEmoji @emoji}}</span>
@@ -10,11 +10,11 @@ import dEmoji from "discourse/ui-kit/helpers/d-emoji";
     <p class="workflows-empty-state__description">{{@description}}</p>
     {{#if @onAction}}
       <DButton
+        class="btn-primary"
         @action={{@onAction}}
+        @icon={{@buttonIcon}}
         @label={{@buttonLabel}}
         @translatedLabel={{@translatedButtonLabel}}
-        @icon={{@buttonIcon}}
-        class="btn-primary"
       />
     {{/if}}
   </div>

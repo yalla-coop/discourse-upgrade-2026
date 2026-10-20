@@ -7,6 +7,7 @@ module DiscourseWorkflows
         USER_CHANNEL_PREFIX = "/discourse-workflows/user-modal"
         BUTTON_STYLES = %w[default primary danger].freeze
         DEFAULT_BUTTON_STYLE = "default"
+        MODAL_ID_MAX_LENGTH = 100
 
         description(
           name: "action:modal",
@@ -76,6 +77,14 @@ module DiscourseWorkflows
           "#{USER_CHANNEL_PREFIX}/#{user_id}"
         end
 
+        def self.publish_close(user_id, modal_id)
+          MessageBus.publish(
+            user_channel(user_id),
+            { type: "close_modal", modal_id: modal_id },
+            user_ids: [user_id],
+          )
+        end
+
         def self.button_rows(parameters)
           DiscourseWorkflows::CollectionParameters.rows_from_value(
             DiscourseWorkflows::CollectionParameters.fetch_value(parameters, :buttons),
@@ -92,12 +101,14 @@ module DiscourseWorkflows
 
         def execute(exec_ctx)
           target_user = resolve_target_user(exec_ctx)
-          buttons = build_buttons(exec_ctx)
+          buttons = build_buttons(exec_ctx, target_user)
 
           MessageBus.publish(
             self.class.user_channel(target_user.id),
             {
               type: "show_modal",
+              # Unique per show: close_modal must only dismiss this exact prompt.
+              modal_id: SecureRandom.hex(8),
               title: exec_ctx.get_node_parameter("title", 0).to_s,
               body: exec_ctx.get_node_parameter("body", 0).to_s,
               buttons: buttons,
@@ -132,7 +143,7 @@ module DiscourseWorkflows
           user
         end
 
-        def build_buttons(exec_ctx)
+        def build_buttons(exec_ctx, target_user)
           rows =
             DiscourseWorkflows::CollectionParameters.rows_from_value(
               exec_ctx.get_node_parameter("buttons", 0, default: []),
@@ -146,7 +157,7 @@ module DiscourseWorkflows
               "label" => row["label"].to_s.presence || value,
               "value" => value,
               "style" => normalize_style(row["style"]),
-              "action_id" => exec_ctx.resume_action_id(value),
+              "action_id" => exec_ctx.resume_action_id(value, target_user_id: target_user.id),
             }
           end
         end

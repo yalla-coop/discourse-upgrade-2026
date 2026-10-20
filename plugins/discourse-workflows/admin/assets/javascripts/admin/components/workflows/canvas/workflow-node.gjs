@@ -18,9 +18,9 @@ import {
   nodeTypeInputLabel,
   nodeTypeIsManuallyTriggerable,
   nodeTypePortLabel,
-  nodeTypeRunScopeLabelKey,
   nodeTypeStyle,
   resolveNodeTypeVersion,
+  typeVersionForNode,
 } from "../../../lib/workflows/node-types";
 import { nodeDescription, nodeLabel } from "../../../lib/workflows/node-utils";
 import CanvasHoverToolbar from "./hover-toolbar";
@@ -31,10 +31,14 @@ function resolveType(workflowsNodeTypes, node) {
     return null;
   }
 
-  return resolveNodeTypeVersion(nodeType, node.typeVersion);
+  return resolveNodeTypeVersion(nodeType, typeVersionForNode(node));
 }
 
-const highlightOnInsert = modifier((element) => {
+const highlightOnInsert = modifier((element, [shouldHighlight]) => {
+  if (!shouldHighlight()) {
+    return;
+  }
+
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
     return;
   }
@@ -54,6 +58,10 @@ export function shouldShowManualTrigger(node) {
   return Boolean(node?.type?.startsWith("trigger:"));
 }
 
+export function shouldShowExecuteStep(node) {
+  return Boolean(node?.type) && !node.type.startsWith("trigger:");
+}
+
 export function shouldEnableManualTrigger(node, nodeType, session) {
   if (!node?.type?.startsWith("trigger:")) {
     return false;
@@ -71,6 +79,9 @@ export default class WorkflowNode extends Component {
 
   stopPropagation = (e) => e.stopPropagation();
 
+  consumeInsertHighlight = () =>
+    Boolean(this.args.consumeInsertHighlight?.(this.data.clientId));
+
   handleDelete = (e) => {
     e.stopPropagation();
     e.preventDefault();
@@ -80,6 +91,11 @@ export default class WorkflowNode extends Component {
   handleManualTrigger = (e) => {
     e.stopPropagation();
     this.args.onManualTrigger?.(this.data.clientId);
+  };
+
+  handleExecuteStep = (e) => {
+    e.stopPropagation();
+    this.args.onExecuteStep?.(this.data.clientId);
   };
 
   handleOpenIssues = (e) => {
@@ -118,11 +134,6 @@ export default class WorkflowNode extends Component {
 
   get description() {
     return nodeDescription(this.data);
-  }
-
-  get runScopeLabel() {
-    const labelKey = nodeTypeRunScopeLabelKey(this.resolvedNodeType, this.data);
-    return labelKey ? i18n(labelKey) : null;
   }
 
   get outputKeys() {
@@ -179,11 +190,38 @@ export default class WorkflowNode extends Component {
       : i18n("discourse_workflows.manual_trigger.needs_pin_data");
   }
 
+  get showExecuteStep() {
+    return shouldShowExecuteStep(this.data);
+  }
+
+  get executeStepLabel() {
+    return i18n("discourse_workflows.execute_step.run");
+  }
+
   get dataTableId() {
     if (this.data.type !== "action:data_table") {
       return null;
     }
     return this.data.configuration?.data_table_id;
+  }
+
+  get iconBlockStyle() {
+    return nodeTypeStyle(this.resolvedNodeType);
+  }
+
+  get dimensionsStyle() {
+    const { width, height } = this.args.node;
+    return trustHTML(
+      `width: ${width}px; height: ${height}px; --node-width: ${width}px; --node-height: ${height}px;`
+    );
+  }
+
+  get issues() {
+    const nodeType = this.resolvedNodeType;
+    if (!nodeType || typeof nodeType === "string") {
+      return [];
+    }
+    return getNodeIssues(this.data.configuration, nodeType.properties);
   }
 
   @action
@@ -196,24 +234,6 @@ export default class WorkflowNode extends Component {
     );
   }
 
-  get iconBlockStyle() {
-    return nodeTypeStyle(this.resolvedNodeType);
-  }
-
-  get dimensionsStyle() {
-    return trustHTML(
-      `width: ${this.args.node.width}px; height: ${this.args.node.height}px;`
-    );
-  }
-
-  get issues() {
-    const nodeType = this.resolvedNodeType;
-    if (!nodeType || typeof nodeType === "string") {
-      return [];
-    }
-    return getNodeIssues(this.data.configuration, nodeType.properties);
-  }
-
   <template>
     {{! eslint-disable ember/template-no-pointer-down-event-binding }}
     <div
@@ -224,19 +244,11 @@ export default class WorkflowNode extends Component {
         (if @node.selected "is-selected")
         (if this.isUnavailable "is-unavailable")
       }}
-      style={{this.dimensionsStyle}}
       data-client-id={{this.data.clientId}}
       data-unavailable={{if this.isUnavailable "true" "false"}}
-      {{highlightOnInsert}}
+      style={{this.dimensionsStyle}}
+      {{highlightOnInsert this.consumeInsertHighlight}}
     >
-      {{#if @node.selected}}
-        {{#if this.runScopeLabel}}
-          <div class="workflow-rete-node__run-scope-tooltip">
-            {{this.runScopeLabel}}
-          </div>
-        {{/if}}
-      {{/if}}
-
       <div class="workflow-rete-node__icon-row">
         <div
           class={{dConcatClass
@@ -275,18 +287,18 @@ export default class WorkflowNode extends Component {
           <CanvasHoverToolbar @hoverSelector=".workflow-rete-node">
             {{#if this.showManualTrigger}}
               <DTooltip
-                @identifier="workflow-node-manual-trigger"
                 @content={{this.manualTriggerLabel}}
+                @identifier="workflow-node-manual-trigger"
               >
                 <:trigger>
                   <button
-                    type="button"
+                    aria-label={{this.manualTriggerLabel}}
                     class={{dConcatClass
                       "workflow-canvas-toolbar__btn --success"
                       (if this.isManuallyTriggerable "" "is-disabled")
                     }}
                     disabled={{if this.isManuallyTriggerable false true}}
-                    aria-label={{this.manualTriggerLabel}}
+                    type="button"
                     {{on "pointerdown" this.stopPropagation}}
                     {{on "click" this.handleManualTrigger}}
                   >
@@ -295,10 +307,32 @@ export default class WorkflowNode extends Component {
                 </:trigger>
               </DTooltip>
             {{/if}}
+            {{#if this.showExecuteStep}}
+              <DTooltip
+                @content={{this.executeStepLabel}}
+                @identifier="workflow-node-execute-step"
+              >
+                <:trigger>
+                  <button
+                    aria-label={{this.executeStepLabel}}
+                    class={{dConcatClass
+                      "workflow-canvas-toolbar__btn --success"
+                      (if this.isUnavailable "is-disabled")
+                    }}
+                    disabled={{if this.isUnavailable true false}}
+                    type="button"
+                    {{on "pointerdown" this.stopPropagation}}
+                    {{on "click" this.handleExecuteStep}}
+                  >
+                    {{dIcon "play"}}
+                  </button>
+                </:trigger>
+              </DTooltip>
+            {{/if}}
             {{#if this.dataTableId}}
               <button
-                type="button"
                 class="workflow-canvas-toolbar__btn"
+                type="button"
                 {{on "pointerdown" this.stopPropagation}}
                 {{on "click" this.handleEditDataTable}}
               >
@@ -306,8 +340,8 @@ export default class WorkflowNode extends Component {
               </button>
             {{/if}}
             <button
-              type="button"
               class="workflow-canvas-toolbar__btn"
+              type="button"
               {{on "pointerdown" this.stopPropagation}}
               {{on "click" this.handleDelete}}
             >
@@ -317,8 +351,8 @@ export default class WorkflowNode extends Component {
 
           {{#if this.isUnavailable}}
             <span
-              class="workflow-rete-node__unavailable-icon"
               aria-label={{this.unavailableReason}}
+              class="workflow-rete-node__unavailable-icon"
             >
               {{dIcon "triangle-exclamation"}}
             </span>
@@ -330,8 +364,8 @@ export default class WorkflowNode extends Component {
 
           {{#if this.issues.length}}
             <DTooltip
-              @identifier="workflow-node-issues"
               class="workflow-rete-node__issues-badge"
+              @identifier="workflow-node-issues"
               {{on "pointerdown" this.stopPropagation}}
               {{on "click" this.handleOpenIssues}}
             >
@@ -381,8 +415,8 @@ export default class WorkflowNode extends Component {
 
       {{#if this.isUnavailable}}
         <DTooltip
-          @identifier="workflow-node-unavailable"
           @content={{this.unavailableReason}}
+          @identifier="workflow-node-unavailable"
         >
           <:trigger>
             <span class="workflow-rete-node__unavailable-pill">

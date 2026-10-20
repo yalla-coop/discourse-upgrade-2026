@@ -246,13 +246,13 @@ RSpec.describe Admin::ThemesController do
         )
       end
 
-      it "fails to import with a failing status" do
+      it "returns 422 for a nonexistent remote theme" do
         post "/admin/themes/import.json", params: { remote: "non-existent" }
 
         expect(response.status).to eq(422)
       end
 
-      it "fails to import with a failing status" do
+      it "returns 422 for an excessively long remote URL" do
         post "/admin/themes/import.json", params: { remote: "https://#{"a" * 10_000}.com" }
 
         expect(response.status).to eq(422)
@@ -291,6 +291,44 @@ RSpec.describe Admin::ThemesController do
 
         expect(response.status).to eq(201)
         expect(response.parsed_body["theme"]["name"]).to eq("discourse-inexistent-theme")
+      end
+
+      it "creates a private theme placeholder without cloning the repository" do
+        Discourse.redis.setex("ssh_key_public_key", 1.hour, "private_key")
+
+        expect do
+          post "/admin/themes/import.json",
+               params: {
+                 remote: "git@github.com:discourse/private-theme.git",
+                 branch: "main",
+                 public_key: "public_key",
+                 placeholder: true,
+               }
+        end.to change { Theme.count }.by(1).and change { RemoteTheme.count }.by(1)
+
+        expect(response.status).to eq(201)
+        remote_theme = Theme.last.remote_theme
+        expect(remote_theme.attributes.slice("remote_url", "branch", "private_key")).to eq(
+          "remote_url" => "git@github.com:discourse/private-theme.git",
+          "branch" => "main",
+          "private_key" => "private_key",
+        )
+      end
+
+      it "rolls back the remote theme when placeholder creation fails" do
+        Discourse.redis.setex("ssh_key_public_key", 1.hour, "private_key")
+        Theme.stubs(:create!).raises(ActiveRecord::RecordInvalid.new(Theme.new))
+
+        expect do
+          post "/admin/themes/import.json",
+               params: {
+                 remote: "git@github.com:discourse/private-theme.git",
+                 public_key: "public_key",
+                 placeholder: true,
+               }
+        end.not_to change { RemoteTheme.count }
+
+        expect(response.status).to eq(422)
       end
 
       it "fails to import with an error if uploads are not allowed" do
@@ -1223,7 +1261,7 @@ RSpec.describe Admin::ThemesController do
     context "when logged in as an admin" do
       before { sign_in(admin) }
 
-      it "should return the right response when an invalid id is given" do
+      it "rejects an invalid theme ID" do
         get "/admin/themes/9999/preview.json"
 
         expect(response.status).to eq(400)
@@ -1265,7 +1303,7 @@ RSpec.describe Admin::ThemesController do
     context "when logged in as an admin" do
       before { sign_in(admin) }
 
-      it "should update a theme setting" do
+      it "updates a theme setting" do
         put "/admin/themes/#{theme.id}/setting.json", params: { name: "bg", value: "green" }
 
         expect(response.status).to eq(200)
@@ -1278,7 +1316,7 @@ RSpec.describe Admin::ThemesController do
         expect(user_history.action).to eq(UserHistory.actions[:change_theme_setting])
       end
 
-      it "should return the right error when value used to update a theme setting of `objects` typed is invalid" do
+      it "returns an error for an invalid objects setting value" do
         theme.set_field(
           target: :settings,
           name: "yaml",
@@ -1303,7 +1341,7 @@ RSpec.describe Admin::ThemesController do
         )
       end
 
-      it "should be able to update a theme setting of `objects` typed" do
+      it "updates an objects theme setting" do
         theme.set_field(
           target: :settings,
           name: "yaml",
@@ -1333,7 +1371,7 @@ RSpec.describe Admin::ThemesController do
         )
       end
 
-      it "should clear a theme setting" do
+      it "clears a theme setting" do
         put "/admin/themes/#{theme.id}/setting.json", params: { name: "bg" }
         theme.reload
 
@@ -1387,7 +1425,7 @@ RSpec.describe Admin::ThemesController do
     context "when logged in as an admin" do
       before { sign_in(admin) }
 
-      it "should update a theme translation" do
+      it "updates a theme translation" do
         put "/admin/themes/#{theme.id}.json",
             params: {
               theme: {
@@ -1401,7 +1439,7 @@ RSpec.describe Admin::ThemesController do
         theme.reload.translations.map { |t| expect(t.value).to eq("Hello there! updated") }
       end
 
-      it "should update a theme translation with locale" do
+      it "updates a theme translation for the requested locale" do
         put "/admin/themes/#{theme.id}.json",
             params: {
               theme: {
@@ -1416,7 +1454,7 @@ RSpec.describe Admin::ThemesController do
         theme.reload.translations.map { |t| expect(t.value).to eq("Hello there! updated") }
       end
 
-      it "should fail update a theme translation when locale is wrong" do
+      it "rejects a theme translation with an invalid locale" do
         put "/admin/themes/#{theme.id}.json",
             params: {
               theme: {
@@ -1433,7 +1471,7 @@ RSpec.describe Admin::ThemesController do
         )
       end
 
-      it "should update other locale and do not change current one" do
+      it "updates another locale without changing the current locale" do
         put "/admin/themes/#{theme.id}.json",
             params: {
               theme: {

@@ -20,6 +20,8 @@ module DiscourseWorkflows
          { pending: 0, running: 1, success: 2, error: 3, waiting: 4, rate_limited: 5, skipped: 6 }
     enum :execution_mode, { normal: 0, error_mode: 1, manual: 2 }
 
+    after_create { ExecutionStat.log(workflow_id) unless rate_limited? }
+
     scope :for_workflow, ->(workflow_id) { workflow_id ? where(workflow_id: workflow_id) : all }
     scope :recent, ->(period = 7.days) { where("created_at >= ?", period.ago) }
     scope :successful, -> { where(status: :success) }
@@ -51,6 +53,37 @@ module DiscourseWorkflows
             workflow_data: WorkflowSnapshot.from_workflow(workflow, published: false).to_h,
           )
         end
+      end.tap do |execution|
+        ExecutionProgressPublisher.publish_created(execution, workflow_name: workflow.name)
+      end
+    end
+
+    def self.create_pending_step!(workflow:, node_id:, trigger_data: {}, run_data: {})
+      transaction do
+        create!(
+          workflow: workflow,
+          workflow_version_id: workflow.version_id,
+          trigger_node_id: node_id,
+          trigger_data: trigger_data,
+          status: :pending,
+          execution_mode: :manual,
+        ).tap do |execution|
+          ExecutionData.create!(
+            execution: execution,
+            workflow_data: WorkflowSnapshot.from_workflow(workflow, published: false).to_h,
+            data: {
+              "entries" => {
+              },
+              "context" => {
+              },
+              "node_contexts" => {
+              },
+              "run_data" => run_data,
+            },
+          )
+        end
+      end.tap do |execution|
+        ExecutionProgressPublisher.publish_created(execution, workflow_name: workflow.name)
       end
     end
 
@@ -85,6 +118,7 @@ module DiscourseWorkflows
 
       execution.status = :running
       execution.updated_at = now
+      ExecutionProgressPublisher.publish(execution)
       execution
     end
 
@@ -101,6 +135,7 @@ module DiscourseWorkflows
       execution.status = :running
       execution.started_at = now
       execution.updated_at = now
+      ExecutionProgressPublisher.publish(execution)
       execution
     end
 
@@ -159,7 +194,11 @@ module DiscourseWorkflows
         )
       end
 
-      DiscourseWorkflows::WorkflowCallContinuation.child_failed!(reload) if claimed
+      if claimed
+        reload
+        DiscourseWorkflows::ExecutionProgressPublisher.publish(self, refresh: true)
+        DiscourseWorkflows::WorkflowCallContinuation.child_failed!(self)
+      end
 
       claimed
     end

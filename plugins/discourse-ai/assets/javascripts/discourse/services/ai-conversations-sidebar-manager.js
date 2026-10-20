@@ -7,6 +7,7 @@ import { ajax } from "discourse/lib/ajax";
 import { popupAjaxError } from "discourse/lib/ajax-error";
 import discourseDebounce from "discourse/lib/debounce";
 import { autoUpdatingRelativeAge } from "discourse/lib/formatter";
+import { discoveryHomepageRoute } from "discourse/lib/homepage-router-overrides";
 import { MAIN_PANEL } from "discourse/lib/sidebar/panels";
 import { defaultHomepage } from "discourse/lib/utilities";
 import { i18n } from "discourse-i18n";
@@ -14,20 +15,20 @@ import AiBotSidebarEmptyState from "../components/ai-bot-sidebar-empty-state";
 import AiConversationSidebarContextMenu from "../components/ai-conversation-sidebar-context-menu";
 
 export const AI_CONVERSATIONS_PANEL = "ai-conversations";
+const AI_CONVERSATIONS_HOMEPAGE = "ai-conversations";
 const SCROLL_BUFFER = 100;
 const DEBOUNCE = 100;
 const TITLE_CHANNEL = `/discourse-ai/ai-bot/topic-titles`;
 
 export default class AiConversationsSidebarManager extends Service {
   @service appEvents;
+  @service currentUser;
   @service sidebarState;
   @service messageBus;
   @service routeHistory;
   @service router;
   @service menu;
   @service capabilities;
-  @service currentUser;
-  @service siteSettings;
 
   @tracked topics = [];
   @tracked sections = trackedArray();
@@ -80,7 +81,9 @@ export default class AiConversationsSidebarManager extends Service {
       this._attachScrollListener
     );
 
-    this._watchForTitleUpdates();
+    if (this.currentUser) {
+      this._watchForTitleUpdates();
+    }
   }
 
   willDestroy() {
@@ -122,6 +125,12 @@ export default class AiConversationsSidebarManager extends Service {
     this.sidebarState.setSeparatedMode();
     this.sidebarState.hideSwitchPanelButtons();
 
+    // Anonymous visitors get the panel for its login prompt, but have no
+    // conversations to list.
+    if (!this.currentUser) {
+      return true;
+    }
+
     // don't render sidebar multiple times
     if (this._didInit) {
       this._rebuildSections();
@@ -137,32 +146,6 @@ export default class AiConversationsSidebarManager extends Service {
     });
 
     return true;
-  }
-
-  _attachScrollListener() {
-    const sections = document.querySelector(
-      ".sidebar-sections.ai-conversations-panel"
-    );
-    this._scrollElement = sections;
-
-    if (this._hasScrollListener || !this._scrollElement) {
-      return;
-    }
-
-    sections.addEventListener("scroll", this._debouncedScrollHandler);
-
-    this._hasScrollListener = true;
-  }
-
-  _removeScrollListener() {
-    if (this._hasScrollListener) {
-      this._scrollElement.removeEventListener(
-        "scroll",
-        this._debouncedScrollHandler
-      );
-      this._hasScrollListener = false;
-      this._scrollElement = null;
-    }
   }
 
   stopForcingCustomSidebar() {
@@ -188,15 +171,6 @@ export default class AiConversationsSidebarManager extends Service {
     }
 
     this._removeScrollListener();
-  }
-
-  _captureLastKnownAppURL() {
-    const lastForumUrl = this.routeHistory.history.find((url) => {
-      return !url.startsWith("/discourse-ai");
-    });
-
-    this.lastKnownAppURL =
-      lastForumUrl || this.router.urlFor(`discovery.${defaultHomepage()}`);
   }
 
   async fetchMessages() {
@@ -237,14 +211,6 @@ export default class AiConversationsSidebarManager extends Service {
     }
   }
 
-  _handleNewBotPM(topic) {
-    this.topics = this._dedupeTopics([
-      { ai_conversation_starred: false, ...topic },
-      ...this.topics,
-    ]);
-    this._rebuildSections();
-  }
-
   async updateConversationStarred(topic, starred) {
     if (!topic) {
       return;
@@ -280,6 +246,56 @@ export default class AiConversationsSidebarManager extends Service {
       popupAjaxError(error);
       throw error;
     }
+  }
+
+  _attachScrollListener() {
+    const sections = document.querySelector(
+      ".sidebar-sections.ai-conversations-panel"
+    );
+    this._scrollElement = sections;
+
+    if (this._hasScrollListener || !this._scrollElement) {
+      return;
+    }
+
+    sections.addEventListener("scroll", this._debouncedScrollHandler);
+
+    this._hasScrollListener = true;
+  }
+
+  _removeScrollListener() {
+    if (this._hasScrollListener) {
+      this._scrollElement.removeEventListener(
+        "scroll",
+        this._debouncedScrollHandler
+      );
+      this._hasScrollListener = false;
+      this._scrollElement = null;
+    }
+  }
+
+  _captureLastKnownAppURL() {
+    // When conversations are the homepage, `/` is not a way back to the forum.
+    const conversationsIsHomepage =
+      defaultHomepage() === AI_CONVERSATIONS_HOMEPAGE;
+    const lastForumUrl = this.routeHistory.history.find((url) => {
+      if (conversationsIsHomepage && url.split(/[?#]/, 1)[0] === "/") {
+        return false;
+      }
+
+      return !url.startsWith("/discourse-ai");
+    });
+
+    this.lastKnownAppURL =
+      lastForumUrl || this.router.urlFor(discoveryHomepageRoute());
+  }
+
+  _handleNewBotPM(topic) {
+    this.topics = this._dedupeTopics([
+      { ai_conversation_starred: false, ...topic },
+      ...this.topics,
+    ]);
+    this._rebuildSections();
   }
 
   _dedupeTopics(topics) {
@@ -334,15 +350,11 @@ export default class AiConversationsSidebarManager extends Service {
         return bDate - aDate;
       });
 
-    if (this.siteSettings.enable_ai_bot_starred_conversations) {
-      fresh.push({
-        name: "starred-conversations",
-        title: i18n("discourse_ai.ai_bot.conversations.starred"),
-        links: trackedArray(
-          starredTopics.map((t) => this._conversationLink(t))
-        ),
-      });
-    }
+    fresh.push({
+      name: "starred-conversations",
+      title: i18n("discourse_ai.ai_bot.conversations.starred"),
+      links: trackedArray(starredTopics.map((t) => this._conversationLink(t))),
+    });
 
     const todaySection = {
       name: "today",
@@ -353,11 +365,7 @@ export default class AiConversationsSidebarManager extends Service {
     fresh.push(todaySection);
 
     this.topics
-      .filter(
-        (t) =>
-          !this.siteSettings.enable_ai_bot_starred_conversations ||
-          !t.ai_conversation_starred
-      )
+      .filter((t) => !t.ai_conversation_starred)
       .sort((a, b) => {
         const bDate = new Date(b.last_posted_at || now);
         const aDate = new Date(a.last_posted_at || now);
@@ -428,10 +436,6 @@ export default class AiConversationsSidebarManager extends Service {
             scheduleOnce("afterRender", this, this.triggerEvent);
           }
 
-          triggerEvent() {
-            this.events.trigger("discourse-ai:conversations-sidebar-updated");
-          }
-
           get name() {
             return sec.name;
           }
@@ -472,6 +476,10 @@ export default class AiConversationsSidebarManager extends Service {
               return AiBotSidebarEmptyState;
             }
           }
+
+          triggerEvent() {
+            this.events.trigger("discourse-ai:conversations-sidebar-updated");
+          }
         };
       }, AI_CONVERSATIONS_PANEL);
     }
@@ -486,10 +494,7 @@ export default class AiConversationsSidebarManager extends Service {
 
   _conversationLink(topic) {
     const isStarred = !!topic.ai_conversation_starred;
-    const canShowConversationMenu =
-      (this.siteSettings.enable_ai_bot_starred_conversations ||
-        this.currentUser?.can_share_ai_bot_conversations) &&
-      !this.capabilities.isIpadOS;
+    const canShowConversationMenu = !this.capabilities.isIpadOS;
 
     return {
       key: topic.id,

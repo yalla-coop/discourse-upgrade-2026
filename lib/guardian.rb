@@ -102,6 +102,13 @@ class Guardian
     end
 
     def in_any_groups?(group_ids)
+      if !SiteSetting.granular_anonymous_and_logged_in_groups_permissions
+        return(
+          group_ids.include?(Group::AUTO_GROUPS[:everyone]) ||
+            group_ids.include?(Group::AUTO_GROUPS[:anonymous_users])
+        )
+      end
+
       group_ids.include?(Group::AUTO_GROUPS[:anonymous_users])
     end
 
@@ -197,6 +204,10 @@ class Guardian
     @user.in_any_groups?(group_ids)
   end
 
+  def can_search?
+    authenticated? || SiteSetting.allow_anonymous_search
+  end
+
   # Can the user see the object?
   def can_see?(obj)
     if obj
@@ -251,6 +262,10 @@ class Guardian
       )
   end
   alias can_see_flags? can_moderate?
+
+  def can_delete_all_posts_and_topics?
+    @user.in_any_groups?(SiteSetting.delete_all_posts_and_topics_allowed_groups_map)
+  end
 
   def can_tag?(topic)
     return false if topic.blank?
@@ -428,7 +443,8 @@ class Guardian
   end
 
   def can_change_trust_level?(user)
-    user && (is_admin? || (is_moderator? && SiteSetting.moderators_change_trust_levels))
+    user &&
+      (is_admin? || (is_moderator? && SiteSetting.moderators_change_trust_levels && !user.staff?))
   end
 
   # Support sites that have to approve users
@@ -662,8 +678,7 @@ class Guardian
   end
 
   def can_lazy_load_categories?
-    SiteSetting.lazy_load_categories_groups_map.include?(Group::AUTO_GROUPS[:everyone]) ||
-      @user.in_any_groups?(SiteSetting.lazy_load_categories_groups_map)
+    in_any_groups?(SiteSetting.lazy_load_categories_groups_map)
   end
 
   def is_me?(other)

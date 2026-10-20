@@ -3,27 +3,8 @@
 module Migrations
   module Converters
     module Discourse
-      class UserOptions < Conversion::ProgressStep
-        source do
-          attr_accessor :source_db
-
-          def max_progress
-            @source_db.count <<~SQL
-              SELECT COUNT(*)
-              FROM user_options
-              WHERE user_id > 0
-            SQL
-          end
-
-          def items
-            @source_db.query <<~SQL
-              SELECT *
-              FROM user_options
-              WHERE user_id > 0
-              ORDER BY user_id
-            SQL
-          end
-        end
+      class UserOptions < Conversion::Step
+        source { reads_table "user_options", where: "user_id > 0" }
 
         processor do
           def process(item)
@@ -31,6 +12,7 @@ module Migrations
               user_id: item[:user_id],
               allow_private_messages: item[:allow_private_messages],
               auto_track_topics_after_msecs: item[:auto_track_topics_after_msecs],
+              automatically_translate: item[:automatically_translate],
               automatically_unpin_topics: item[:automatically_unpin_topics],
               bookmark_auto_delete_preference: item[:bookmark_auto_delete_preference],
               color_scheme_id: item[:color_scheme_id],
@@ -52,6 +34,7 @@ module Migrations
               enable_upcoming_change_available_notifications:
                 item[:enable_upcoming_change_available_notifications],
               external_links_in_new_tab: item[:external_links_in_new_tab],
+              hidden_composer_toolbar_buttons: item[:hidden_composer_toolbar_buttons],
               hide_presence: item[:hide_presence],
               hide_profile: item[:hide_profile],
               hide_profile_and_presence: item[:hide_profile_and_presence],
@@ -66,7 +49,9 @@ module Migrations
               notification_level_when_replying: item[:notification_level_when_replying],
               notify_on_linked_posts: item[:notify_on_linked_posts],
               oldest_search_log_date: item[:oldest_search_log_date],
+              push_notification_level: item[:push_notification_level],
               seen_popups: item[:seen_popups],
+              send_shortcut: item[:send_shortcut],
               show_original_content: item[:show_original_content],
               sidebar_link_to_filtered_list: item[:sidebar_link_to_filtered_list],
               sidebar_show_count_of_new_items: item[:sidebar_show_count_of_new_items],
@@ -77,7 +62,7 @@ module Migrations
               theme_key_seq: item[:theme_key_seq],
               timezone: item[:timezone],
               title_count_mode_key: item[:title_count_mode_key],
-              topics_unread_when_closed: item[:topics_unread_when_closed],
+              understood_languages: item[:understood_languages],
               watched_precedence_over_muted: item[:watched_precedence_over_muted],
             )
           end

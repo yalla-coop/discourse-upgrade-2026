@@ -13,13 +13,11 @@ describe DiscoursePolicy::PolicyController do
     group.add(user2)
   end
 
-  def raw
-    <<~MD
+  let(:raw) { <<~MD }
       [policy group=#{group.name}]
       I always open **doors**!
       [/policy]
     MD
-  end
 
   it "allows users to accept/reject policy" do
     post = create_post(raw: raw, user: moderator)
@@ -196,13 +194,11 @@ describe DiscoursePolicy::PolicyController do
   describe "private policy restrictions" do
     fab!(:admin)
 
-    def private_raw
-      <<~MD
+    let(:private_raw) { <<~MD }
         [policy group=#{group.name} private=true]
         I always open **doors**!
         [/policy]
       MD
-    end
 
     it "denies non-admin access to accepted users for a private policy" do
       post = create_post(raw: private_raw, user: moderator)
@@ -329,6 +325,40 @@ describe DiscoursePolicy::PolicyController do
       expect(response.parsed_body["errors"]).to include(
         I18n.t("discourse_policy.errors.policy_group_inaccessible"),
       )
+    end
+  end
+
+  describe "wiki policy posts" do
+    fab!(:admin)
+
+    let(:policy_post) { create_post(user: admin, raw: raw) }
+
+    it "rejects making a policy post a wiki while allowing quoted policy markup" do
+      sign_in(admin)
+
+      put "/posts/#{policy_post.id}/wiki.json", params: { wiki: "true" }
+
+      aggregate_failures do
+        expect(response.status).to eq(422)
+        expect(response.parsed_body["errors"]).to include(
+          I18n.t("discourse_policy.errors.policy_cannot_be_wiki"),
+        )
+        expect(policy_post.reload).not_to be_wiki
+      end
+
+      quoted_policy_post = create_post(user: admin, raw: <<~MD)
+        [quote="someone, post:1, topic:1"]
+        #{raw}
+        [/quote]
+      MD
+
+      put "/posts/#{quoted_policy_post.id}/wiki.json", params: { wiki: "true" }
+
+      aggregate_failures do
+        expect(response.status).to eq(200)
+        expect(response.body).to be_blank
+        expect(quoted_policy_post.reload).to be_wiki
+      end
     end
   end
 end

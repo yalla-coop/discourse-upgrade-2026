@@ -4,6 +4,7 @@ import { action } from "@ember/object";
 import { service } from "@ember/service";
 import { groupPath } from "discourse/lib/url";
 import DButton from "discourse/ui-kit/d-button";
+import DUserLink from "discourse/ui-kit/d-user-link";
 import dBoundAvatarTemplate from "discourse/ui-kit/helpers/d-bound-avatar-template";
 import dIcon from "discourse/ui-kit/helpers/d-icon";
 
@@ -36,25 +37,25 @@ export default class PrivateMessageMap extends Component {
     <div class={{this.participantsClasses}}>
       {{#each @topicDetails.allowed_groups as |group|}}
         <PmMapUserGroup
-          @model={{group}}
           @canRemoveAllowedUsers={{@topicDetails.can_remove_allowed_users}}
+          @model={{group}}
           @removeAllowedGroup={{@removeAllowedGroup}}
         />
       {{/each}}
       {{#each @topicDetails.allowed_users as |user|}}
         <PmMapUser
-          @model={{user}}
           @canRemoveAllowedUsers={{@topicDetails.can_remove_allowed_users}}
           @canRemoveSelfId={{@topicDetails.can_remove_self_id}}
+          @model={{user}}
           @removeAllowedUser={{@removeAllowedUser}}
         />
       {{/each}}
 
       {{#if this.canInvite}}
         <DButton
+          class="btn-default btn-small add-participant-btn"
           @action={{@showInvite}}
           @icon="plus"
-          class="btn-default btn-small add-participant-btn"
         />
       {{/if}}
     </div>
@@ -71,8 +72,8 @@ class PmMapUserGroup extends Component {
   }
 
   <template>
-    <div class="user group" data-id={{@model.id}}>
-      <a href={{this.groupUrl}} class="group-link">
+    <div class="user group btn-default" data-id={{@model.id}}>
+      <a class="group-link" href={{this.groupUrl}}>
         {{dIcon "users"}}
         <span class="group-name">{{@model.name}}</span>
       </a>
@@ -94,7 +95,7 @@ class PmRemoveGroupLink extends Component {
 
   <template>
     <DButton
-      class="remove-invited btn-small"
+      class="btn-transparent remove-invited btn-small"
       @action={{this.removeGroup}}
       @icon="xmark"
     />
@@ -115,27 +116,25 @@ class PmMapUser extends Component {
   }
 
   <template>
-    <div class="user" data-id={{@model.id}}>
-      <a class="user-link" href={{@model.path}}>
-        <a
-          class="trigger-user-card"
-          data-user-card={{@model.username}}
-          title={{@model.username}}
-          aria-hidden="true"
-        >
-          {{dBoundAvatarTemplate
-            @model.avatar_template
-            "tiny"
-            (hash title=this.avatarTitle)
-          }}
-        </a>
+    <div class="user btn-default" data-id={{@model.id}}>
+      <DUserLink
+        class="user-link trigger-user-card"
+        title={{@model.username}}
+        @href={{@model.path}}
+        @username={{@model.username}}
+      >
+        {{dBoundAvatarTemplate
+          @model.avatar_template
+          "tiny"
+          (hash title=this.avatarTitle)
+        }}
         <span class="username">{{@model.username}}</span>
-      </a>
+      </DUserLink>
 
       {{#if this.canRemoveLink}}
         <PmRemoveLink
-          @model={{@model}}
           @isCurrentUser={{this.isCurrentUser}}
+          @model={{@model}}
           @removeAllowedUser={{@removeAllowedUser}}
         />
       {{/if}}
@@ -151,7 +150,7 @@ class PmRemoveLink extends Component {
 
   <template>
     <DButton
-      class="remove-invited btn-small"
+      class="btn-transparent remove-invited btn-small"
       @action={{this.removeUser}}
       @icon="xmark"
     />

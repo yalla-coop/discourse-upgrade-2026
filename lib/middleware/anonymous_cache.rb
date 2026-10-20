@@ -9,6 +9,8 @@ require "http_user_agent_encoder"
 
 module Middleware
   class AnonymousCache
+    CACHEABLE_ENV = "discourse.anonymous_cache.cacheable"
+
     def self.cache_key_segments
       @@cache_key_segments ||= {
         m: "key_is_mobile?",
@@ -19,7 +21,7 @@ module Middleware
         t: "key_cache_theme_ids",
         ca: "key_compress_anon",
         l: "key_locale",
-        lso: "key_show_original_content",
+        lat: "key_automatically_translate",
         cm: "key_forced_color_mode",
         cs: "key_color_scheme_id",
         ds: "key_dark_scheme_id",
@@ -198,8 +200,8 @@ module Middleware
         GlobalSetting.compress_anon_cache
       end
 
-      def key_show_original_content
-        @request.cookies.key?(ContentLocalization::SHOW_ORIGINAL_COOKIE)
+      def key_automatically_translate
+        ContentLocalization.automatically_translate_anonymously?(@request.cookies)
       end
 
       def theme_ids
@@ -381,6 +383,7 @@ module Middleware
     PAYLOAD_INVALID_REQUEST_METHODS = %w[GET HEAD]
 
     def call(env)
+      env[CACHEABLE_ENV] = false
       return @app.call(env) if defined?(@@disabled) && @@disabled
 
       if PAYLOAD_INVALID_REQUEST_METHODS.include?(env[Rack::REQUEST_METHOD]) &&
@@ -420,8 +423,9 @@ module Middleware
         end
       end
 
+      cacheable = env[CACHEABLE_ENV] = helper.cacheable?
       result =
-        if helper.cacheable?
+        if cacheable
           helper.cached(env) || helper.cache(@app.call(env), env)
         else
           @app.call(env)

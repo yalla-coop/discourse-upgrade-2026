@@ -16,6 +16,65 @@ RSpec.describe SiteSerializer do
     end
   end
 
+  describe "#homepage_choices" do
+    around do |example|
+      registrations = DiscoursePluginRegistry._raw_homepage_options.dup
+      example.run
+      DiscoursePluginRegistry._raw_homepage_options.replace(registrations)
+    end
+
+    it "exposes the eligible homepage choices" do
+      serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
+      expect(serialized[:homepage_choices]).to eq(HomepageSiteSetting.choices)
+    end
+
+    it "exposes registered homepage paths" do
+      plugin = Plugin::Instance.new
+      plugin.stubs(:enabled?).returns(true)
+      plugin.register_homepage(
+        "directory",
+        name: "discourse_directory.navigation.title",
+        path: "/directory",
+        route: "discourse_directory/directory#index",
+      )
+
+      serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
+
+      expect(serialized[:homepage_choices]).to include("directory")
+      expect(serialized[:homepage_options]).to include(
+        id: "directory",
+        path: "/directory",
+        server_side: false,
+      )
+    end
+  end
+
+  describe "#anonymous_list_filters" do
+    it "exposes the filters an anonymous visitor can request" do
+      serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
+
+      expect(serialized[:anonymous_list_filters]).to include("latest", "top", "hot")
+      expect(serialized[:anonymous_list_filters]).not_to include("unread")
+      # an anonymous menu item, but not a list filter
+      expect(serialized[:anonymous_list_filters]).not_to include("categories")
+    end
+  end
+
+  describe "#can_search" do
+    it "exposes whether the current user can search" do
+      SiteSetting.allow_anonymous_search = false
+
+      anonymous_payload =
+        described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
+      user_guardian = Guardian.new(Fabricate(:user))
+      user_payload =
+        described_class.new(Site.new(user_guardian), scope: user_guardian, root: false).as_json
+
+      expect(anonymous_payload[:can_search]).to eq(false)
+      expect(user_payload[:can_search]).to eq(true)
+    end
+  end
+
   describe "#user_tips" do
     it "is included if enable_user_tips" do
       SiteSetting.enable_user_tips = true
@@ -53,6 +112,12 @@ RSpec.describe SiteSerializer do
       end
     end
 
+    around do |example|
+      stub_const(target_class, :ACL_PERMISSIONS, Acl::Permissions.new(:edit, :manage)) do
+        example.run
+      end
+    end
+
     after { DiscoursePluginRegistry.reset_register!(:acl_target_classes) }
 
     it "includes mandatory ACLs by target class" do
@@ -80,22 +145,21 @@ RSpec.describe SiteSerializer do
     end
 
     it "includes plugin-registered target classes" do
-      Object.const_set(:SiteSerializerSpecTarget, target_class)
-      AclTarget.loaded_target_classes.delete(target_class)
-      DiscoursePluginRegistry.register_acl_target_class(
-        "SiteSerializerSpecTarget",
-        Plugin::Instance.new,
-      )
+      stub_const(Object, :SiteSerializerSpecTarget, target_class) do
+        AclTarget.loaded_target_classes.delete(target_class)
+        DiscoursePluginRegistry.register_acl_target_class(
+          "SiteSerializerSpecTarget",
+          Plugin::Instance.new,
+        )
 
-      serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
+        serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
 
-      expect(serialized.dig(:access_control, :mandatory_acl)).to include(
-        "SiteSerializerSpecTarget" => [
-          { type: :group, id: Group::AUTO_GROUPS[:admins], permission: "manage" },
-        ],
-      )
-    ensure
-      Object.send(:remove_const, :SiteSerializerSpecTarget) if defined?(SiteSerializerSpecTarget)
+        expect(serialized.dig(:access_control, :mandatory_acl)).to include(
+          "SiteSerializerSpecTarget" => [
+            { type: :group, id: Group::AUTO_GROUPS[:admins], permission: "manage" },
+          ],
+        )
+      end
     end
   end
 
@@ -205,12 +269,12 @@ RSpec.describe SiteSerializer do
     fab!(:category)
     fab!(:sidebar) { Fabricate(:category_sidebar_section_link, linkable: category, user: user) }
 
-    before { SiteSetting.lazy_load_categories_groups = "#{Group::AUTO_GROUPS[:everyone]}" }
+    before { SiteSetting.lazy_load_categories_groups = "#{Group::AUTO_GROUPS[:logged_in_users]}" }
 
-    it "does not include any categories for anonymous users" do
+    it "includes categories for anonymous users" do
       serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
 
-      expect(serialized[:categories]).to eq(nil)
+      expect(serialized[:categories].map { |category| category[:id] }).to include(category.id)
     end
 
     it "includes preloaded categories for logged in users" do
@@ -318,9 +382,9 @@ RSpec.describe SiteSerializer do
 
           expect(serialized[:anonymous_sidebar_sections].count).to eq(2)
 
-          expect(serialized[:anonymous_sidebar_sections].last[:links].map { |link| link.id }).to eq(
-            [public_section_link.linkable.id],
-          )
+          expect(
+            serialized[:anonymous_sidebar_sections].last[:links].map { |link| link[:id] },
+          ).to eq([public_section_link.linkable.id])
         end.count
 
       public_section_link_2 =
@@ -334,7 +398,9 @@ RSpec.describe SiteSerializer do
 
           expect(serialized[:anonymous_sidebar_sections].count).to eq(2)
 
-          expect(serialized[:anonymous_sidebar_sections].last[:links].map { |link| link.id }).to eq(
+          expect(
+            serialized[:anonymous_sidebar_sections].last[:links].map { |link| link[:id] },
+          ).to eq(
             [
               public_section_link.linkable.id,
               public_section_link_2.linkable.id,
@@ -428,7 +494,7 @@ RSpec.describe SiteSerializer do
       Fabricate(:tag_group, permissions: { "staff" => 1 }, tag_names: [hidden_tag.name])
     end
 
-    it "should return the site's top tags as the default tags for sidebar" do
+    it "returns the site's top tags as default sidebar tags" do
       serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
 
       expect(serialized[:navigation_menu_site_top_tags]).to eq(
@@ -458,7 +524,7 @@ RSpec.describe SiteSerializer do
       )
     end
 
-    it "should not be serialized if `tagging_enabled` site setting is set to false" do
+    it "is not serialized when tagging is disabled" do
       SiteSetting.set(:tagging_enabled, false)
 
       serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
@@ -466,7 +532,7 @@ RSpec.describe SiteSerializer do
       expect(serialized[:navigation_menu_site_top_tags]).to eq(nil)
     end
 
-    it "should use slug_for_url for tags with empty slugs" do
+    it "uses slug_for_url for tags with empty slugs" do
       numeric_tag =
         Fabricate(:tag, name: "1").tap { |tag| Fabricate.times(10, :topic, tags: [tag]) }
 
@@ -479,7 +545,7 @@ RSpec.describe SiteSerializer do
       expect(numeric_entry[:slug]).to eq("#{numeric_tag.id}-tag")
     end
 
-    it "should return an empty array if site has no top tags" do
+    it "returns an empty array when the site has no top tags" do
       Tag.delete_all
 
       serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
@@ -618,7 +684,7 @@ RSpec.describe SiteSerializer do
           :groups
         ]
 
-      expect(serialized_groups.find { |g| g["name"] == "everyone" }["automatic"]).to eq(true)
+      expect(serialized_groups.find { |g| g["name"] == "trust_level_1" }["automatic"]).to eq(true)
       expect(serialized_groups.find { |g| g["name"] == group.name }["automatic"]).to eq(false)
     end
   end
@@ -675,6 +741,28 @@ RSpec.describe SiteSerializer do
       serialized = described_class.new(Site.new(guardian), scope: guardian, root: false).as_json
       expect(serialized[:upcoming_changes_with_css]).to include(:enable_upload_debug_mode)
       expect(serialized[:upcoming_changes_with_css]).not_to include(:enable_user_tips)
+    end
+  end
+
+  describe "#permanent_upcoming_change_names" do
+    before do
+      UpcomingChanges.stubs(:permanent_upcoming_change_names).returns(%w[enable_permanent_feature])
+    end
+
+    it "returns the permanent change names for staff" do
+      admin = Fabricate(:admin)
+      admin_guardian = Guardian.new(admin)
+      serialized =
+        described_class.new(Site.new(admin_guardian), scope: admin_guardian, root: false).as_json
+      expect(serialized[:permanent_upcoming_change_names]).to eq(%w[enable_permanent_feature])
+    end
+
+    it "is not included for non-staff users" do
+      user = Fabricate(:user)
+      user_guardian = Guardian.new(user)
+      serialized =
+        described_class.new(Site.new(user_guardian), scope: user_guardian, root: false).as_json
+      expect(serialized).not_to have_key(:permanent_upcoming_change_names)
     end
   end
 end

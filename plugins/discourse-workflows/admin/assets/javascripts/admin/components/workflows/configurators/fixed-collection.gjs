@@ -84,6 +84,10 @@ export default class FixedCollection extends Component {
   }
 
   get label() {
+    if (this.args.showLabel === false) {
+      return null;
+    }
+
     return (
       this.args.label || propertyLabel(this.nodeDefinition, this.args.fieldName)
     );
@@ -91,6 +95,10 @@ export default class FixedCollection extends Component {
 
   get isFlat() {
     return this.args.schema?.ui?.flat === true;
+  }
+
+  get isSortable() {
+    return this.args.schema?.type_options?.sortable === true;
   }
 
   get hide_optional_fields() {
@@ -113,6 +121,10 @@ export default class FixedCollection extends Component {
   }
 
   get maxItemsReachedTitle() {
+    if (this.maxItems === null) {
+      return null;
+    }
+
     return i18n("discourse_workflows.property_engine.max_items_reached", {
       count: this.maxItems,
     });
@@ -230,6 +242,17 @@ export default class FixedCollection extends Component {
   }
 
   @action
+  removeItemLabel(item) {
+    if (!item?.name) {
+      return i18n("discourse_workflows.property_engine.remove_item");
+    }
+
+    return i18n("discourse_workflows.property_engine.remove_assignment", {
+      name: item.name,
+    });
+  }
+
+  @action
   removeItem(group, removeFn, index) {
     this.args.onRemove?.(index);
     const path = this.groupPath(group);
@@ -241,6 +264,56 @@ export default class FixedCollection extends Component {
       path,
       Math.max(this.itemCount(group) - 1, 0)
     );
+    this.args.onChange?.();
+  }
+
+  @action
+  isFirstItem(index) {
+    return index === 0;
+  }
+
+  @action
+  isLastItem(group, index) {
+    return index === this.itemCount(group) - 1;
+  }
+
+  @action
+  moveItemLabel(direction, index) {
+    return i18n(`discourse_workflows.property_engine.move_item_${direction}`, {
+      position: index + 1,
+    });
+  }
+
+  @action
+  async moveItem(group, index, offset) {
+    const path = this.groupPath(group);
+    const items = this.args.formApi?.get(path);
+    const newIndex = index + offset;
+
+    if (!Array.isArray(items) || newIndex < 0 || newIndex >= items.length) {
+      return;
+    }
+
+    const reorderedItems = [...items];
+    const [movedItem] = reorderedItems.splice(index, 1);
+    reorderedItems.splice(newIndex, 0, movedItem);
+
+    const currentKey = this.activeAttrKey(group, index);
+    const newKey = this.activeAttrKey(group, newIndex);
+    const reorderedAttrs = new Map(this.activeAttrs);
+    const currentAttrs = reorderedAttrs.get(currentKey);
+    const newAttrs = reorderedAttrs.get(newKey);
+    reorderedAttrs.delete(currentKey);
+    reorderedAttrs.delete(newKey);
+    if (currentAttrs) {
+      reorderedAttrs.set(newKey, currentAttrs);
+    }
+    if (newAttrs) {
+      reorderedAttrs.set(currentKey, newAttrs);
+    }
+    this.activeAttrs = reorderedAttrs;
+
+    await this.args.formApi.set(path, reorderedItems);
     this.args.onChange?.();
   }
 
@@ -316,7 +389,7 @@ export default class FixedCollection extends Component {
   }
 
   <template>
-    <@form.Section @title={{this.label}} @subtitle={{this.description}}>
+    <@form.Section @subtitle={{this.description}} @title={{this.label}}>
       {{#each this.groups key="name" as |group|}}
         {{#if this.hasMultipleGroups}}
           <span class="workflows-property-engine__block-field-label">
@@ -332,18 +405,35 @@ export default class FixedCollection extends Component {
           >
             <div class="workflows-property-engine__collection-row">
 
+              {{#if this.isSortable}}
+                <div
+                  class="workflows-property-engine__collection-order-controls"
+                >
+                  <DButton
+                    class="workflows-property-engine__collection-move"
+                    @action={{fn this.moveItem group index -1}}
+                    @disabled={{this.isFirstItem index}}
+                    @icon="arrow-up"
+                    @translatedAriaLabel={{this.moveItemLabel "up" index}}
+                    @translatedTitle={{this.moveItemLabel "up" index}}
+                  />
+                  <DButton
+                    class="workflows-property-engine__collection-move"
+                    @action={{fn this.moveItem group index 1}}
+                    @disabled={{this.isLastItem group index}}
+                    @icon="arrow-down"
+                    @translatedAriaLabel={{this.moveItemLabel "down" index}}
+                    @translatedTitle={{this.moveItemLabel "down" index}}
+                  />
+                </div>
+              {{/if}}
+
               <DButton
+                class="workflows-property-engine__collection-delete"
                 @action={{fn this.removeItem group collection.remove index}}
                 @icon="xmark"
-                class="workflows-property-engine__collection-delete"
-                @translatedAriaLabel={{i18n
-                  "discourse_workflows.property_engine.remove_assignment"
-                  name=item.name
-                }}
-                @translatedTitle={{i18n
-                  "discourse_workflows.property_engine.remove_assignment"
-                  name=item.name
-                }}
+                @translatedAriaLabel={{this.removeItemLabel item}}
+                @translatedTitle={{this.removeItemLabel item}}
               />
 
               <collection.Object
@@ -360,17 +450,17 @@ export default class FixedCollection extends Component {
                   {{#each (this.itemFields group) key="name" as |itemField|}}
                     {{#if (isItemFieldVisible itemField item)}}
                       <Field
-                        @form={{object}}
-                        @formApi={{@formApi}}
                         @configuration={{item}}
                         @connections={{@connections}}
                         @credentials={{@credentials}}
                         @fieldName={{itemField.name}}
+                        @form={{object}}
+                        @formApi={{@formApi}}
                         @node={{@node}}
                         @nodeDefinition={{this.nodeDefinition}}
                         @nodeParameters={{@nodeParameters}}
-                        @nodeType={{@nodeType}}
                         @nodes={{@nodes}}
+                        @nodeType={{@nodeType}}
                         @nodeTypes={{@nodeTypes}}
                         @schema={{itemField}}
                         @session={{@session}}
@@ -405,7 +495,7 @@ export default class FixedCollection extends Component {
                           >
                             <subCollection.Object
                               class="workflows-property-engine__nested-collection-item"
-                              as |subObject|
+                              as |subObject subItem|
                             >
 
                               {{#each
@@ -413,16 +503,17 @@ export default class FixedCollection extends Component {
                                 as |subField|
                               }}
                                 <Field
-                                  @form={{subObject}}
-                                  @formApi={{@formApi}}
+                                  @configuration={{subItem}}
                                   @connections={{@connections}}
                                   @credentials={{@credentials}}
                                   @fieldName={{subField.name}}
+                                  @form={{subObject}}
+                                  @formApi={{@formApi}}
                                   @node={{@node}}
                                   @nodeDefinition={{this.nodeDefinition}}
                                   @nodeParameters={{@nodeParameters}}
-                                  @nodeType={{@nodeType}}
                                   @nodes={{@nodes}}
+                                  @nodeType={{@nodeType}}
                                   @nodeTypes={{@nodeTypes}}
                                   @schema={{subField}}
                                   @session={{@session}}
@@ -430,18 +521,19 @@ export default class FixedCollection extends Component {
                               {{/each}}
 
                               <DButton
+                                class="workflows-property-engine__collection-delete"
                                 @action={{fn
                                   this.removeNestedItem
                                   subCollection.remove
                                   subIndex
                                 }}
                                 @icon="xmark"
-                                class="workflows-property-engine__collection-delete"
                               />
                             </subCollection.Object>
                           </object.Collection>
 
                           <DButton
+                            class="btn-default btn-small"
                             @action={{fn
                               this.addNestedItem
                               group
@@ -452,21 +544,21 @@ export default class FixedCollection extends Component {
                             @translatedLabel={{i18n
                               "discourse_workflows.property_engine.add_item"
                             }}
-                            class="btn-default btn-small"
                           />
                         </div>
                       {{else}}
                         <Field
-                          @form={{object}}
-                          @formApi={{@formApi}}
+                          @configuration={{item}}
                           @connections={{@connections}}
                           @credentials={{@credentials}}
                           @fieldName={{extraField.name}}
+                          @form={{object}}
+                          @formApi={{@formApi}}
                           @node={{@node}}
                           @nodeDefinition={{this.nodeDefinition}}
                           @nodeParameters={{@nodeParameters}}
-                          @nodeType={{@nodeType}}
                           @nodes={{@nodes}}
+                          @nodeType={{@nodeType}}
                           @nodeTypes={{@nodeTypes}}
                           @schema={{extraField}}
                           @session={{@session}}
@@ -505,14 +597,14 @@ export default class FixedCollection extends Component {
                                     item
                                     menu.close
                                   }}
-                                  @translatedLabel={{this.fieldLabel
-                                    extraField.name
-                                  }}
                                   @icon={{if
                                     (this.isAttrActive
                                       group index extraField item
                                     )
                                     "check"
+                                  }}
+                                  @translatedLabel={{this.fieldLabel
+                                    extraField.name
                                   }}
                                 />
                               </dropdown.item>
@@ -529,45 +621,45 @@ export default class FixedCollection extends Component {
 
           {{#if (this.showEmptyState group)}}
             <WorkflowsEmptyState
+              @buttonIcon="plus"
               @description={{@emptyStateDescription}}
               @onAction={{fn this.addItem group}}
-              @buttonIcon="plus"
               @translatedButtonLabel={{this.addLabel}}
             />
           {{else}}
             <DButton
+              class="btn-default"
               @action={{fn this.addItem group}}
+              @disabled={{this.atMaxItems group}}
               @icon="plus"
               @translatedLabel={{this.addLabel}}
-              @disabled={{this.atMaxItems group}}
               @translatedTitle={{this.maxItemsReachedTitle}}
-              class="btn-default"
             />
           {{/if}}
         {{else}}
           <@form.Object
-            @name={{this.groupPath group}}
             class={{if
               this.isFlat
               "workflows-property-engine__collection-flat"
               "workflows-property-engine__collection-fields"
             }}
+            @name={{this.groupPath group}}
             as |object item|
           >
             {{#each (this.allItemFields group) key="name" as |itemField|}}
               {{#if (isItemFieldVisible itemField item)}}
                 <Field
-                  @form={{object}}
-                  @formApi={{@formApi}}
                   @configuration={{item}}
                   @connections={{@connections}}
                   @credentials={{@credentials}}
                   @fieldName={{itemField.name}}
+                  @form={{object}}
+                  @formApi={{@formApi}}
                   @node={{@node}}
                   @nodeDefinition={{this.nodeDefinition}}
                   @nodeParameters={{@nodeParameters}}
-                  @nodeType={{@nodeType}}
                   @nodes={{@nodes}}
+                  @nodeType={{@nodeType}}
                   @nodeTypes={{@nodeTypes}}
                   @schema={{itemField}}
                   @session={{@session}}

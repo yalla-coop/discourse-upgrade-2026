@@ -28,8 +28,6 @@ describe "Login via email code" do
   def start_code_login(email)
     visit("/login")
     expect(page).to have_css("#login-account-name")
-    screenshot_marker(label: "code-login-password-form")
-
     find("#one-time-code-link").click
     expect(page).to have_css(".code-login-form__email-step")
     screenshot_marker(label: "code-login-email-step")
@@ -83,13 +81,14 @@ describe "Login via email code" do
     end
   end
 
-  it "can switch to the code form and back to password login" do
+  it "defaults to password login and can opt into code login" do
     visit("/login")
     expect(page).to have_css("#login-account-name")
+    expect(page).to have_no_css(".code-login-form")
+    screenshot_marker(label: "code-login-password-form")
 
     find("#one-time-code-link").click
     expect(page).to have_css(".code-login-form__email-step")
-
     find(".code-login-form__password-toggle").click
     expect(page).to have_css("#login-account-name")
 
@@ -98,6 +97,52 @@ describe "Login via email code" do
     find("#login-button").click
 
     expect(page).to have_css(".header-dropdown-toggle.current-user")
+  end
+
+  context "with a required checkbox user field" do
+    fab!(:user_field) do
+      Fabricate(:user_field, name: "Terms", field_type: "confirm", required: true)
+    end
+
+    it "renders the checkbox at a usable size and lets it be toggled" do
+      new_email = "new.person@example.com"
+
+      visit("/login?mode=code")
+      expect(page).to have_css(".code-login-form__email-step")
+
+      find(".code-login-form__email-step input[type='email']").fill_in(with: new_email)
+      find(".code-login-form__continue").click
+      expect(page).to have_css(".code-login-form__code-step")
+
+      fill_code(latest_emailed_code(new_email))
+
+      expect(page).to have_css(".code-login-form__user-fields-step")
+      screenshot_marker(label: "code-login-user-fields-step")
+
+      checkbox = find(".user-field.confirm input[type='checkbox']")
+
+      # Regression: the shared `.input-group input` rule stretches inputs to
+      # `min-width: 250px; width: 100%`. Without the checkbox override applying
+      # to `.login-fullpage`, the checkbox renders as a full-width bar. Assert it
+      # stays small.
+      expect(checkbox.evaluate_script("this.offsetWidth")).to be < 50
+
+      checkbox.click
+      expect(checkbox).to be_checked
+
+      find(".code-login-form__user-fields-step .code-login-form__verify").click
+
+      expect(page).to have_css(".code-login-form__signup-details-step")
+
+      fill_in("code-login-username", with: "new-person")
+      expect(page).to have_no_css(".code-login-form__continue-to-site[disabled]")
+      find(".code-login-form__continue-to-site").click
+
+      expect(page).to have_css(".header-dropdown-toggle.current-user")
+
+      user = User.find_by_email(new_email)
+      expect(user.custom_fields["user_field_#{user_field.id}"]).to eq("true")
+    end
   end
 
   context "when the setting is disabled" do

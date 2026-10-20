@@ -38,36 +38,17 @@ export default class Menus extends Component {
     this._content = trustHTML(value);
   }
 
-  get templateCode() {
-    return `<DMenu
-  @label={{html-safe "${this.label}"}}
-  @content={{html-safe "${this.content}"}}
-/>`;
-  }
-
-  get templateCodeContent() {
-    return `<DMenu @maxWidth={{100}}>
-  <:trigger>
-     ${this.label}
-  </:trigger>
-  <:content>
-    ${this.content}
-  </:content>
-</DMenu>`;
-  }
-
-  get serviceCode() {
-    return `this.menu.register(
-  document.queryselector(".my-element"),
-  { content: htmlSafe(${this.content}) }
-);`;
-  }
-
-  get serviceCodeComponent() {
-    return `this.menu.register(
-  document.queryselector(".my-element"),
-  { component: MyComponent, data: { foo: 1 } }
-);`;
+  get options() {
+    return {
+      offset: this.offset,
+      arrow: this.arrow,
+      maxWidth: this.maxWidth,
+      identifier: this.identifier,
+      interactive: this.interactive,
+      triggers: this.triggers ?? ["click"],
+      untriggers: this.untriggers ?? ["click"],
+      content: this.content,
+    };
   }
 
   @action
@@ -107,33 +88,20 @@ export default class Menus extends Component {
     );
   }
 
-  get options() {
-    return {
-      offset: this.offset,
-      arrow: this.arrow,
-      maxWidth: this.maxWidth,
-      identifier: this.identifier,
-      interactive: this.interactive,
-      triggers: this.triggers ?? ["click"],
-      untriggers: this.untriggers ?? ["click"],
-      content: this.content,
-    };
-  }
-
   <template>
     <StyleguideExample @title="<Dmenu />">
       <StyleguideComponent @tag="dmenu component">
         <:sample>
           <DMenu
-            @label={{this.label}}
-            @offset={{this.offset}}
             @arrow={{this.arrow}}
-            @maxWidth={{this.maxWidth}}
+            @content={{this.content}}
             @identifier={{this.identifier}}
             @interactive={{this.interactive}}
+            @label={{this.label}}
+            @maxWidth={{this.maxWidth}}
+            @offset={{this.offset}}
             @triggers={{this.triggers}}
             @untriggers={{this.untriggers}}
-            @content={{this.content}}
           >
             {{this.content}}
           </DMenu>
@@ -143,14 +111,14 @@ export default class Menus extends Component {
       <StyleguideComponent @tag="dmenu component">
         <:sample>
           <DMenu
-            @offset={{this.offset}}
             @arrow={{this.arrow}}
-            @maxWidth={{this.maxWidth}}
+            @content={{this.content}}
             @identifier={{this.identifier}}
             @interactive={{this.interactive}}
+            @maxWidth={{this.maxWidth}}
+            @offset={{this.offset}}
             @triggers={{this.triggers}}
             @untriggers={{this.untriggers}}
-            @content={{this.content}}
           >
             <:trigger>
               {{this.label}}
@@ -165,9 +133,9 @@ export default class Menus extends Component {
       <StyleguideComponent @tag="menu service">
         <:sample>
           <button
-            type="button"
             class="btn btn-default"
             id="menu-instance"
+            type="button"
           >{{this.label}}</button>
         </:sample>
         <:actions>
@@ -178,9 +146,9 @@ export default class Menus extends Component {
       <StyleguideComponent @tag="menu service">
         <:sample>
           <button
-            type="button"
             class="btn btn-default"
             id="menu-instance-with-component"
+            type="button"
           >{{this.label}}</button>
         </:sample>
         <:actions>
@@ -191,51 +159,51 @@ export default class Menus extends Component {
       <Controls>
         <Row @name="Example label">
           <input
-            {{on "input" (withEventValue (fn (mut this.label)))}}
             type="text"
             value={{this.label}}
+            {{on "input" (withEventValue (fn (mut this.label)))}}
           />
         </Row>
         <Row @name="[@content]">
           <input
-            {{on "input" (withEventValue (fn (mut this.content)))}}
             type="text"
             value={{this.content}}
+            {{on "input" (withEventValue (fn (mut this.content)))}}
           />
         </Row>
         <Row @name="[@identifier]">
           <input
-            {{on "input" (withEventValue (fn (mut this.identifier)))}}
             type="text"
             value={{this.identifier}}
+            {{on "input" (withEventValue (fn (mut this.identifier)))}}
           />
         </Row>
         <Row @name="[@offset]">
           <input
-            {{on "input" (withEventValue (fn (mut this.offset)))}}
             type="number"
             value={{this.offset}}
+            {{on "input" (withEventValue (fn (mut this.offset)))}}
           />
         </Row>
         <Row @name="[@triggers]">
           <input
-            {{on "input" (withEventValue (fn (mut this.triggers)))}}
             type="text"
             value={{this.triggers}}
+            {{on "input" (withEventValue (fn (mut this.triggers)))}}
           />
         </Row>
         <Row @name="[@untriggers]">
           <input
-            {{on "input" (withEventValue (fn (mut this.untriggers)))}}
             type="text"
             value={{this.untriggers}}
+            {{on "input" (withEventValue (fn (mut this.untriggers)))}}
           />
         </Row>
         <Row @name="[@maxWidth]">
           <input
-            {{on "input" (withEventValue (fn (mut this.maxWidth)))}}
             type="number"
             value={{this.maxWidth}}
+            {{on "input" (withEventValue (fn (mut this.maxWidth)))}}
           />
         </Row>
         <Row @name="[@interactive]">

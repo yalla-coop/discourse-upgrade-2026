@@ -1,10 +1,9 @@
-/* eslint-disable ember/no-classic-components, ember/no-jquery, ember/require-tagless-components */
+/* eslint-disable ember/no-classic-components, ember/require-tagless-components */
 import Component from "@ember/component";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
 import { trustHTML } from "@ember/template";
 import { classNames, tagName } from "@ember-decorators/component";
-import $ from "jquery";
 import cookie from "discourse/lib/cookie";
 import dIcon from "discourse/ui-kit/helpers/d-icon";
 import { i18n } from "discourse-i18n";
@@ -44,13 +43,13 @@ export default class Patreon extends Component {
     cookie(cookieName, "t", {
       expires,
     });
-    $(this.element).fadeOut(700);
+    this.set("showDonationPrompt", false);
   }
 
   <template>
     {{#if this.showDonationPrompt}}
       <div class="patreon-donation-prompt">
-        <span {{on "click" this.close}} role="button" class="close">
+        <span class="close" role="button" {{on "click" this.close}}>
           {{dIcon "xmark"}}
         </span>
 

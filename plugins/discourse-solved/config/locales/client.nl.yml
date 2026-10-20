@@ -15,6 +15,17 @@ nl:
           kpi:
             accepted_solutions:
               label: "Geaccepteerde oplossingen"
+        sections:
+          support:
+            title: "Steunen"
+            answerers:
+              staff: "Medewerker"
+              member: "Leden"
+              basic: "Basis"
+            response_time:
+              buckets:
+                lt_1h: "< 1 uur"
+                gt_24h: "> 24 uur"
   js:
     notifications:
       alt:
@@ -86,6 +97,11 @@ nl:
           solved: "zijn opgelost"
           unsolved: "zijn onopgelost"
     admin:
+      reports:
+        related_items:
+          labels:
+            topic: "Topic"
+            category: "Categorie"
       web_hooks:
         solved_event:
           group_name: "Oplossingsgebeurtenis"

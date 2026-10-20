@@ -145,6 +145,10 @@ class Topic < ActiveRecord::Base
     @featured_users ||= TopicFeaturedUsers.new(self)
   end
 
+  def first_post_with_deleted
+    posts.with_deleted.find_by(post_number: 1)
+  end
+
   def trash!(trashed_by = nil)
     trigger_event = false
 
@@ -196,18 +200,10 @@ class Topic < ActiveRecord::Base
             max_emojis: true,
             unique_among: {
               unless:
-                Proc.new { |t| SiteSetting.allow_duplicate_topic_titles? || t.private_message? },
-              message: :has_already_been_used,
+                Proc.new { |t| SiteSetting.duplicate_topic_titles.allowed? || t.private_message? },
+              message: :topic_title_already_used,
               allow_blank: true,
-              case_sensitive: false,
-              collection:
-                Proc.new { |t|
-                  if SiteSetting.allow_duplicate_topic_titles_category?
-                    Topic.listable_topics.where("category_id = ?", t.category_id)
-                  else
-                    Topic.listable_topics
-                  end
-                },
+              collection: ->(t) { t.duplicate_title_candidates },
             }
 
   validates :category_id,
@@ -314,6 +310,7 @@ class Topic < ActiveRecord::Base
   belongs_to :og_image_upload, class_name: "Upload"
   has_many :topic_thumbnails, through: :image_upload
 
+  after_update :clear_page_not_found_topics_cache, if: :moved_to_read_restricted_category?
   after_save :regenerate_og_image
 
   # When we want to temporarily attach some data to a forum topic (usually before serialization)
@@ -449,6 +446,19 @@ class Topic < ActiveRecord::Base
     elsif saved_changes[:category_id] && category&.read_restricted?
       UserProfile.remove_featured_topic_from_all_profiles(self)
     end
+  end
+
+  def self.clear_page_not_found_topics_cache!
+    keys =
+      I18n.available_locales.map do |locale|
+        Discourse.cache.normalize_key("page_not_found_topics:#{locale}")
+      end
+    Discourse.cache.redis.del(*keys)
+  end
+
+  def clear_page_not_found_topics_cache
+    self.class.clear_page_not_found_topics_cache!
+    DB.after_commit { self.class.clear_page_not_found_topics_cache! }
   end
 
   def regenerate_og_image
@@ -595,6 +605,12 @@ class Topic < ActiveRecord::Base
     return unless escaped = ERB::Util.html_escape(title)
     fancy_title = Emoji.unicode_unescape(HtmlPrettify.render(escaped))
     fancy_title.length > Topic.max_fancy_title_length ? escaped : fancy_title
+  end
+
+  # Used when interpolating a topic title into a Markdown link label, where
+  # unescaped brackets or parentheses could change the resulting link.
+  def markdown_link_title
+    title.gsub(/([\\\[\]()])/) { "\\#{$1}" }
   end
 
   def fancy_title
@@ -1245,6 +1261,7 @@ class Topic < ActiveRecord::Base
         group_user.destroy
         allowed_groups.reload
         add_small_action(removed_by, "removed_group", group.name, skip_guardian: true)
+        Jobs.enqueue(:delete_inaccessible_notifications, topic_id: id)
         return true
       end
     end
@@ -1265,6 +1282,10 @@ class Topic < ActiveRecord::Base
           add_small_action(removed_by, "user_left", user.username, skip_guardian: true)
         else
           add_small_action(removed_by, "removed_user", user.username, skip_guardian: true)
+        end
+
+        unless user.guardian.can_see?(self)
+          user.publish_notifications_state if Notification.remove_for(user.id, id).positive?
         end
 
         MessageBus.publish("/topic/#{id}", { type: "remove_allowed_user" }, user_ids: [user.id])
@@ -1388,6 +1409,7 @@ class Topic < ActiveRecord::Base
         self,
         moved_by,
         post_ids,
+        guardian: opts.fetch(:guardian) { moved_by.guardian },
         move_to_pm: opts[:archetype].present? && opts[:archetype] == "private_message",
         options: {
           freeze_original: opts[:freeze_original],
@@ -1418,9 +1440,9 @@ class Topic < ActiveRecord::Base
   # go out of sync unless you do something drastic live move posts from one topic to another.
   # this recalculates everything.
   def update_statistics!
+    update_column(:highest_post_number, Topic.reset_highest(id))
     feature_topic_users
     update_action_counts
-    update_column(:highest_post_number, Topic.reset_highest(id))
   end
 
   def update_action_counts
@@ -1806,6 +1828,19 @@ class Topic < ActiveRecord::Base
     @acting_user = u
   end
 
+  def duplicate_title_candidates
+    candidates = Topic.listable_topics.where(category_id:)
+
+    if SiteSetting.duplicate_topic_titles.disallowed?
+      guardian = acting_user&.guardian
+      visible_topics = Topic.listable_topics.secured(guardian)
+      visible_topics = visible_topics.visible if !guardian&.can_see_unlisted_topics?
+      candidates = candidates.or(visible_topics)
+    end
+
+    candidates
+  end
+
   def secure_group_ids
     @secure_group_ids ||= (category.secure_group_ids if category && category.read_restricted?)
   end
@@ -1815,7 +1850,13 @@ class Topic < ActiveRecord::Base
   end
 
   def expandable_first_post?
-    SiteSetting.embed_truncate? && has_topic_embed?
+    embed = topic_embed
+    return false if embed.nil?
+
+    # A nil state preserves site-wide behavior for embeds without recorded state.
+    return SiteSetting.embed_truncate? if embed.content_truncated.nil?
+
+    embed.content_truncated?
   end
 
   def message_archived?(user)
@@ -1984,6 +2025,10 @@ class Topic < ActiveRecord::Base
     ApplicationLayoutPreloader.banner_json_cache.clear if archetype == "banner"
   end
 
+  def plain_text_excerpt
+    ExcerptParser.to_plain_text(excerpt)
+  end
+
   def pm_with_non_human_user?
     sql = <<~SQL
     SELECT 1 FROM topics
@@ -2137,8 +2182,8 @@ class Topic < ActiveRecord::Base
       data: {
         topic_title: title,
         display_username: invited_by.username,
-        original_user_id: user.id,
-        original_username: user.username,
+        original_user_id: invited_by.id,
+        original_username: invited_by.username,
       }.to_json,
     )
   end
@@ -2226,7 +2271,10 @@ class Topic < ActiveRecord::Base
   end
 
   def visible_tags(guardian)
-    tags.reject { |tag| guardian.hidden_tag_names.include?(tag[:name]) }
+    guardian ||= Guardian.new
+    return tags if guardian.is_admin?
+
+    tags.select { |tag| guardian.visible_tag_ids.include?(tag.id) }
   end
 
   def self.editable_custom_fields(guardian)
@@ -2237,6 +2285,10 @@ class Topic < ActiveRecord::Base
   end
 
   private
+
+  def moved_to_read_restricted_category?
+    saved_change_to_category_id? && category&.read_restricted?
+  end
 
   def invite_to_private_message(invited_by, target_user, guardian)
     if !guardian.can_send_private_message?(target_user)
@@ -2293,7 +2345,7 @@ class Topic < ActiveRecord::Base
   end
 
   def limit_first_day_topics_per_day
-    apply_per_day_rate_limit_for("first-day-topics", :max_topics_in_first_day)
+    RateLimiter.new(user, "first-day-topics-per-day", user.first_day_topics_limit, 1.day.to_i)
   end
 
   def apply_per_day_rate_limit_for(key, method_name)

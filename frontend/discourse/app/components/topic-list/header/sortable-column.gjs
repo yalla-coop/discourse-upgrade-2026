@@ -5,12 +5,14 @@ import { service } from "@ember/service";
 import PluginOutlet from "discourse/components/plugin-outlet";
 import TopicBulkSelectDropdown from "discourse/components/topic-list/topic-bulk-select-dropdown";
 import lazyHash from "discourse/helpers/lazy-hash";
+import { resetCachedTopicList } from "discourse/lib/cached-topic-list";
 import dConcatClass from "discourse/ui-kit/helpers/d-concat-class";
 import dIcon from "discourse/ui-kit/helpers/d-icon";
 import { i18n } from "discourse-i18n";
 
 export default class SortableColumn extends Component {
   @service router;
+  @service session;
 
   get localizedName() {
     if (this.args.forceName) {
@@ -63,15 +65,12 @@ export default class SortableColumn extends Component {
 
   @action
   afterBulkActionComplete() {
+    resetCachedTopicList(this.session);
     return this.router.refresh();
   }
 
   <template>
     <th
-      {{(if @sortable (modifier on "click" this.onClick))}}
-      {{(if @sortable (modifier on "keydown" this.onKeyDown))}}
-      data-sort-order={{@order}}
-      scope="col"
       aria-sort={{this.ariaSort}}
       class={{dConcatClass
         "topic-list-data"
@@ -80,14 +79,18 @@ export default class SortableColumn extends Component {
         (if this.isSorting "sorting")
         (if @number "num")
       }}
+      data-sort-order={{@order}}
+      scope="col"
       ...attributes
+      {{(if @sortable (modifier on "click" this.onClick))}}
+      {{(if @sortable (modifier on "keydown" this.onKeyDown))}}
     >
       {{#if @canBulkSelect}}
         {{#if @showBulkToggle}}
           <button
-            {{on "click" @bulkSelectHelper.toggleBulkSelect}}
-            title={{i18n "topics.bulk.toggle"}}
             class="btn-transparent bulk-select no-text"
+            title={{i18n "topics.bulk.toggle"}}
+            {{on "click" @bulkSelectHelper.toggleBulkSelect}}
           >
             {{dIcon "list-check"}}
           </button>
@@ -97,18 +100,18 @@ export default class SortableColumn extends Component {
           <span class="bulk-select-topics">
             <div class="bulk-select-topics-actions">
               <button
-                {{on "click" this.bulkSelectAll}}
                 class="btn btn-default bulk-select-all"
+                {{on "click" this.bulkSelectAll}}
               >{{i18n "topics.bulk.select_all"}}</button>
               <button
-                {{on "click" this.bulkClearAll}}
                 class="btn btn-default bulk-clear-all"
+                {{on "click" this.bulkClearAll}}
               >{{i18n "topics.bulk.clear_all"}}</button>
             </div>
             {{#if @canDoBulkActions}}
               <TopicBulkSelectDropdown
-                @bulkSelectHelper={{@bulkSelectHelper}}
                 @afterBulkActionComplete={{this.afterBulkActionComplete}}
+                @bulkSelectHelper={{@bulkSelectHelper}}
               />
             {{/if}}
           </span>

@@ -7,14 +7,29 @@ class ReviewableUser < Reviewable
     create(created_by_id: Discourse.system_user.id, target: user)
   end
 
+  after_create :retain_avatar_snapshot
+
+  def self.payload_for(user)
+    profile = user.user_profile
+    avatar = user.uploaded_avatar
+
+    {
+      username: user.username,
+      name: user.name,
+      email: user.email,
+      bio: profile&.bio_raw,
+      website: profile&.website,
+      avatar_upload_id: avatar&.id,
+      avatar_url: avatar && Discourse.store.cdn_url(avatar.url),
+    }
+  end
+
   def self.additional_args(params)
     { reject_reason: params[:reject_reason], send_email: params[:send_email] != "false" }
   end
 
   def build_combined_actions(actions, guardian, args)
-    if status == "rejected" && !payload&.dig("scrubbed_by")
-      build_action(actions, :scrub, client_action: "scrub")
-    end
+    build_action(actions, :scrub, client_action: "scrub") if guardian.is_admin? && scrubbable?
 
     suspect_pending = status == "pending" && is_a_suspect_user?
 
@@ -27,10 +42,20 @@ class ReviewableUser < Reviewable
           icon: "user-xmark",
           label: "reviewables.actions.confirm_spam.title",
         )
+
+      build_penalty_actions(actions, bundle:, silence: :silence_user, suspend: :suspend_user)
+
       delete_user_actions(actions, bundle, require_reject_reason: false)
     end
 
-    if guardian.can_approve?(target)
+    if status == "pending" && target&.uploaded_avatar_id.present?
+      build_action(actions, :remove_avatar, icon: "user-xmark", secondary: true)
+    end
+
+    # Reviewed items must not offer approval in the queue, but approving an
+    # unapproved user directly (e.g. from the admin user page) still goes
+    # through this action, so those callers opt in with `allow_reviewed`.
+    if (pending? || args[:allow_reviewed]) && guardian.can_approve?(target)
       actions.add(:approve_user, bundle: nil) do |a|
         a.icon = "user-plus"
         a.completed_message = "reviewables.actions.approve_user.complete"
@@ -51,6 +76,12 @@ class ReviewableUser < Reviewable
   def build_actions(actions, guardian, args)
     return if approved?
     super
+  end
+
+  def perform_remove_avatar(performed_by, args)
+    target.remove_avatar!(performed_by)
+
+    create_result(:success)
   end
 
   def perform_approve_user(performed_by, args)
@@ -87,9 +118,9 @@ class ReviewableUser < Reviewable
         )
 
       self.payload = {
-        scrubbed_by: guardian.current_user.username,
-        scrubbed_reason: reason,
-        scrubbed_at:,
+        "scrubbed_by" => guardian.current_user.username,
+        "scrubbed_reason" => reason,
+        "scrubbed_at" => scrubbed_at,
       }
       save!
 
@@ -159,6 +190,26 @@ class ReviewableUser < Reviewable
 
   def is_a_suspect_user?
     reviewable_scores.any? { |rs| rs.reason == "suspect_user" }
+  end
+
+  private
+
+  def retain_avatar_snapshot
+    upload_id = payload&.dig("avatar_upload_id")
+    return if upload_id.blank?
+
+    UploadReference.ensure_exist!(
+      upload_ids: [upload_id],
+      target_type: self.class.polymorphic_name,
+      target_id: id,
+    )
+  end
+
+  def scrubbable?
+    username = payload&.dig("username")
+    return false if !rejected? || username.blank?
+
+    target.blank? || username != target.username
   end
 end
 

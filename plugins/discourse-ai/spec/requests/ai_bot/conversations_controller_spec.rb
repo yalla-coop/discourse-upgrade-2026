@@ -23,13 +23,90 @@ RSpec.describe DiscourseAi::AiBot::ConversationsController do
 
   before do
     enable_current_plugin
-    SiteSetting.enable_ai_bot_starred_conversations = true
-    sign_in(current_user)
     [conversation, starred_conversation, other_conversation].each { |topic| mark_ai_bot_pm(topic) }
+  end
+
+  describe "GET /" do
+    fab!(:bot_allowed_group, :group)
+    fab!(:llm_model)
+
+    before do
+      toggle_enabled_bots(bots: [llm_model])
+      SiteSetting.ai_bot_enabled = true
+      SiteSetting.ai_bot_allowed_groups = bot_allowed_group.id.to_s
+      SiteSetting.top_menu = "latest|new|top|categories"
+      SiteSetting.default_homepage = "ai-conversations"
+      SiteSetting.has_login_hint = false
+    end
+
+    it "renders conversations as the homepage for people who can use the bot" do
+      bot_allowed_group.add(current_user)
+      sign_in(current_user)
+
+      get "/"
+
+      expect(response.status).to eq(200)
+      expect(response.body).to include(
+        '<meta name="discourse_current_homepage" content="ai-conversations">',
+      )
+    end
+
+    it "renders the top menu homepage for people outside the bot's allowed groups" do
+      sign_in(current_user)
+
+      get "/"
+
+      expect(response.status).to eq(200)
+      expect(response.body).to include('<meta name="discourse_current_homepage" content="latest">')
+    end
+
+    it "renders the conversations preview for anonymous visitors when they're allowed a preview" do
+      SiteSetting.ai_bot_allowed_groups =
+        "#{bot_allowed_group.id}|#{Group::AUTO_GROUPS[:anonymous_users]}"
+
+      get "/"
+
+      expect(response.status).to eq(200)
+      expect(response.body).to include(
+        '<meta name="discourse_current_homepage" content="ai-conversations">',
+      )
+    end
+
+    it "renders the top menu homepage for anonymous visitors without a preview" do
+      get "/"
+
+      expect(response.status).to eq(200)
+      expect(response.body).to include('<meta name="discourse_current_homepage" content="latest">')
+    end
+
+    it "renders the topic list for crawlers even when anonymous visitors get a preview" do
+      SiteSetting.ai_bot_allowed_groups =
+        "#{bot_allowed_group.id}|#{Group::AUTO_GROUPS[:anonymous_users]}"
+
+      get "/", headers: { "HTTP_USER_AGENT" => "Googlebot" }
+
+      expect(response.status).to eq(200)
+      expect(response.body).to include(regular_topic.title)
+    end
+  end
+
+  describe "GET /discourse-ai/ai-bot/conversations" do
+    it "renders the app for anonymous visitors, so they can preview it or log in" do
+      get "/discourse-ai/ai-bot/conversations"
+
+      expect(response.status).to eq(200)
+    end
+
+    it "requires login for the conversation list" do
+      get "/discourse-ai/ai-bot/conversations.json"
+
+      expect(response.status).to eq(403)
+    end
   end
 
   describe "GET /discourse-ai/ai-bot/conversations.json" do
     before do
+      sign_in(current_user)
       DiscourseAi::AiBot::ConversationStar.create!(user: current_user, topic: starred_conversation)
       DiscourseAi::AiBot::ConversationStar.create!(user: other_user, topic: other_conversation)
     end
@@ -77,45 +154,10 @@ RSpec.describe DiscourseAi::AiBot::ConversationsController do
         be_in([starred_conversation.id, *extra_starred_conversations.map(&:id)]),
       )
     end
-
-    it "returns the legacy response when the upcoming change is disabled" do
-      SiteSetting.enable_ai_bot_starred_conversations = false
-
-      get "/discourse-ai/ai-bot/conversations.json"
-
-      expect(response.status).to eq(200)
-      json = response.parsed_body
-      expect(json).not_to have_key("starred_conversations")
-      starred_topic = json["conversations"].find { |topic| topic["id"] == starred_conversation.id }
-      expect(starred_topic["ai_conversation_starred"]).to eq(false)
-      expect(json["conversations"].map { |topic| topic["id"] }).to include(starred_conversation.id)
-    end
   end
 
   describe "PUT /discourse-ai/ai-bot/conversations/:topic_id/starred.json" do
-    context "when the upcoming change is disabled" do
-      before { SiteSetting.enable_ai_bot_starred_conversations = false }
-
-      it "returns 404 and does not star the conversation" do
-        put "/discourse-ai/ai-bot/conversations/#{conversation.id}/starred.json",
-            params: {
-              starred: true,
-            }
-
-        expect(response.status).to eq(404)
-        expect(
-          DiscourseAi::AiBot::ConversationStar.exists?(user: current_user, topic: conversation),
-        ).to eq(false)
-      end
-      it "returns 404 even when params are invalid" do
-        put "/discourse-ai/ai-bot/conversations/#{conversation.id}/starred.json",
-            params: {
-              starred: "wat",
-            }
-
-        expect(response.status).to eq(404)
-      end
-    end
+    before { sign_in(current_user) }
 
     it "stars a conversation for the current user" do
       put "/discourse-ai/ai-bot/conversations/#{conversation.id}/starred.json",

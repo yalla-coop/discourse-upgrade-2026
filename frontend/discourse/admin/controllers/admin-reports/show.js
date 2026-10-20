@@ -1,8 +1,15 @@
+import { tracked } from "@glimmer/tracking";
 import Controller from "@ember/controller";
 import { computed } from "@ember/object";
 import { applyValueTransformer } from "discourse/lib/transformer";
 
+const DEFAULT_BACK_LINK = {
+  route: "adminReports",
+  label: "admin.reports.back",
+};
+
 export default class AdminReportsShowController extends Controller {
+  @tracked backLink = DEFAULT_BACK_LINK;
   queryParams = applyValueTransformer("admin-reports-show-query-params", [
     "start_date",
     "end_date",
@@ -36,5 +43,13 @@ export default class AdminReportsShowController extends Controller {
     options.chartGrouping = this.chart_grouping;
 
     return options;
+  }
+
+  setBackLink({ route, query, label }) {
+    this.backLink = { route, query, label };
+  }
+
+  resetBackLink() {
+    this.backLink = DEFAULT_BACK_LINK;
   }
 }

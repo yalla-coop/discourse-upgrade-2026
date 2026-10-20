@@ -208,7 +208,7 @@ namespace :release do
         capture: true,
       )
 
-    prs = JSON.parse(json_output)
+    prs = JSON.parse(json_output).sort_by { |pr| pr["number"] }
     raise "No open PRs found targeting #{base} on private-mirror" if prs.empty?
 
     extract_ghsa_id = ->(body) do
@@ -226,8 +226,12 @@ namespace :release do
 
     selected =
       if (ghsa_ids = ENV["SECURITY_FIX_GHSA_IDS"])
-        requested = ghsa_ids.split(",").map(&:strip)
-        choices.select { |pr| pr["ghsa_id"] && requested.include?(pr["ghsa_id"]) }
+        requested = ghsa_ids.split(",").map(&:strip).map(&:downcase)
+        matched =
+          choices.select { |pr| pr["ghsa_id"] && requested.include?(pr["ghsa_id"].downcase) }
+        missing = requested - matched.map { |pr| pr["ghsa_id"].downcase }
+        raise "No matching PR found for requested GHSA(s): #{missing.join(", ")}" if missing.any?
+        matched
       else
         prompt = TTY::Prompt.new
         prompt_choices =
@@ -243,6 +247,7 @@ namespace :release do
         )
       end
     raise "No PRs selected" if selected.empty?
+    selected.sort_by! { |pr| pr["number"] }
 
     puts "Staging security fixes for #{base} branch: #{selected.map { |pr| pr["headRefName"] }.inspect}"
 
@@ -254,7 +259,7 @@ namespace :release do
 
         ReleaseUtils.git "merge", "--squash", "privatemirror/#{pr["headRefName"]}"
 
-        commit_message = "#{pr["title"]}\n\n#{pr["body"]}".strip
+        commit_message = pr["title"].strip
         author =
           ReleaseUtils.git(
             "log",

@@ -16,7 +16,7 @@ module DiscourseAi
         end
 
         def max_prompt_tokens
-          buffer = (opts[:max_tokens] || 2500) + 50
+          buffer = (opts[:reserved_output_tokens] || opts[:max_tokens] || 2500) + 50
 
           if tools.present?
             @function_size ||= llm_model.tokenizer_class.size(tools.to_json.to_s)
@@ -97,7 +97,9 @@ module DiscourseAi
 
           user_message = { role: }
 
-          content_array << "#{msg[:id]}: " if msg[:id]
+          if (prefix = user_id_prefix(msg))
+            content_array << prefix
+          end
 
           content_array << msg[:content]
 

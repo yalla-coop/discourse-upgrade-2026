@@ -364,12 +364,10 @@ class PostRevisionSerializer < ApplicationSerializer
     object.user || Discourse.system_user
   end
 
-  def hidden_tags
-    @hidden_tags ||= DiscourseTagging.hidden_tag_names(scope)
-  end
-
   def filter_tags(tags)
-    tags.is_a?(Array) && tags.any? ? tags - hidden_tags : tags
+    return tags unless tags.is_a?(Array) && tags.any?
+
+    tags & DiscourseTagging.filter_visible(Tag.where(name: tags), scope).pluck(:name)
   end
 
   def filter_category_id(category_id)
@@ -380,13 +378,12 @@ class PostRevisionSerializer < ApplicationSerializer
   def reply_to_info(post_number)
     return nil if post_number.blank?
 
-    target = Post.where(topic_id: topic.id, post_number: post_number).first
-    info = { post_number: post_number }
+    target = Post.with_deleted.where(topic_id: topic.id, post_number: post_number).first
+    return nil if target.blank? || !scope.can_see?(target)
 
-    # Only enrich with the target's author if the current viewer can see
-    # that post. Deleted posts, whispers, and posts in restricted
-    # categories must not leak their author through the revision history.
-    if target && scope.can_see?(target) && target.user
+    info = { post_number: target.post_number }
+
+    if target.user
       info[:username] = target.user.username_lower
       info[:display_username] = target.user.username
       info[:avatar_template] = target.user.avatar_template

@@ -130,7 +130,7 @@ RSpec.describe Categories::Types::Base do
     end
   end
 
-  describe ".configure_site_settings" do
+  describe ".configure_site_settings with scalar defaults" do
     it "applies site settings from configuration_schema defaults" do
       test_type =
         build_test_type(
@@ -348,6 +348,26 @@ RSpec.describe Categories::Types::Base do
       expect(entry[:label]).to be_present
     end
 
+    it "reflects whether the site setting has been overridden" do
+      test_type =
+        build_test_type(
+          :test_overridden,
+          configuration_schema: {
+            site_settings: {
+              title: "My Forum",
+            },
+          },
+        )
+
+      entry = test_type.send(:resolved_configuration_schema)[:site_settings].first
+      expect(entry[:overridden]).to eq(false)
+
+      SiteSetting.title = "Customized"
+
+      entry = test_type.send(:resolved_configuration_schema)[:site_settings].first
+      expect(entry[:overridden]).to eq(true)
+    end
+
     it "passes through category settings" do
       test_type =
         build_test_type(
@@ -524,7 +544,7 @@ RSpec.describe Categories::Types::Base do
     end
   end
 
-  describe ".configure_site_settings" do
+  describe ".configure_site_settings with hash defaults" do
     it "extracts default from hash config values" do
       test_type =
         build_test_type(

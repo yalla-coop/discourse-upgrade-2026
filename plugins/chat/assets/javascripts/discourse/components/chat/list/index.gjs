@@ -37,23 +37,34 @@ export default class List extends Component {
     return this.args.itemComponent ?? Item;
   }
 
+  get collectionItemsMaybeFiltered() {
+    const collection = this.args.collection;
+    const filterFn = this.args.filterFn;
+
+    if (filterFn) {
+      return filterFn(collection.items);
+    } else {
+      return collection.items;
+    }
+  }
+
   @action
   loadCollection() {
     discourseDebounce(this, this.debouncedLoadCollection, INPUT_DELAY);
   }
 
   async debouncedLoadCollection() {
-    await this.args.collection.load({ limit: 10 });
+    await this.args.collection.load({ limit: 10 }).catch(() => {});
   }
 
   <template>
     <div class="c-list">
       <div
         class={{if @collection.fetchedOnce "--loaded"}}
-        {{this.fill}}
         ...attributes
+        {{this.fill}}
       >
-        {{#each @collection.items as |item|}}
+        {{#each this.collectionItemsMaybeFiltered as |item|}}
           {{yield (hash Item=(component this.itemComponent item=item))}}
         {{else}}
           {{#if @collection.fetchedOnce}}

@@ -2,9 +2,11 @@ import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
+import { service } from "@ember/service";
 import { trustHTML } from "@ember/template";
 import PostCookedHtml from "discourse/components/post/cooked-html";
 import userPrioritizedName from "discourse/helpers/user-prioritized-name";
+import { relativeAge } from "discourse/lib/formatter";
 import DiscourseURL from "discourse/lib/url";
 import DButton from "discourse/ui-kit/d-button";
 import DRelativeDate from "discourse/ui-kit/d-relative-date";
@@ -15,6 +17,8 @@ import dOnResize from "discourse/ui-kit/modifiers/d-on-resize";
 import { i18n } from "discourse-i18n";
 
 export default class DPostAccordionItem extends Component {
+  @service a11y;
+
   @tracked measured = false;
   @tracked isOverflowing = false;
 
@@ -28,6 +32,15 @@ export default class DPostAccordionItem extends Component {
 
   get hasContent() {
     return !!this.post?.cooked;
+  }
+
+  get srDate() {
+    if (this.a11y.autoUpdatingRelativeDateRef && this.post.created_at) {
+      return relativeAge(new Date(this.post.created_at), {
+        format: "medium-with-ago",
+        wrapInSpan: false,
+      });
+    }
   }
 
   get userDisplayName() {
@@ -83,12 +96,12 @@ export default class DPostAccordionItem extends Component {
           "quote d-post-accordion-item"
           (if this.hasContent "d-post-accordion-item--has-content")
         }}
-        style={{this.maxHeightStyle}}
         data-expanded={{@isExpanded}}
         data-overflowing={{this.overflowingAttr}}
-        data-username={{this.post.username}}
         data-post={{this.post.post_number}}
         data-topic={{this.post.topic_id}}
+        data-username={{this.post.username}}
+        style={{this.maxHeightStyle}}
       >
         {{! eslint-disable ember/template-no-invalid-interactive }}
         <div
@@ -99,17 +112,20 @@ export default class DPostAccordionItem extends Component {
             {{#if @hasItemMetadataBlock}}
               {{yield this.post to="itemMetadata"}}
             {{else}}
-              <DUserLink @username={{this.post.username}} class="user-link">
+              <DUserLink class="user-link" @username={{this.post.username}}>
                 {{dBoundAvatarTemplate this.post.avatar_template "tiny"}}
                 <span>{{this.userDisplayName}}</span>
               </DUserLink>
               <span class="dot-separator"></span>
               <a
-                href={{this.post.url}}
+                aria-label={{this.srDate}}
                 class="date-link"
+                href={{this.post.url}}
                 title={{i18n "post.sr_date"}}
               >
-                <DRelativeDate @date={{this.post.created_at}} />
+                <span aria-hidden="true">
+                  <DRelativeDate @date={{this.post.created_at}} />
+                </span>
               </a>
             {{/if}}
           </div>
@@ -120,16 +136,16 @@ export default class DPostAccordionItem extends Component {
                 @action={{@onToggleExpanded}}
                 @ariaExpanded={{@isExpanded}}
                 @ariaLabel={{if @isExpanded "post.collapse" "expand"}}
-                @title={{if @isExpanded "post.collapse" "expand"}}
                 @icon={{if @isExpanded "chevron-up" "chevron-down"}}
+                @title={{if @isExpanded "post.collapse" "expand"}}
               />
             {{else}}
               <DButton
                 class="btn-flat d-post-accordion-item__jump"
-                @href={{this.post.url}}
                 @ariaLabel="post.follow_quote"
-                @title="post.follow_quote"
+                @href={{this.post.url}}
                 @icon="arrow-down"
+                @title="post.follow_quote"
               />
             {{/if}}
           </div>
@@ -138,8 +154,8 @@ export default class DPostAccordionItem extends Component {
         {{#if this.hasContent}}
           <div class="d-post-accordion-item__body">
             <blockquote
-              id={{this.quoteId}}
               class="d-post-accordion-item__content"
+              id={{this.quoteId}}
               {{dOnResize this.checkOverflow}}
             >
               {{#if @hasBeforeItemContentBlock}}
@@ -147,14 +163,14 @@ export default class DPostAccordionItem extends Component {
               {{/if}}
 
               <PostCookedHtml
-                @post={{this.post}}
                 @decoratorState={{@decoratorState}}
+                @post={{this.post}}
               />
 
             </blockquote>
 
             <div class="d-post-accordion-item__read-more">
-              <a href={{this.post.url}} class="read-more-link">
+              <a class="read-more-link" href={{this.post.url}}>
                 {{i18n "read_more"}}
               </a>
             </div>

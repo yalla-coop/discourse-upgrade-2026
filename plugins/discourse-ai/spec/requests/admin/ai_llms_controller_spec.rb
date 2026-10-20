@@ -48,6 +48,42 @@ RSpec.describe DiscourseAi::Admin::AiLlmsController do
       )
     end
 
+    it "includes provider capabilities metadata" do
+      get "/admin/plugins/discourse-ai/ai-llms.json"
+      expect(response).to be_successful
+
+      capabilities = response.parsed_body["meta"]["provider_capabilities"]
+      expect(capabilities.dig("google_vertex_ai", "requires_configured_url")).to eq(false)
+      expect(capabilities.dig("aws_bedrock", "requires_configured_url")).to eq(false)
+      expect(capabilities.dig("aws_bedrock_converse", "requires_configured_url")).to eq(false)
+      expect(capabilities.dig("anthropic", "requires_configured_url")).to eq(true)
+    end
+
+    it "includes OpenAI reasoning controls metadata" do
+      get "/admin/plugins/discourse-ai/ai-llms.json"
+      expect(response).to be_successful
+
+      open_ai_params = response.parsed_body.dig("meta", "provider_params", "open_ai")
+      expect(open_ai_params["reasoning_effort"]).to include(
+        "type" => "enum",
+        "values" => %w[default none minimal low medium high xhigh max],
+        "default" => "default",
+      )
+      expect(open_ai_params["reasoning_mode"]).to include(
+        "type" => "enum",
+        "values" => %w[default standard pro],
+        "default" => "default",
+      )
+
+      azure_params = response.parsed_body.dig("meta", "provider_params", "azure")
+      expect(azure_params["reasoning_effort"]).to include(
+        "type" => "enum",
+        "values" => %w[default none minimal low medium high xhigh max],
+        "default" => "default",
+      )
+      expect(azure_params).not_to have_key("reasoning_mode")
+    end
+
     it "includes vLLM reasoning controls metadata" do
       get "/admin/plugins/discourse-ai/ai-llms.json"
       expect(response).to be_successful
@@ -120,20 +156,32 @@ RSpec.describe DiscourseAi::Admin::AiLlmsController do
       llms = response.parsed_body["ai_llms"]
 
       model_json = llms.find { |m| m["id"] == llm_model.id }
-      expect(model_json["used_by"]).to contain_exactly({ "type" => "ai_bot" })
+      expect(model_json["used_by"]).to contain_exactly(
+        { "type" => "ai_bot", "id" => DiscourseAi::Configuration::Module::BOT_ID },
+      )
 
       model2_json = llms.find { |m| m["id"] == llm_model2.id }
 
       expect(model2_json["used_by"]).to contain_exactly(
         { "type" => "ai_agent", "name" => "Cool agent", "id" => ai_agent.id },
-        { "type" => "ai_helper", "name" => "Proofread text" },
+        {
+          "type" => "ai_helper",
+          "name" => "Proofread text",
+          "id" => DiscourseAi::Configuration::Module::AI_HELPER_ID,
+        },
       )
 
       model3_json = llms.find { |m| m["id"] == fake_model.id }
 
       expect(model3_json["used_by"]).to contain_exactly(
-        { "type" => "ai_summarization" },
-        { "type" => "ai_embeddings_semantic_search" },
+        {
+          "type" => "ai_summarization",
+          "id" => DiscourseAi::Configuration::Module::SUMMARIZATION_ID,
+        },
+        {
+          "type" => "ai_embeddings_semantic_search",
+          "id" => DiscourseAi::Configuration::Module::EMBEDDINGS_ID,
+        },
       )
     end
   end
@@ -182,6 +230,64 @@ RSpec.describe DiscourseAi::Admin::AiLlmsController do
     end
 
     context "with valid attributes" do
+      it "maps legacy create requests to native or disabled mode" do
+        post "/admin/plugins/discourse-ai/ai-llms.json",
+             params: {
+               ai_llm: valid_attrs.merge(display_name: "Legacy native", vision_enabled: true),
+             }
+        native = LlmModel.find(response.parsed_body.dig("ai_llm", "id"))
+
+        post "/admin/plugins/discourse-ai/ai-llms.json",
+             params: {
+               ai_llm: valid_attrs.merge(display_name: "Legacy disabled", vision_enabled: false),
+             }
+        disabled = LlmModel.find(response.parsed_body.dig("ai_llm", "id"))
+
+        expect([native.vision_mode, disabled.vision_mode]).to eq(%w[native disabled])
+      end
+
+      it "rejects a null explicit vision mode" do
+        post "/admin/plugins/discourse-ai/ai-llms.json",
+             params: {
+               ai_llm: valid_attrs.merge(vision_mode: nil, vision_enabled: true),
+             }
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(LlmModel.where(display_name: valid_attrs[:display_name])).not_to exist
+      end
+
+      it "creates disabled, native, and delegated vision modes" do
+        native_target = Fabricate(:llm_model, vision_enabled: true)
+
+        post "/admin/plugins/discourse-ai/ai-llms.json",
+             params: {
+               ai_llm: valid_attrs.merge(display_name: "Disabled", vision_mode: "disabled"),
+             }
+        disabled = LlmModel.find(response.parsed_body.dig("ai_llm", "id"))
+
+        post "/admin/plugins/discourse-ai/ai-llms.json",
+             params: {
+               ai_llm: valid_attrs.merge(display_name: "Native", vision_mode: "native"),
+             }
+        native = LlmModel.find(response.parsed_body.dig("ai_llm", "id"))
+
+        post "/admin/plugins/discourse-ai/ai-llms.json",
+             params: {
+               ai_llm:
+                 valid_attrs.merge(
+                   display_name: "Delegated",
+                   vision_mode: "delegated",
+                   vision_llm_model_id: native_target.id,
+                 ),
+             }
+        delegated = LlmModel.find(response.parsed_body.dig("ai_llm", "id"))
+
+        expect([disabled.vision_mode, native.vision_mode, delegated.vision_mode]).to eq(
+          %w[disabled native delegated],
+        )
+        expect(delegated.vision_llm_model).to eq(native_target)
+      end
+
       it "creates a new LLM model" do
         post "/admin/plugins/discourse-ai/ai-llms.json", params: { ai_llm: valid_attrs }
         response_body = response.parsed_body
@@ -263,6 +369,30 @@ RSpec.describe DiscourseAi::Admin::AiLlmsController do
         )
       end
 
+      it "stores reasoning configuration for custom model names" do
+        provider_params = { reasoning_effort: "max", reasoning_mode: "pro" }
+        attrs =
+          valid_attrs.merge(
+            name: "future-reasoning-deployment",
+            url: "https://api.openai.com/v1/responses",
+            provider_params: provider_params,
+          )
+
+        post "/admin/plugins/discourse-ai/ai-llms.json", params: { ai_llm: attrs }
+
+        expect(response.status).to eq(201)
+        expect(LlmModel.last.provider_params).to eq(provider_params.stringify_keys)
+      end
+
+      it "allows standard reasoning mode with Chat Completions" do
+        attrs = valid_attrs.merge(provider_params: { reasoning_mode: "standard" })
+
+        post "/admin/plugins/discourse-ai/ai-llms.json", params: { ai_llm: attrs }
+
+        expect(response.status).to eq(201)
+        expect(LlmModel.last.provider_params["reasoning_mode"]).to eq("standard")
+      end
+
       it "does not store nested hash values in provider_params" do
         provider_params = { organization: { nested: "injected_value" } }
 
@@ -291,6 +421,17 @@ RSpec.describe DiscourseAi::Admin::AiLlmsController do
     end
 
     context "with invalid attributes" do
+      it "rejects pro reasoning mode without a Responses API configuration" do
+        attrs = valid_attrs.merge(provider_params: { reasoning_mode: "pro" })
+
+        post "/admin/plugins/discourse-ai/ai-llms.json", params: { ai_llm: attrs }
+
+        expect(response.status).to eq(422)
+        expect(response.parsed_body["errors"]).to contain_exactly(
+          I18n.t("discourse_ai.llm_models.reasoning_mode_requirements"),
+        )
+      end
+
       it "doesn't create a model" do
         post "/admin/plugins/discourse-ai/ai-llms.json",
              params: {
@@ -458,6 +599,55 @@ RSpec.describe DiscourseAi::Admin::AiLlmsController do
 
     context "with valid update params" do
       let(:update_attrs) { { provider: "anthropic" } }
+
+      it "preserves legacy delegated updates and clears stale targets when switching modes" do
+        native_target = Fabricate(:llm_model, vision_enabled: true)
+        llm_model.update!(vision_llm_model: native_target)
+
+        put "/admin/plugins/discourse-ai/ai-llms/#{llm_model.id}.json",
+            params: {
+              ai_llm: {
+                vision_enabled: false,
+              },
+            }
+        expect(llm_model.reload.vision_mode).to eq("delegated")
+
+        put "/admin/plugins/discourse-ai/ai-llms/#{llm_model.id}.json",
+            params: {
+              ai_llm: {
+                display_name: "Still delegated",
+              },
+            }
+        expect(llm_model.reload.vision_mode).to eq("delegated")
+
+        put "/admin/plugins/discourse-ai/ai-llms/#{llm_model.id}.json",
+            params: {
+              ai_llm: {
+                vision_enabled: true,
+              },
+            }
+        expect(llm_model.reload.vision_mode).to eq("delegated")
+
+        replacement_target = Fabricate(:llm_model, vision_enabled: true)
+        put "/admin/plugins/discourse-ai/ai-llms/#{llm_model.id}.json",
+            params: {
+              ai_llm: {
+                vision_llm_model_id: replacement_target.id,
+              },
+            }
+        expect(llm_model.reload.vision_llm_model).to eq(replacement_target)
+
+        put "/admin/plugins/discourse-ai/ai-llms/#{llm_model.id}.json",
+            params: {
+              ai_llm: {
+                vision_mode: "native",
+                vision_llm_model_id: native_target.id,
+              },
+            }
+
+        expect(llm_model.reload.vision_mode).to eq("native")
+        expect(llm_model.vision_llm_model_id).to be_nil
+      end
 
       context "with quotas" do
         it "updates quotas correctly" do
@@ -834,6 +1024,17 @@ RSpec.describe DiscourseAi::Admin::AiLlmsController do
         ).last
       expect(history).to be_present
       expect(history.subject).to eq(model_display_name) # Verify subject is set to display_name
+    end
+
+    it "returns a conflict when another model delegates vision to the target" do
+      llm_model.update!(vision_enabled: true)
+      dependent =
+        Fabricate(:llm_model, display_name: "Dependent model", vision_llm_model: llm_model)
+
+      delete "/admin/plugins/discourse-ai/ai-llms/#{llm_model.id}.json"
+
+      expect(response).to have_http_status(:conflict)
+      expect(response.parsed_body["errors"].join).to include(dependent.display_name)
     end
 
     context "with llms configured" do

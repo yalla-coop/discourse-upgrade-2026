@@ -51,6 +51,24 @@ RSpec.describe PostRevisionSerializer do
     expect(json[:tags_changes][:current]).to eq([])
   end
 
+  it "preserves the revision tag order when filtering visible tags" do
+    SiteSetting.tagging_enabled = true
+    tags = %w[alpha bravo charlie].map { |name| Fabricate(:tag, name: name) }
+    post.topic.tags = tags
+    revision =
+      Fabricate(
+        :post_revision,
+        post: post,
+        modifications: {
+          "tags" => [%w[charlie alpha], %w[alpha bravo charlie]],
+        },
+      )
+
+    json = described_class.new(revision, scope: Guardian.new, root: false).as_json
+
+    expect(json[:tags_changes]).to eq(previous: %w[charlie alpha], current: %w[alpha bravo charlie])
+  end
+
   context "with hidden tags" do
     fab!(:public_tag) { Fabricate(:tag, name: "public") }
     fab!(:public_tag2) { Fabricate(:tag, name: "visible") }
@@ -250,7 +268,7 @@ RSpec.describe PostRevisionSerializer do
       expect(json).not_to have_key(:reply_to_post_number_changes)
     end
 
-    it "does not leak author info for a target the viewer cannot see" do
+    it "omits target info for a reply target the viewer cannot see" do
       SiteSetting.whispers_allowed_groups = Group::AUTO_GROUPS[:staff]
       whisper =
         Fabricate(
@@ -278,9 +296,10 @@ RSpec.describe PostRevisionSerializer do
           root: false,
         ).as_json
 
-      expect(json[:reply_to_post_number_changes][:current][:post_number]).to eq(whisper.post_number)
-      expect(json[:reply_to_post_number_changes][:current]).not_to have_key(:username)
-      expect(json[:reply_to_post_number_changes][:current]).not_to have_key(:avatar_template)
+      expect(json[:reply_to_post_number_changes][:previous][:post_number]).to eq(
+        other_parent.post_number,
+      )
+      expect(json[:reply_to_post_number_changes][:current]).to be_nil
     end
   end
 end
