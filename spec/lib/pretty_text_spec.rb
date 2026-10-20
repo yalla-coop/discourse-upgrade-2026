@@ -704,14 +704,12 @@ RSpec.describe PrettyText do
     end
 
     it "does censor code fences" do
-      begin
-        %w[apple banana].each do |w|
-          Fabricate(:watched_word, word: w, action: WatchedWord.actions[:censor])
-        end
-        expect(PrettyText.cook("# banana")).not_to include("banana")
-      ensure
-        Discourse.redis.flushdb
+      %w[apple banana].each do |w|
+        Fabricate(:watched_word, word: w, action: WatchedWord.actions[:censor])
       end
+      expect(PrettyText.cook("# banana")).not_to include("banana")
+    ensure
+      Discourse.redis.flushdb
     end
 
     it "strips out unicode bidirectional (bidi) override characters and replaces with a highlighted span" do
@@ -1465,6 +1463,51 @@ RSpec.describe PrettyText do
             <p><a href="https://vimeo.com/1">https://vimeo.com/1</a></p>
           HTML
         end
+
+        it "leaves a malformed Vimeo source without rendering it as markup" do
+          iframe_source = "https://player.vimeo.com/video/123'></a><img src=x onerror=alert(1)>"
+          html = %(<iframe src="#{iframe_source}"></iframe>)
+
+          fragment = Nokogiri::HTML5.fragment(described_class.format_for_email(html, post))
+
+          aggregate_failures do
+            expect(fragment.css("img")).to be_empty
+            expect(fragment.at_css("iframe")["src"]).to eq(iframe_source)
+          end
+        end
+
+        it "leaves a non-Vimeo iframe containing the player domain unchanged" do
+          iframe_source =
+            "https://www.instagram.com/?x=player.vimeo.com/<img src=x onerror=alert(1)>"
+          html = %(<iframe src="#{iframe_source}"></iframe>)
+
+          fragment = Nokogiri::HTML5.fragment(described_class.format_for_email(html, post))
+
+          aggregate_failures do
+            expect(fragment.css("a")).to be_empty
+            expect(fragment.at_css("iframe")["src"]).to eq(iframe_source)
+          end
+        end
+
+        it "converts an unlisted Vimeo embed using its hash" do
+          html = %(<iframe src="https://player.vimeo.com/video/508864124?h=fcbbcc92fa"></iframe>)
+
+          expect(described_class.format_for_email(html, post)).to match_html(<<~HTML)
+            <p><a href="https://vimeo.com/508864124/fcbbcc92fa">https://vimeo.com/508864124/fcbbcc92fa</a></p>
+          HTML
+        end
+
+        it "leaves an iframe with a non-http data-original-href unchanged" do
+          html =
+            %(<iframe src="https://player.vimeo.com/video/1" data-original-href="javascript:alert(1)"></iframe>)
+
+          fragment = Nokogiri::HTML5.fragment(described_class.format_for_email(html, post))
+
+          aggregate_failures do
+            expect(fragment.css("a")).to be_empty
+            expect(fragment.at_css("iframe")["data-original-href"]).to eq("javascript:alert(1)")
+          end
+        end
       end
 
       describe "#strip_secure_uploads" do
@@ -1545,6 +1588,35 @@ RSpec.describe PrettyText do
           expect(md).to include("data-stripped-secure-upload=\"#{url}\"")
           expect(md).to include("data-width=\"20\"")
           expect(md).to include("data-height=\"20\"")
+        end
+
+        it "keeps a crafted secure upload URL as attribute data" do
+          url =
+            %(#{Discourse.base_url}/secure-uploads/original/1X/a"><img src=x onerror=alert(1)>b.png)
+
+          fragment =
+            Nokogiri::HTML5.fragment(described_class.format_for_email(%(<img src='#{url}'>), post))
+          notice = fragment.at_css("div.secure-upload-notice")
+
+          aggregate_failures do
+            expect(fragment.css("img")).to be_empty
+            expect(notice["data-stripped-secure-upload"]).to eq(url)
+          end
+        end
+
+        it "discards non-numeric secure upload dimensions" do
+          html =
+            %(<img src="/secure-uploads/original/1X/testimage.png" width="20 onmouseover=alert(1) x" height="20">)
+
+          notice =
+            Nokogiri::HTML5.fragment(described_class.format_for_email(html, post)).at_css(
+              "div.secure-upload-notice",
+            )
+
+          aggregate_failures do
+            expect(notice.attributes.keys).not_to include("onmouseover", "data-width")
+            expect(notice["data-height"]).to eq("20")
+          end
         end
       end
     end
@@ -1628,6 +1700,13 @@ RSpec.describe PrettyText do
   describe "emoji" do
     it "replaces unicode emoji with our emoji sets if emoji is enabled" do
       expect(PrettyText.cook("💣")).to match(/\:bomb\:/)
+    end
+
+    it "renders a denied emoji name as plain text when the name contains regex metacharacters" do
+      SiteSetting.emoji_deny_list = "+1"
+      Emoji.clear_cache
+
+      expect(PrettyText.cook(":+1: hello")).to eq("<p>:+1: hello</p>")
     end
 
     it "does not replace left right arrow" do
@@ -1922,6 +2001,37 @@ RSpec.describe PrettyText do
         "data-type": "category",
         "data-slug": private_category.slug,
         "data-id": private_category.id,
+      },
+    ) do
+      with_tag("span", with: { class: "hashtag-icon-placeholder" })
+    end
+
+    tag_with_periods = Fabricate(:tag, name: "sam.i.am")
+    Fabricate(:topic, tags: [tag_with_periods])
+    cooked = PrettyText.cook(" #sam.i.am", user_id: user.id)
+    expect(cooked).to have_tag(
+      "a",
+      with: {
+        class: "hashtag-cooked",
+        href: tag_with_periods.url,
+        "data-type": "tag",
+        "data-slug": tag_with_periods.name,
+        "data-id": tag_with_periods.id,
+      },
+    ) do
+      with_tag("span", with: { class: "hashtag-icon-placeholder" })
+    end
+
+    cooked = PrettyText.cook(" #known::tag.", user_id: user.id)
+    expect(cooked).to include("</a>.")
+    expect(cooked).to have_tag(
+      "a",
+      with: {
+        class: "hashtag-cooked",
+        href: tag.url,
+        "data-type": "tag",
+        "data-slug": tag.name,
+        "data-id": tag.id,
       },
     ) do
       with_tag("span", with: { class: "hashtag-icon-placeholder" })
@@ -2462,6 +2572,17 @@ HTML
     expect(PrettyText.cook("<test>alert(42)</test>")).to eq "<p>alert(42)</p>"
   end
 
+  it "sanitizes html without cooking markdown" do
+    sanitized =
+      PrettyText.sanitize(
+        '<a href="https://example.com" target="_blank" rel="noopener" onclick="alert(1)">learn more</a><a href="javascript:alert(1)">bad</a><script>alert(1)</script>',
+      )
+
+    expect(sanitized).to eq(
+      '<a href="https://example.com" target="_blank">learn more</a><a>bad</a>',
+    )
+  end
+
   it "should not onebox magically linked urls" do
     expect(PrettyText.cook("[url]site.com[/url]")).not_to include("onebox")
   end
@@ -2533,6 +2654,60 @@ HTML
     end
   end
 
+  describe "upload:// links" do
+    it "treats the label as literal so formatting characters are preserved" do
+      cooked = PrettyText.cook <<~MD
+        ![_test_file_|100x100](upload://abc.jpg)
+        [_test_file_.txt|attachment](upload://abc.txt)
+      MD
+
+      expect(cooked).to include('alt="_test_file_"')
+      expect(cooked).to include('class="attachment"')
+      expect(cooked).to include(">_test_file_.txt<")
+      expect(cooked).not_to include("<em>")
+    end
+
+    it "unescapes backslash escapes left over from legacy posts" do
+      cooked = PrettyText.cook("![20260421\\_140231|100x100](upload://abc.jpg)")
+
+      expect(cooked).to include('alt="20260421_140231"')
+    end
+
+    it "leaves non-upload links alone" do
+      cooked = PrettyText.cook("[_foo_](http://example.com)")
+
+      expect(cooked).to include("<em>foo</em>")
+    end
+
+    it "keeps plain URLs in the label intact when they would otherwise linkify" do
+      cooked = PrettyText.cook("![foo https://example.com bar|100x100](upload://abc.jpg)")
+
+      expect(cooked).to include('alt="foo https://example.com bar"')
+    end
+
+    it "keeps hashtags and mentions in the label literal" do
+      cooked = PrettyText.cook("[#cat @sam|attachment](upload://abc.txt)")
+
+      expect(cooked).to include(">#cat @sam<")
+      expect(cooked).not_to include("hashtag")
+      expect(cooked).not_to include("mention")
+    end
+
+    it "treats reference-style upload labels as literal too" do
+      cooked = PrettyText.cook("[_foo_][1]\n\n[1]: upload://abc.jpg")
+
+      expect(cooked).to include(">_foo_<")
+      expect(cooked).not_to include("<em>")
+    end
+
+    it "still renders inline formatting in non-upload attachment labels" do
+      cooked = PrettyText.cook("[**bold**|attachment](https://example.com/file.pdf)")
+
+      expect(cooked).to include('class="attachment"')
+      expect(cooked).to include("<strong>bold</strong>")
+    end
+  end
+
   describe "upload decoding" do
     it "can decode upload:// for default setup" do
       set_cdn_url("https://cdn.com")
@@ -2591,6 +2766,27 @@ HTML
       HTML
 
       expect(PrettyText.cook(raw)).to eq(cooked.strip)
+    end
+
+    it "handles attachment filenames with markdown characters" do
+      SiteSetting.authorized_extensions = "txt"
+
+      {
+        "_test_file_.txt" => "<em>",
+        "*test*.txt" => "<em>",
+        "**bold**.txt" => "<strong>",
+        "~~strike~~.txt" => "<s>",
+        "`code`.txt" => "<code>",
+      }.each do |filename, bad_tag|
+        upload = Fabricate(:upload, original_filename: filename, extension: "txt")
+        markdown = UploadMarkdown.new(upload).to_markdown
+        cooked = PrettyText.cook(markdown)
+
+        expect(cooked).to include('class="attachment"'),
+        "expected attachment class for filename: #{filename}\nmarkdown: #{markdown}\ncooked: #{cooked}"
+        expect(cooked).not_to include(bad_tag),
+        "unexpected #{bad_tag} for filename: #{filename}\nmarkdown: #{markdown}\ncooked: #{cooked}"
+      end
     end
 
     it "can place a blank image if we can not find the upload" do
@@ -2718,7 +2914,7 @@ HTML
     # basically it is super hard to remember every single rare letter when there are
     # so many, so ruby tags provide a hint.
     #
-    html = (<<~MD).strip
+    html = <<~MD.strip
       <ruby lang="je">
         <rb lang="je">X</rb>
         漢 <rp>(</rp><rt lang="je"> ㄏㄢˋ </rt><rp>)</rp>
@@ -2909,6 +3105,18 @@ HTML
       described_class.add_video_placeholder_image(doc)
 
       expect(doc.to_html).to eq(html)
+    end
+
+    it "does not link thumbnails from SQL LIKE wildcards" do
+      private_thumbnail = Fabricate(:upload, original_filename: "private-thumbnail.png")
+      html = <<~HTML
+        <p></p><div class="video-placeholder-container" data-video-src="/uploads/%"></div><p></p>
+      HTML
+      doc = Nokogiri::HTML5.fragment(html)
+
+      described_class.add_video_placeholder_image(doc)
+
+      expect(doc.to_html).not_to include(private_thumbnail.url)
     end
 
     it "links to a thumbnail image if the video source is valid" do

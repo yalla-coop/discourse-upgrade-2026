@@ -18,24 +18,23 @@ module DiscoursePostEvent
       :minimal,
       :closed,
       :"chat-enabled",
+      :livestream,
       :"max-attendees",
       :"all-day",
+      :image,
     ]
 
     def self.extract_events(post)
       cooked = PrettyText.cook(post.raw, topic_id: post.topic_id, user_id: post.user_id)
-      valid_options = VALID_OPTIONS.map { |o| "data-#{o}" }
+      valid_options = valid_option_attributes
 
-      valid_custom_fields = []
-      SiteSetting
-        .discourse_post_event_allowed_custom_fields
-        .split("|")
-        .each do |setting|
-          valid_custom_fields << {
-            original: "data-#{setting}",
-            normalized: "data-#{setting.gsub(/_/, "-")}",
-          }
-        end
+      valid_custom_fields =
+        SiteSetting
+          .discourse_post_event_allowed_custom_fields
+          .split("|")
+          .map do |setting|
+            { original: "data-#{setting}", normalized: custom_field_data_attribute(setting) }
+          end
 
       Nokogiri
         .HTML(cooked)
@@ -48,7 +47,9 @@ module DiscoursePostEvent
 
             if value && valid_options.include?(name)
               event ||= {}
-              event[name.sub("data-", "").to_sym] = if %w[data-name data-url].include?(name)
+              event[name.sub("data-", "").to_sym] = if %w[data-name data-url data-image].include?(
+                   name,
+                 )
                 value
               else
                 CGI.escapeHTML(value)
@@ -66,6 +67,32 @@ module DiscoursePostEvent
           event
         end
         .compact
+    end
+
+    def self.valid_option_attributes
+      VALID_OPTIONS.map { |option| "data-#{option}" }
+    end
+
+    def self.custom_field_data_attribute(setting)
+      camelized = setting.downcase.gsub(/[-.]/, "_").gsub(/_(.)/) { $1.upcase }
+      dasherized = camelized.gsub(/[A-Z]/) { |char| "-#{char.downcase}" }.sub(/\A-/, "")
+      "data-#{dasherized}"
+    end
+
+    def self.linkify_description(text, post: nil)
+      escaped = ERB::Util.html_escape(text)
+      html =
+        escaped
+          .gsub(URI::DEFAULT_PARSER.make_regexp(%w[http https])) do |url|
+            "<a href=\"#{url}\">#{url}</a>"
+          end
+          .gsub(/\r\n?|\n/, "<br>")
+
+      doc = Nokogiri::HTML5.fragment(html)
+      add_nofollow = post.nil? || post.add_nofollow?
+      PrettyText.add_rel_attributes_to_user_content(doc, add_nofollow)
+
+      doc.to_html
     end
   end
 end

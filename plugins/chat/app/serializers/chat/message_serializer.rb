@@ -59,7 +59,7 @@ module Chat
     end
 
     def excerpt
-      object.excerpt || object.build_excerpt
+      object.excerpt_for_display
     end
 
     def reactions
@@ -91,6 +91,8 @@ module Chat
     end
 
     def users_bookmark
+      return if scope&.user.blank?
+
       @user_bookmark ||= object.bookmarks.find { |bookmark| bookmark.user_id == scope&.user&.id }
     end
 

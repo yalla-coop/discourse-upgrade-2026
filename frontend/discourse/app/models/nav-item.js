@@ -1,7 +1,6 @@
 import { tracked } from "@glimmer/tracking";
 import EmberObject, { computed } from "@ember/object";
 import { dependentKeyCompat } from "@ember/object/compat";
-import { reads } from "@ember/object/computed";
 import { service } from "@ember/service";
 import deprecated from "discourse/lib/deprecated";
 import { getOwnerWithFallback } from "discourse/lib/get-owner";
@@ -130,7 +129,7 @@ export default class NavItem extends EmberObject {
     let items = args.siteSettings.top_menu.split("|");
 
     const user = getOwnerWithFallback(this).lookup("service:current-user");
-    if (user?.new_new_view_enabled) {
+    if (user?.unified_new_enabled) {
       items = items.filter((item) => item !== "unread");
     }
     const filterType = (args.filterMode || "").split("/").pop();
@@ -223,10 +222,23 @@ export default class NavItem extends EmberObject {
 
   @tracked name;
   @tracked tag;
-  @reads("name") filterType;
 
   @tracked _title;
   @tracked _displayName;
+
+  @tracked _filterTypeOverride;
+
+  @dependentKeyCompat
+  get filterType() {
+    if (this._filterTypeOverride !== undefined) {
+      return this._filterTypeOverride;
+    }
+    return this.name;
+  }
+
+  set filterType(value) {
+    this._filterTypeOverride = value;
+  }
 
   @dependentKeyCompat
   get title() {
@@ -236,8 +248,8 @@ export default class NavItem extends EmberObject {
 
     let nameKey = this.name.replace("/", ".");
 
-    if (nameKey === "new" && this.currentUser?.new_new_view_enabled) {
-      nameKey = "new_new";
+    if (nameKey === "new" && this.currentUser?.unified_new_enabled) {
+      nameKey = "unified_new";
     }
 
     return i18n("filters." + nameKey + ".help", {});

@@ -4,7 +4,7 @@
 module TopicGuardian
   def can_remove_allowed_users?(topic, target_user = nil)
     is_staff? || (is_my_own?(topic) && @user.has_trust_level?(TrustLevel[2])) ||
-      (topic.allowed_users.count > 1 && topic.user != target_user && !!(is_me?(target_user)))
+      (topic.allowed_users.count > 1 && topic.user != target_user && !!is_me?(target_user))
   end
 
   def can_review_topic?(topic)
@@ -59,6 +59,15 @@ module TopicGuardian
       (!category || Category.topic_create_allowed(self).where(id: category_id).count == 1)
   end
 
+  def can_set_topic_timer?(topic = nil)
+    return false if anonymous? || is_silenced?
+    return true if @user.is_system_user?
+    return false if topic && !can_see_topic?(topic)
+    return true if is_staff?
+
+    @user.in_any_groups?(SiteSetting.topic_timers_allowed_groups_map)
+  end
+
   def can_move_topic_to_category?(category)
     category =
       (
@@ -69,7 +78,8 @@ module TopicGuardian
         end
       )
 
-    is_staff? || (can_create_topic_on_category?(category) && !category.require_topic_approval?)
+    is_staff? ||
+      (can_create_topic_on_category?(category) && !topic_posting_review_required?(category))
   end
 
   def can_create_post_on_topic?(topic)
@@ -101,33 +111,25 @@ module TopicGuardian
     # can't edit topics in secured categories where you don't have permission to create topics
     # except for a tiny edge case where the topic is uncategorized and you are trying
     # to fix it but uncategorized is disabled
-    if (
-         SiteSetting.allow_uncategorized_topics ||
-           topic.category_id != SiteSetting.uncategorized_category_id
-       )
+    if SiteSetting.allow_uncategorized_topics ||
+         topic.category_id != SiteSetting.uncategorized_category_id
       return false if !can_create_topic_on_category?(topic.category)
     end
 
     # Editing a shared draft.
-    if (
-         !topic.archived && !topic.private_message? &&
-           topic.category_id == SiteSetting.shared_drafts_category.to_i &&
-           can_see_category?(topic.category) && can_see_shared_draft? && can_create_post?(topic)
-       )
+    if !topic.archived && !topic.private_message? &&
+         topic.category_id == SiteSetting.shared_drafts_category.to_i &&
+         can_see_category?(topic.category) && can_see_shared_draft? && can_create_post?(topic)
       return true
     end
 
-    if (
-         is_in_edit_post_groups? && topic.archived && !topic.private_message? &&
-           can_create_post?(topic)
-       )
+    if is_in_edit_post_groups? && topic.archived && !topic.private_message? &&
+         can_create_post?(topic)
       return true
     end
 
-    if (
-         is_in_edit_topic_groups? && !topic.archived && !topic.private_message? &&
-           can_create_post?(topic)
-       )
+    if is_in_edit_topic_groups? && !topic.archived && !topic.private_message? &&
+         can_create_post?(topic)
       return true
     end
 
@@ -175,15 +177,7 @@ module TopicGuardian
     # All other posts that were deleted still must be permanently deleted
     # before the topic can be deleted with the exception of small action
     # posts that will be deleted right before the topic is.
-    all_posts_count =
-      Post
-        .with_deleted
-        .where(topic_id: topic.id)
-        .where(
-          post_type: [Post.types[:regular], Post.types[:moderator_action], Post.types[:whisper]],
-        )
-        .count
-    return false if all_posts_count > 1
+    return false if topic.deletable_posts_count > 1
 
     return false if !is_admin? || !can_see_topic?(topic)
     return false if !topic.deleted_at
@@ -369,12 +363,6 @@ module TopicGuardian
     topic&.slow_mode_seconds.to_i > 0 && @user.human? && !is_staff?
   end
 
-  private
-
-  def can_delete_own_topic?(topic)
-    topic.posts_count <= 1 && topic.created_at? && topic.created_at > 24.hours.ago
-  end
-
   def private_message_topic_scope(scope)
     pm_scope = scope.private_messages_for_user(user)
 
@@ -384,6 +372,12 @@ module TopicGuardian
       SQL
 
     pm_scope
+  end
+
+  private
+
+  def can_delete_own_topic?(topic)
+    topic.posts_count <= 1 && topic.created_at? && topic.created_at > 24.hours.ago
   end
 
   def secured_regular_topic_scope(scope, topic_ids:)

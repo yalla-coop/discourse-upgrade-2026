@@ -1,7 +1,7 @@
 import deprecated from "discourse/lib/deprecated";
 import { getOwnerWithFallback } from "discourse/lib/get-owner";
 import { humanizeList } from "discourse/lib/text";
-import { isAppleDevice } from "discourse/lib/utilities";
+import { capabilities } from "discourse/services/capabilities";
 import I18n, { i18n } from "discourse-i18n";
 
 function isGUID(value) {
@@ -31,16 +31,6 @@ export const dialog = {
     dg.alert(msg);
   },
 };
-
-export function markdownNameFromFileName(fileName) {
-  let name = fileName.slice(0, fileName.lastIndexOf("."));
-
-  if (isAppleDevice() && isGUID(name)) {
-    name = i18n("upload_selector.default_image_alt_text");
-  }
-
-  return name.replace(/\[|\]|\|/g, "");
-}
 
 export function validateUploadedFiles(files, opts) {
   if (!files || files.length === 0) {
@@ -211,7 +201,7 @@ export function authorizedExtensions(staff, siteSettings) {
 
 function authorizedImagesExtensions(staff, siteSettings) {
   return authorizesAllExtensions(staff, siteSettings)
-    ? "png, jpg, jpeg, gif, svg, ico, heic, heif, webp, avif"
+    ? "png, jpg, jpeg, gif, svg, ico, heic, heif, webp, avif, jxl"
     : imagesExtensions(staff, siteSettings).join(", ");
 }
 
@@ -245,7 +235,7 @@ export function authorizesOneOrMoreImageExtensions(staff, siteSettings) {
 }
 
 export function isImage(path) {
-  return /\.(png|webp|jpe?g|gif|svg|ico|heic|heif|avif)$/i.test(path);
+  return /\.(png|webp|jpe?g|gif|svg|ico|heic|heif|avif|jxl)$/i.test(path);
 }
 
 export function isVideo(path) {
@@ -287,6 +277,16 @@ export function uploadIcon(staff, siteSettings) {
   return allowsAttachments(staff, siteSettings) ? "upload" : "far-image";
 }
 
+function markdownNameFromFileName(fileName) {
+  let name = fileName.slice(0, fileName.lastIndexOf("."));
+
+  if (capabilities.isIOS && isGUID(name)) {
+    name = i18n("upload_selector.default_image_alt_text");
+  }
+
+  return name.replace(/\[|\]|\|/g, "");
+}
+
 function imageMarkdown(upload) {
   return `![${markdownNameFromFileName(upload.original_filename)}|${
     upload.thumbnail_width
@@ -300,7 +300,7 @@ function playableMediaMarkdown(upload, type) {
 }
 
 function attachmentMarkdown(upload) {
-  return `[${upload.original_filename}|attachment](${
+  return `[${upload.original_filename.replace(/\[|\]|\|/g, "")}|attachment](${
     upload.short_url
   }) (${I18n.toHumanSize(upload.filesize)})`;
 }

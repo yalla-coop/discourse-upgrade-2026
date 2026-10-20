@@ -40,6 +40,44 @@ module DiscoursePostEvent
         end
       end
 
+      context "for a private event in a public topic" do
+        fab!(:event_owner, :admin)
+        fab!(:public_topic) { Fabricate(:topic, user: event_owner) }
+        fab!(:public_post) { Fabricate(:post, user: event_owner, topic: public_topic) }
+        fab!(:viewer, :user)
+        fab!(:invitee_user, :user)
+        fab!(:restricted_group) do
+          Fabricate(
+            :group,
+            visibility_level: Group.visibility_levels[:owners],
+            members_visibility_level: Group.visibility_levels[:owners],
+          ).tap { |group| group.add(invitee_user) }
+        end
+        fab!(:private_event) do
+          Fabricate(
+            :event,
+            post: public_post,
+            status: DiscoursePostEvent::Event.statuses[:private],
+            raw_invitees: [restricted_group.name],
+          )
+        end
+
+        before do
+          private_event.create_invitees(
+            [{ user_id: invitee_user.id, status: Invitee.statuses[:going] }],
+          )
+        end
+
+        it "does not disclose private event invitees to uninvited users" do
+          sign_in(viewer)
+
+          get "/discourse-post-event/events/#{private_event.id}/invitees.json"
+
+          expect(response.body).not_to include(invitee_user.username)
+          expect(response.status).to eq(403)
+        end
+      end
+
       context "when params are included" do
         let(:invitee1) { Fabricate(:user, username: "Francis", name: "Francis") }
         let(:invitee2) { Fabricate(:user, username: "Francisco", name: "Francisco") }
@@ -149,6 +187,19 @@ module DiscoursePostEvent
         expect(Invitee).to exist(user_id: other_user.id, status: Invitee.statuses[:interested])
       end
 
+      it "persists the recurring flag when joining" do
+        post "/discourse-post-event/events/#{event.id}/invitees.json",
+             params: {
+               invitee: {
+                 status: "going",
+                 recurring: true,
+               },
+             }
+
+        expect(response.status).to eq(200)
+        expect(Invitee).to exist(user_id: user.id, recurring: true)
+      end
+
       it "returns 403 when non-staff tries to invite themselves to a private event" do
         private_event = Fabricate(:event, post: post_1, status: "private")
         other_user = Fabricate(:user)
@@ -224,6 +275,19 @@ module DiscoursePostEvent
 
         expect(response.status).to eq(200)
         expect(invitee.reload.status).to eq(Invitee.statuses[:interested])
+      end
+
+      it "persists the recurring flag when updating" do
+        put "/discourse-post-event/events/#{event.id}/invitees/#{invitee.id}.json",
+            params: {
+              invitee: {
+                status: "going",
+                recurring: true,
+              },
+            }
+
+        expect(response.status).to eq(200)
+        expect(invitee.reload.recurring).to eq(true)
       end
 
       it "returns 404 when invitee does not exist" do
@@ -383,6 +447,38 @@ module DiscoursePostEvent
     it "requires login for destroy" do
       delete "/discourse-post-event/events/#{event.id}/invitees/#{invitee.id}.json"
       expect(response.status).to eq(403)
+    end
+
+    context "for a private event in a public topic" do
+      fab!(:private_event_post) { Fabricate(:post, user: admin_user, topic: topic) }
+      fab!(:restricted_group) do
+        Fabricate(
+          :group,
+          visibility_level: Group.visibility_levels[:owners],
+          members_visibility_level: Group.visibility_levels[:owners],
+        ).tap { |group| group.add(invitee_user) }
+      end
+      fab!(:private_event) do
+        Fabricate(
+          :event,
+          post: private_event_post,
+          status: DiscoursePostEvent::Event.statuses[:private],
+          raw_invitees: [restricted_group.name],
+        )
+      end
+
+      before do
+        private_event.create_invitees(
+          [{ user_id: invitee_user.id, status: DiscoursePostEvent::Invitee.statuses[:going] }],
+        )
+      end
+
+      it "does not disclose private event invitees to anonymous viewers" do
+        get "/discourse-post-event/events/#{private_event.id}/invitees.json"
+
+        expect(response.body).not_to include(invitee_user.username)
+        expect(response.status).to eq(403)
+      end
     end
   end
 end

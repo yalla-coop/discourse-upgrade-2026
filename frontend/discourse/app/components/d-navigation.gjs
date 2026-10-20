@@ -9,20 +9,20 @@ import BreadCrumbs from "discourse/components/bread-crumbs";
 import BulkSelectToggle from "discourse/components/bulk-select-toggle";
 import CategoryNotificationsTracking from "discourse/components/category-notifications-tracking";
 import CreateTopicButton from "discourse/components/create-topic-button";
-import DButton from "discourse/components/d-button";
 import NavigationBar from "discourse/components/navigation-bar";
 import PluginOutlet from "discourse/components/plugin-outlet";
 import TagInfoButton from "discourse/components/tag-info-button";
 import TagNotificationsTracking from "discourse/components/tag-notifications-tracking";
 import TopicDismissButtons from "discourse/components/topic-dismiss-buttons";
 import lazyHash from "discourse/helpers/lazy-hash";
-import { setting } from "discourse/lib/computed";
 import { filterTypeForMode } from "discourse/lib/filter-mode";
 import { NotificationLevels } from "discourse/lib/notification-levels";
 import { applyValueTransformer } from "discourse/lib/transformer";
 import NavItem from "discourse/models/nav-item";
 import CategoriesAdminDropdown from "discourse/select-kit/components/categories-admin-dropdown";
+import TagCategoryAdminDropdown from "discourse/select-kit/components/tag-category-admin-dropdown";
 import { and, gt } from "discourse/truth-helpers";
+import DButton from "discourse/ui-kit/d-button";
 
 @tagName("")
 export default class DNavigation extends Component {
@@ -31,20 +31,42 @@ export default class DNavigation extends Component {
   @service siteSettings;
   @service currentUser;
 
-  @setting("fixed_category_positions") fixedCategoryPositions;
-
-  get canEditTags() {
-    return this.currentUser?.canEditTags;
+  @computed("siteSettings.fixed_category_positions")
+  get fixedCategoryPositions() {
+    return this.siteSettings.fixed_category_positions;
   }
 
+  @computed("category", "site.shared_drafts_category_id", "site.desktopView")
   get createTopicLabel() {
     const defaultKey = "topic.create";
+    let value = this.site.desktopView ? defaultKey : "";
 
-    return applyValueTransformer(
-      "create-topic-label",
-      this.site.desktopView ? defaultKey : "",
-      { site: this.site, defaultKey }
-    );
+    if (
+      value === defaultKey &&
+      this.site.shared_drafts_category_id &&
+      this.category?.id === this.site.shared_drafts_category_id
+    ) {
+      value = "topic.create_shared_draft";
+    }
+
+    return applyValueTransformer("create-topic-label", value, {
+      site: this.site,
+      defaultKey,
+      category: this.category,
+      currentUser: this.currentUser,
+    });
+  }
+
+  @computed("category")
+  get createTopicIcon() {
+    const defaultIcon = "far-pen-to-square";
+
+    return applyValueTransformer("create-topic-icon", defaultIcon, {
+      site: this.site,
+      defaultIcon,
+      category: this.category,
+      currentUser: this.currentUser,
+    });
   }
 
   get showBulkSelectInNavControls() {
@@ -124,12 +146,36 @@ export default class DNavigation extends Component {
     return this.category?.can_edit;
   }
 
-  @computed("additionalTags", "category", "tag.name")
-  get showToggleInfo() {
-    if (this.siteSettings.experimental_tag_settings_page) {
-      return this.currentUser;
-    }
-    return !this.additionalTags && !this.category && this.tag?.name !== "none";
+  @computed("tag", "tag.name", "additionalTags", "currentUser.canEditTags")
+  get showTagEdit() {
+    return (
+      this.tag &&
+      this.tag.name !== "none" &&
+      !this.additionalTags &&
+      this.currentUser?.canEditTags
+    );
+  }
+
+  @computed("toggleTagInfo", "tag", "tag.name", "additionalTags", "category")
+  get showTagInfoButton() {
+    return (
+      this.toggleTagInfo &&
+      this.tag &&
+      this.tag.name !== "none" &&
+      !this.additionalTags &&
+      !this.category
+    );
+  }
+
+  @computed(
+    "category.can_edit",
+    "tag",
+    "tag.name",
+    "additionalTags",
+    "currentUser.canEditTags"
+  )
+  get showCombinedAdminDropdown() {
+    return this.category?.can_edit && this.showTagEdit;
   }
 
   @computed(
@@ -141,7 +187,7 @@ export default class DNavigation extends Component {
     "skipCategoriesNavItem"
   )
   get navItems() {
-    return NavItem.buildList(this.category, {
+    const items = NavItem.buildList(this.category, {
       filterType: this.filterType,
       noSubcategories: this.noSubcategories,
       currentRouteQueryParams: this.router?.currentRoute?.queryParams,
@@ -149,6 +195,21 @@ export default class DNavigation extends Component {
       siteSettings: this.siteSettings,
       skipCategoriesNavItem: this.skipCategoriesNavItem,
     });
+
+    return applyValueTransformer("navigation-items", items, {
+      category: this.category,
+      tag: this.tag,
+      filterType: this.filterType,
+    });
+  }
+
+  @computed("showResetNew", "filterType", "currentUser.unified_new_enabled")
+  get showNewDismissCombo() {
+    return (
+      this.showResetNew &&
+      this.filterType === "new" &&
+      this.currentUser.unified_new_enabled
+    );
   }
 
   @computed("filterType")
@@ -193,13 +254,35 @@ export default class DNavigation extends Component {
   }
 
   @action
+  handleTagCategoryAdmin(actionId) {
+    switch (actionId) {
+      case "editCategory":
+        this.editCategory();
+        break;
+      case "editTag":
+        this.router.transitionTo(
+          "tag.edit.tab",
+          this.tag.slug,
+          this.tag.id,
+          "general"
+        );
+        break;
+    }
+  }
+
+  @action
   clickCreateTopicButton() {
     this.createTopic();
   }
 
   @action
-  clickTagInfo() {
-    this.toggleInfo();
+  editTag() {
+    this.router.transitionTo(
+      "tag.edit.tab",
+      this.tag.slug,
+      this.tag.id,
+      "general"
+    );
   }
 
   <template>
@@ -241,6 +324,7 @@ export default class DNavigation extends Component {
         @selectedTopics={{@bulkSelectHelper.selected}}
         @model={{@model}}
         @showResetNew={{@showResetNew}}
+        @showNewDismissCombo={{this.showNewDismissCombo}}
         @showDismissRead={{@showDismissRead}}
         @resetNew={{@resetNew}}
         @dismissRead={{@dismissRead}}
@@ -267,33 +351,41 @@ export default class DNavigation extends Component {
         {{/if}}
       {{/if}}
 
-      {{#if (and this.category this.showCategoryEdit)}}
-        <DButton
-          @action={{this.editCategory}}
-          @icon="wrench"
-          @title="category.edit_title"
-          class="btn-default edit-category"
+      {{#if this.showCombinedAdminDropdown}}
+        <TagCategoryAdminDropdown
+          @category={{this.category}}
+          @tag={{this.tag}}
+          @onChange={{this.handleTagCategoryAdmin}}
+          @options={{hash triggerOnChangeOnTab=false}}
         />
+      {{else}}
+        {{#if (and this.category this.showCategoryEdit)}}
+          <DButton
+            @action={{this.editCategory}}
+            @icon="wrench"
+            @title="category.edit_title"
+            class="btn-default edit-category"
+          />
+        {{/if}}
+
+        {{#if this.showTagEdit}}
+          <DButton
+            @action={{this.editTag}}
+            @icon="wrench"
+            @ariaLabel="tagging.edit"
+            @title="tagging.edit"
+            id="edit-tag"
+            class="btn-default"
+          />
+        {{/if}}
       {{/if}}
 
-      {{#if this.tag}}
-        {{#if this.showToggleInfo}}
-          {{#if this.siteSettings.experimental_tag_settings_page}}
-            <TagInfoButton
-              @tag={{this.tag}}
-              @currentUser={{this.currentUser}}
-            />
-          {{else}}
-            <DButton
-              @icon={{if this.canEditTags "wrench" "circle-info"}}
-              @ariaLabel={{if this.canEditTags "tagging.edit" "tagging.info"}}
-              @title={{if this.canEditTags "tagging.edit" "tagging.info"}}
-              @action={{this.clickTagInfo}}
-              id="show-tag-info"
-              class="btn-default"
-            />
-          {{/if}}
-        {{/if}}
+      {{#if this.showTagInfoButton}}
+        <TagInfoButton
+          @toggleInfo={{@toggleTagInfo}}
+          @active={{@showTagInfo}}
+          @loading={{@loadingTagInfo}}
+        />
       {{/if}}
 
       <PluginOutlet
@@ -312,6 +404,7 @@ export default class DNavigation extends Component {
         @canCreateTopic={{this.canCreateTopic}}
         @action={{this.clickCreateTopicButton}}
         @label={{this.createTopicLabel}}
+        @icon={{this.createTopicIcon}}
         @btnTypeClass={{if
           this.siteSettings.modernize_foundation_theme
           "btn-primary"

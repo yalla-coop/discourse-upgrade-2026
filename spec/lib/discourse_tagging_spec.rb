@@ -1066,6 +1066,36 @@ RSpec.describe DiscourseTagging do
   end
 
   describe "tag_topic_by_names" do
+    context "with a tag restricted to other categories" do
+      fab!(:allowed_category, :category)
+      fab!(:other_category, :category)
+      fab!(:restricted_tag_group) { Fabricate(:tag_group, tag_names: ["events"]) }
+      fab!(:topic_in_other_category) { Fabricate(:topic, category: other_category) }
+
+      before do
+        CategoryTagGroup.create!(category: allowed_category, tag_group: restricted_tag_group)
+      end
+
+      it "names the offending category instead of a generic error, even for admins" do
+        valid =
+          DiscourseTagging.tag_topic_by_names(
+            topic_in_other_category,
+            Guardian.new(admin),
+            ["events"],
+          )
+
+        expect(valid).to eq(false)
+        expect(topic_in_other_category.errors[:base]&.first).to eq(
+          I18n.t(
+            "tags.forbidden.tag_not_allowed_in_category",
+            count: 1,
+            tags: "events",
+            category: other_category.name,
+          ),
+        )
+      end
+    end
+
     context "with visible but restricted tags" do
       fab!(:topic)
 
@@ -1851,7 +1881,7 @@ RSpec.describe DiscourseTagging do
         Tag.new(name: "math=fun").save(validate: false)
         expect(
           described_class.tags_for_saving(%w[math=fun fun*2@gmail.com], guardian).try(:sort),
-        ).to eq(%w[math=fun fun2gmailcom].sort)
+        ).to eq(%w[math=fun fun2gmail.com].sort)
       end
     end
 
@@ -1865,6 +1895,11 @@ RSpec.describe DiscourseTagging do
 
       it "removes zero-width spaces" do
         expect(DiscourseTagging.clean_tag("hel\ufefflo")).to eq("hello")
+      end
+
+      it "allows periods in the middle of tag names" do
+        expect(DiscourseTagging.clean_tag("node.js")).to eq("node.js")
+        expect(DiscourseTagging.clean_tag(".node.js.")).to eq("node.js")
       end
 
       it "removes multiple consecutive dashes" do

@@ -34,9 +34,31 @@ RSpec.describe ContentSecurityPolicy do
       expect(script_srcs).to include("'strict-dynamic'")
     end
 
-    it "does not set worker-src" do
+    it "allows wasm compilation" do
+      script_srcs = parse(policy)["script-src"]
+      expect(script_srcs).to include("'wasm-unsafe-eval'")
+    end
+
+    it "sets worker-src to self and blob:" do
       worker_src = parse(policy)["worker-src"]
-      expect(worker_src).to eq(nil)
+      expect(worker_src).to contain_exactly("'self'", "blob:")
+    end
+
+    it "includes the CDN asset host in worker-src so the worker chunk can be imported" do
+      set_cdn_url "https://cdn.example.com"
+      worker_src = parse(policy)["worker-src"]
+      expect(worker_src).to contain_exactly("'self'", "blob:", "https://cdn.example.com/assets/")
+    end
+
+    it "includes the s3 asset CDN host in worker-src" do
+      global_setting :s3_bucket, "test_bucket"
+      global_setting :s3_region, "ap-australia"
+      global_setting :s3_access_key_id, "123"
+      global_setting :s3_secret_access_key, "123"
+      global_setting :s3_cdn_url, "https://s3cdn.example.com"
+
+      worker_src = parse(policy)["worker-src"]
+      expect(worker_src).to contain_exactly("'self'", "blob:", "https://s3cdn.example.com/assets/")
     end
   end
 
@@ -89,7 +111,8 @@ RSpec.describe ContentSecurityPolicy do
 
     it "can extend frame_ancestors" do
       SiteSetting.content_security_policy_frame_ancestors = true
-      plugin = plugin_class.new(nil, "#{Rails.root}/spec/fixtures/plugins/csp_extension/plugin.rb")
+      plugin =
+        plugin_class.new(nil, "#{Rails.root.join("spec/fixtures/plugins/csp_extension/plugin.rb")}")
 
       plugin.activate!
       Discourse.plugins << plugin

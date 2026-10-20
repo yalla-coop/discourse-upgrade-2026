@@ -29,6 +29,8 @@ IN=(docker exec -u discourse:discourse -w /src -e LOAD_PLUGINS=1 --env-file "$RE
 
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
+# The web server: bin/pitchfork from Discourse 2026.3 (bin/unicorn was removed in
+# 2026.6), bin/unicorn before. Both read the UNICORN_* settings.
 up() {
   if ! docker info >/dev/null 2>&1; then
     echo "Docker isn't running. Open Docker Desktop and try again."
@@ -47,7 +49,7 @@ up() {
     say "Starting the Discourse server inside $CONTAINER (about 30 seconds)"
     docker exec -d -u discourse:discourse -w /src -e LOAD_PLUGINS=1 -e UNICORN_PORT=3000 -e UNICORN_WORKERS=2 -e UNICORN_BIND_ALL=true \
       --env-file "$REPO/deploy/forward-trust.env" \
-      "$CONTAINER" bash -lc 'bin/unicorn > log/contract-server.log 2>&1'
+      "$CONTAINER" bash -lc 'if [ -x bin/pitchfork ]; then s=bin/pitchfork; else s=bin/unicorn; fi; $s > log/contract-server.log 2>&1'
     for _ in $(seq 1 45); do
       sleep 2
       docker exec "$CONTAINER" curl -s -o /dev/null -f http://localhost:3000/session/csrf.json && break

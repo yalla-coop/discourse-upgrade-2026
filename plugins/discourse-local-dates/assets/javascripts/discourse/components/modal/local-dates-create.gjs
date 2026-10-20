@@ -3,24 +3,25 @@ import Component from "@ember/component";
 import { fn, hash } from "@ember/helper";
 import { on } from "@ember/modifier";
 import EmberObject, { action, computed } from "@ember/object";
-import { notEmpty } from "@ember/object/computed";
 import { schedule } from "@ember/runloop";
 import { trustHTML } from "@ember/template";
+import { isEmpty } from "@ember/utils";
 import { tagName } from "@ember-decorators/component";
 import { observes } from "@ember-decorators/object";
-import CalendarDateTimeInput from "discourse/components/calendar-date-time-input";
-import DButton from "discourse/components/d-button";
-import DModal from "discourse/components/d-modal";
-import TextField from "discourse/components/text-field";
-import icon from "discourse/helpers/d-icon";
-import { propertyNotEqual } from "discourse/lib/computed";
+import AdvancedModeToggle from "discourse/components/advanced-mode-toggle";
 import { debounce } from "discourse/lib/decorators";
 import { INPUT_DELAY } from "discourse/lib/environment";
 import { applyLocalDates } from "discourse/lib/local-dates";
+import { deepEqual } from "discourse/lib/object";
 import { cook } from "discourse/lib/text";
 import ComboBox from "discourse/select-kit/components/combo-box";
 import MultiSelect from "discourse/select-kit/components/multi-select";
 import TimezoneInput from "discourse/select-kit/components/timezone-input";
+import DButton from "discourse/ui-kit/d-button";
+import DCalendarDateTimeInput from "discourse/ui-kit/d-calendar-date-time-input";
+import DModal from "discourse/ui-kit/d-modal";
+import DTextField from "discourse/ui-kit/d-text-field";
+import dIcon from "discourse/ui-kit/helpers/d-icon";
 import { i18n } from "discourse-i18n";
 import generateDateMarkup from "discourse/plugins/discourse-local-dates/lib/local-date-markup-generator";
 
@@ -41,11 +42,6 @@ export default class LocalDatesCreate extends Component {
   fromSelected = null;
   toSelected = null;
 
-  @notEmpty("date") fromFilled;
-  @notEmpty("toDate") toFilled;
-  @propertyNotEqual("currentUserTimezone", "options.timezone")
-  timezoneIsDifferentFromUserTimezone;
-
   init() {
     super.init(...arguments);
 
@@ -59,6 +55,21 @@ export default class LocalDatesCreate extends Component {
       timezone: this.currentUserTimezone,
       date: moment().format(this.dateFormat),
     });
+  }
+
+  @computed("date")
+  get fromFilled() {
+    return !isEmpty(this.date);
+  }
+
+  @computed("toDate")
+  get toFilled() {
+    return !isEmpty(this.toDate);
+  }
+
+  @computed("currentUserTimezone", "options.timezone")
+  get timezoneIsDifferentFromUserTimezone() {
+    return !deepEqual(this.currentUserTimezone, this.options?.timezone);
   }
 
   didInsertElement() {
@@ -281,13 +292,6 @@ export default class LocalDatesCreate extends Component {
     return generateDateMarkup(fromDateTime, options, isRange, toDateTime);
   }
 
-  @computed("advancedMode")
-  get toggleModeBtnLabel() {
-    return this.advancedMode
-      ? "discourse_local_dates.create.form.simple_mode"
-      : "discourse_local_dates.create.form.advanced_mode";
-  }
-
   @computed("computedConfig.{from,to,options}", "options", "isValid", "isRange")
   get markup() {
     let text;
@@ -408,7 +412,7 @@ export default class LocalDatesCreate extends Component {
     <DModal
       @title={{i18n "discourse_local_dates.title"}}
       @closeModal={{@closeModal}}
-      class="discourse-local-dates-create-modal -large"
+      class="discourse-local-dates-create-modal --large"
     >
       <:body>
         <div class="form">
@@ -435,7 +439,7 @@ export default class LocalDatesCreate extends Component {
                   {{if this.fromSelected 'is-selected'}}
                   {{if this.fromFilled 'is-filled'}}"
               >
-                {{icon "calendar-days"}}
+                {{dIcon "calendar-days"}}
                 <DButton
                   @action={{this.focusFrom}}
                   @translatedLabel={{this.formattedFrom}}
@@ -450,7 +454,7 @@ export default class LocalDatesCreate extends Component {
                   {{if this.toSelected 'is-selected'}}
                   {{if this.toFilled 'is-filled'}}"
               >
-                {{icon "calendar-days"}}
+                {{dIcon "calendar-days"}}
                 <DButton
                   @action={{this.focusTo}}
                   @translatedLabel={{this.formattedTo}}
@@ -475,7 +479,7 @@ export default class LocalDatesCreate extends Component {
             </div>
 
             <div class="picker-panel">
-              <CalendarDateTimeInput
+              <DCalendarDateTimeInput
                 @datePickerId="local-date-create-form"
                 @date={{this.selectedDate}}
                 @time={{this.selectedTime}}
@@ -554,11 +558,11 @@ export default class LocalDatesCreate extends Component {
                     href="https://momentjs.com/docs/#/parsing/string-format/"
                     rel="noopener noreferrer"
                   >
-                    {{icon "circle-question"}}
+                    {{dIcon "circle-question"}}
                   </a>
                 </p>
                 <div class="controls">
-                  <TextField @value={{this.format}} class="format-input" />
+                  <DTextField @value={{this.format}} class="format-input" />
                 </div>
               </div>
               <div class="control-group">
@@ -603,11 +607,9 @@ export default class LocalDatesCreate extends Component {
           class="btn-flat"
         />
 
-        <DButton
-          @action={{this.toggleAdvancedMode}}
-          @icon="gear"
-          @label={{this.toggleModeBtnLabel}}
-          class="btn-default advanced-mode-btn"
+        <AdvancedModeToggle
+          @active={{this.advancedMode}}
+          @onToggle={{this.toggleAdvancedMode}}
         />
       </:footer>
     </DModal>

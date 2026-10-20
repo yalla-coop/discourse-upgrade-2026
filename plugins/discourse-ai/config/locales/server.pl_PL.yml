@@ -39,8 +39,11 @@ pl_PL:
         title: Oceniaj posty za pomocą sztucznej inteligencji
         description: "Oceniaj posty przy użyciu dużego modelu językowego"
         flagged_post: |
-          <div>Odpowiedź modelu:</div>
-          <p>%{llm_response}</p>
+          %{score_reason}
+          %{response}
+        flagged_post_response: |
+          <p>Odpowiedź modelu: %{llm_response}</p>
+        flagged_post_score_reason: |
           <b>Wyzwalane przez regułę <a href="%{base_path}/admin/plugins/automation/%{automation_id}">%{automation_name}</a> .</b>
         notify_author_pm:
           subject: "Twój post został tymczasowo usunięty w celu sprawdzenia"
@@ -58,6 +61,7 @@ pl_PL:
         description: "Automatycznie taguj tematy za pomocą AI"
   site_settings:
     discourse_ai_enabled: "Włącz wtyczkę Discourse AI."
+    enable_ai_bot_starred_conversations: "Zezwól użytkownikom na wyróżnianie rozmów botów AI i wyświetlanie ich w sekcji oznaczonej gwiazdką na pasku bocznym."
     ai_default_llm_model: "Domyślny model LLM do wykorzystania we wszystkich funkcjach AI"
     ai_artifact_security: "System artefaktów AI generuje ramki IFRAME z kodem, który można uruchomić. Tryb ścisły wymusza dodatkowe kliknięcie, aby uruchomić kod. Tryb łagodny uruchamia kod natychmiast. Tryb hybrydowy pozwala użytkownikowi na podanie danych w trybie artefakt-sztuczna inteligencja-autorun, aby wyświetlić je natychmiast. Tryb wyłączony wyłącza system artefaktów."
     ai_toxicity_enabled: "Włącz moduł toksyczności."
@@ -76,7 +80,12 @@ pl_PL:
     ai_sentiment_enabled: "Włącz moduł sentymentu."
     ai_sentiment_inference_service_api_endpoint: "Adres URL, pod którym działa interfejs API dla modułu sentymentu"
     ai_sentiment_inference_service_api_key: "Klucz dla API sentymentu"
-    ai_sentiment_models: "Modele używane do wnioskowania. Sentyment klasyfikuje post w przestrzeni pozytywnej/neutralnej/negatywnej. Emocje klasyfikuje się w przestrzeni gniewu/wstrętu/strachu/radości/neutralności/smutku/zaskoczenia."
+    ai_sentiment_model_configs: "Punkty końcowe modelu klasyfikacji do wykorzystania we wnioskowaniu. Odczucie klasyfikuje wpisy jako pozytywne, neutralne lub negatywne. Emocja klasyfikuje wpisy według obsługiwanych etykiet emocji."
+    ai_sentiment_models: "Punkty końcowe modelu klasyfikacji do wykorzystania we wnioskowaniu. Odczucie klasyfikuje wpisy jako pozytywne, neutralne lub negatywne. Emocja klasyfikuje posty według obsługiwanych etykiet emocji."
+    ai_sentiment_sentiment_classification_strategy: "Backend klasyfikacji odczuć."
+    ai_sentiment_sentiment_agent: "Agent używany do klasyfikowania odczuć, gdy zapleczem odczuć jest agent."
+    ai_sentiment_emotion_classification_strategy: "Backend klasyfikacji emocji."
+    ai_sentiment_emotion_agent: "Agent do wykorzystania w klasyfikacji emocji, gdy zapleczem emocji jest agent."
     ai_nsfw_detection_enabled: "Włącz moduł NSFW."
     ai_nsfw_inference_service_api_endpoint: "Adres URL, pod którym działa interfejs API dla modułu NSFW"
     ai_nsfw_inference_service_api_key: "Klucz dla NSFW API"
@@ -112,6 +121,8 @@ pl_PL:
     ai_embeddings_semantic_related_age_penalty: "Zastosuj wykładniczą karę wiekową do tematów w wynikach wyszukiwania semantycznego. 0,0 = brak kary, 0,3 = delikatne nastawienie do ostatnio aktywnych treści, 1,0+ = silne nastawienie do niedawno aktywnych treści."
     ai_embeddings_semantic_related_age_time_scale: "Skala czasowa w dniach obliczania kary wiekowej. Tematy nieaktywne przez wiele dni otrzymują ~ 50% kary z karą = 1,0. Użyj 365 dla skali rocznej, 90 dla skali kwartalnej."
     ai_embeddings_per_post_enabled: Generuj osadzenia dla każdego wpisu
+    ai_admin_dashboard_enabled: "Włącz funkcje AI w panelu administracyjnym."
+    ai_admin_dashboard_highlights_agent: "Agent wyjaśniający istotne zmiany w społeczności w panelu administracyjnym."
     ai_summarization_enabled: "Włącz funkcję podsumowania"
     ai_summarization_agent: "Agent do wykorzystania w funkcji podsumowania"
     ai_pm_summarization_allowed_groups: "Grupy mogą tworzyć i przeglądać podsumowania w wiadomościach prywatnych."
@@ -126,6 +137,7 @@ pl_PL:
     ai_bot_add_to_header: "Wyświetl przycisk w nagłówku, aby rozpocząć wiadomość prywatną z botem AI"
     ai_bot_add_to_community_section: "Wyświetl link w sekcji społeczności na pasku bocznym, aby rozpocząć prywatną wiadomość z botem AI"
     ai_bot_github_access_token: "Token dostępu GitHub do użytku z narzędziami GitHub AI (wymagany do obsługi wyszukiwania)"
+    ai_bot_enable_docked_composer: "Włącz dokowany kompozytor w stylu czatu dla konwersacji botów AI zamiast standardowego kompozytora pływającego."
     ai_discover_enabled: "Włącz funkcję wyszukiwania odkrywczego"
     ai_discover_agent: "Agent do wykorzystania w funkcji wyszukiwania odkrywczego"
     ai_google_custom_search_api_key: "Klucz dla Google Custom Search API, zobacz: https://developers.google.com/custom-search"
@@ -137,11 +149,13 @@ pl_PL:
     ai_discord_search_agent: "Agent używany do wyszukiwania Discord."
     ai_discord_allowed_guilds: "Gildie (serwery) Discord, na których bot może wyszukiwać"
     ai_translation_enabled: "Włącz funkcję tłumaczenia AI"
-    ai_translation_backfill_limit_to_public_content: "Po włączeniu tej opcji tłumaczone będą tylko treści z kategorii publicznych. Po wyłączeniu tej opcji do tłumaczenia będą wysyłane również treści z prywatnych wiadomości grupowych i kategorii."
+    ai_translation_excluded_categories: "Treści w tych kategoriach nie będą tłumaczone. Pozostaw puste, aby przetłumaczyć treści we wszystkich kategoriach, w tym w kategoriach prywatnych."
+    ai_translation_personal_messages: "Kontroluje, które prywatne wiadomości są tłumaczone. 'none' wyłącza tłumaczenie wiadomości prywatnych. 'group' tłumaczy tylko wiadomości prywatne grupy. 'all' tłumaczy wszystkie wiadomości prywatne."
     ai_translation_include_bot_content: "Po włączeniu tej opcji treści tworzone przez boty (identyfikatory użytkowników poniżej 0) będą również wysyłane do tłumaczenia."
     ai_translation_max_post_length: "Maksymalna liczba znaków w poście do przetłumaczenia. Posty dłuższe niż ta liczba nie będą tłumaczone."
     ai_translation_backfill_max_age_days: "Maksymalny wiek posta i tematu do przetłumaczenia. Posty i tematy starsze niż ten wiek nie będą tłumaczone. Wartość 0 wyłącza uzupełnianie, ale nie wyłącza tłumaczenia nowych postów."
     ai_translation_backfill_hourly_rate: "Liczba wpisów i tematów do przetłumaczenia na godzinę podczas operacji uzupełniania. Ustaw na 0, aby wyłączyć automatyczne uzupełnianie tłumaczeń dla istniejących treści."
+    ai_translation_backfill_parallel_jobs: "Liczba równoległych zadań postlokalizacyjnych uruchamianych w każdym cyklu uzupełniania. Wyższe wartości zwiększają przepustowość, ale zużywają więcej zasobów."
     ai_usage_rollup_after_days: "Liczba dni przechowywania statystyk użycia AI dla każdego żądania przed ich przekształceniem w dzienne agregaty. Ustaw na 0, aby wyłączyć agregacje."
     ai_audit_logs_purge_after_days: "Usuń dzienniki audytu API AI starsze niż podana liczba dni. Domyślnie około 6 miesięcy. Ustaw na 0, aby zachować je na czas nieokreślony."
   reviewables:
@@ -256,6 +270,12 @@ pl_PL:
       change_description: "Zmień opis"
       copied: "Skopiowano do schowka"
     unknown_model: "Nieznany model AI"
+    discourse_workflows:
+      ai_agent:
+        errors:
+          locked_default_llm_missing: "Agent „%{agent}” jest zablokowany na swoim domyślnym LLM, ale nie skonfigurowano żadnego prawidłowego domyślnego LLM"
+          llm_not_found: "Nie znaleziono modelu LLM o identyfikatorze %{llm_model_id}"
+          no_llm_configured: "Nie skonfigurowano LLM dla agenta „%{agent}”. Wybierz model LLM lub skonfiguruj domyślny LLM agenta/lokacji."
     tools:
       custom_name: "%{name} (niestandardowe)"
       presets:
@@ -318,10 +338,16 @@ pl_PL:
         oauth_token_exchange_failed: "Wymiana tokenów OAuth nie powiodła się ze statusem %{status}."
         oauth_https_required: "OAuth wymaga, aby Twoja witryna była obsługiwana za pomocą protokołu HTTPS."
         oauth_callback_failed: "Nieudane połączenie OAuth: %{message}"
+        oauth_refresh_token_required: "Serwer autoryzacji OAuth nie zwrócił tokena odświeżania. Dostosuj zaawansowane opcje OAuth i ponownie połącz się z tym serwerem MCP."
         oauth_client_metadata_public_https_required: "Rejestracja dokumentu metadanych klienta wymaga publicznego adresu URL witryny HTTPS. Aktualny adres URL metadanych klienta: %{url}"
         oauth_registration_endpoint_missing: "Serwer autoryzacji OAuth nie rozgłasza punktu końcowego rejestracji."
+        oauth_manual_client_registration_required: "Serwer autoryzacji OAuth %{issuer} nie rozgłasza dynamicznej rejestracji klienta. Przełącz ten serwer MCP na ręczne poświadczenia klienta i podaj zarejestrowany identyfikator klienta OAuth."
+        oauth_client_secret_required: "Serwer autoryzacji OAuth %{issuer} wymaga uwierzytelnienia klienta za pomocą tokena końcowego (%{methods}). Skonfiguruj ręczne dane uwierzytelniające klienta za pomocą tajnego klucza klienta."
+        oauth_token_endpoint_auth_method_unsupported: "Serwer autoryzacji OAuth %{issuer} rozgłasza tylko nieobsługiwane metody uwierzytelniania klienta za pomocą tokena (%{methods}). Ten serwer MCP obecnie obsługuje metody none, client_secret_basic i client_secret_post."
         oauth_client_registration_failed: "Nie udało się zarejestrować dynamicznego klienta. Status: %{status}."
         oauth_client_registration_failed_no_id: "Dynamiczna rejestracja klienta powiodła się, ale nie zwrócono identyfikatora klienta."
+      oauth_authorization_params_invalid: "Parametry autoryzacji OAuth muszą być obiektem JSON."
+      oauth_token_params_invalid: "Parametry tokena OAuth muszą być obiektem JSON."
     ai_helper:
       errors:
         completion_request_failed: "Coś poszło nie tak podczas próby przedstawienia sugestii. Spróbuj ponownie."
@@ -370,6 +396,11 @@ pl_PL:
         cannot_delete_system_agent: "Nie można usunąć agentów systemowych, zamiast tego należy je wyłączyć"
         cannot_edit_system_agent: "Można zmienić tylko nazwy agentów systemowych, nie można edytować narzędzi ani komunikatów systemowych, zamiast tego należy je wyłączyć i utworzyć kopię"
         cannot_have_duplicate_tools: "Nie można mieć duplikatów narzędzi"
+        native_tool_requires_forced_llm: "Narzędzia natywne dostawcy wymagają domyślnego LLM z włączoną opcją „Wymuś domyślny LLM”"
+        native_tool_unsupported_by_llm: "Wybrany domyślny program LLM nie obsługuje żadnego z włączonych narzędzi natywnych dostawcy"
+        admin_dashboard_highlights:
+          name: "Najważniejsze informacje na temat panelu administracyjnego"
+          description: "Wyświetla krótki odczyt wyświetlany na górze panelu administracyjnego, wyjaśniając, co się zmieniło i na co należy zwrócić uwagę w tym okresie"
         github_helper:
           name: "Pomocnik GitHub"
           description: "Bot AI specjalizujący się w pomocy w zadaniach i pytaniach związanych z GitHubem"
@@ -446,7 +477,7 @@ pl_PL:
           name: "Tłumacz"
           description: "Domyślny agent obsługujący funkcję tłumacza pomocnika"
         image_captioner:
-          name: "Podpisy pod obrazkami"
+          name: "Podpisy pod obrazami"
           description: "Domyślny agent obsługujący funkcję podpisu obrazu pomocnika"
         locale_detector:
           name: "Detektor ustawień regionalnych"
@@ -475,6 +506,12 @@ pl_PL:
         chat_thread_titler:
           name: "Tytułowanie wątku czatu"
           description: "Domyślny agent obsługujący automatyczne generowanie tytułów wątków czatu"
+        sentiment_classifier:
+          name: "Klasyfikator odczuć"
+          description: "Domyślny agent zasilający klasyfikację odczuć"
+        emotion_classifier:
+          name: "Klasyfikator emocji"
+          description: "Domyślny agent obsługujący klasyfikację emocji"
       topic_not_found: "Podsumowanie niedostępne, nie znaleziono tematu!"
       summarizing: "Podsumowanie tematu"
       searching: "Wyszukiwanie: '%{query}'"
@@ -531,6 +568,13 @@ pl_PL:
           flag_type:
             name: "Typ flagi"
             description: "Kontroluje, czy wpis jest sprawdzany, ukrywany, usuwany lub traktowany jako spam."
+      native_tools:
+        web_search:
+          name: "Wyszukiwanie w sieci (natywne)"
+          help: "Umożliwia modelowi przeszukiwanie sieci przy użyciu wbudowanej wyszukiwarki dostawcy, gdy agent jest zmuszony do korzystania z obsługiwanego LLM."
+        web_fetch:
+          name: "Pobieranie z sieci (natywne)"
+          help: "Umożliwia modelowi otwieranie i odczytywanie stron internetowych przy użyciu wbudowanego dostępu do sieci dostawcy, gdy agent jest wymuszony przez obsługiwany protokół LLM."
       tool_summary:
         read_artifact: "Przeczytaj artefakt sieciowy"
         search_uploaded_documents: "Wyszukaj przesłane dokumenty"
@@ -557,6 +601,7 @@ pl_PL:
         grant_badge: "Przyznaj odznakę"
         list_reviewables: "Kolejka do przeglądu listy"
         perform_reviewable_action: "Działanie kolejki przeglądu"
+        add_reviewable_note: "Dodaj notatkę do kolejki przeglądu"
         assign: "Przypisz temat"
         mark_as_solved: "Oznacz jako rozwiązany"
         search: "Szukaj"
@@ -602,6 +647,7 @@ pl_PL:
         grant_badge: "Przyznaj użytkownikowi odznakę"
         list_reviewables: "Wyświetl listę oczekujących na przegląd elementów w kolejce z opcjonalnym filtrowaniem"
         perform_reviewable_action: "Wykonaj działanie w kolejce przeglądu"
+        add_reviewable_note: "Dodaj notatkę do elementu w kolejce przeglądu"
         assign: "Przypisz lub usuń przypisanie tematu użytkownikowi lub grupie"
         mark_as_solved: "Oznacz lub odznacz wpis jako zaakceptowane rozwiązanie"
         search: "Przeszukaj wszystkie publiczne tematy na forum"
@@ -649,6 +695,7 @@ pl_PL:
         grant_badge: "Przyznanie odznaki „%{badge_name}” użytkownikowi %{username}"
         list_reviewables: "Wyświetlanie listy elementów kolejki przeglądu (typ: %{type})"
         perform_reviewable_action: "Wykonywanie %{action} na %{reviewable_id} do przejrzenia"
+        add_reviewable_note: "Dodawanie notatki do %{reviewable_id} do przeglądu"
         assign: "Przypisanie tematu %{topic_id} (przypisano: %{assigned})"
         mark_as_solved: "Oznaczanie wpisu %{post_id} jako rozwiązany (rozwiązany: %{solved})"
         read: "Czytanie: <a href='%{url}'>%{title}</a>"
@@ -713,6 +760,7 @@ pl_PL:
         already_flagged: "Wpis został już oflagowany do sprawdzenia."
         flagged: "Wpis oflagowany do sprawdzenia."
         reason: "Bot AI oflagował ten wpis.\n\nPowód: %{reason}"
+        score_reason: "Bot AI oznaczył ten wpis."
       close_topic:
         errors:
           not_found: "Temat nie został znaleziony."
@@ -826,6 +874,13 @@ pl_PL:
           conflict: "Ten element kolejki przeglądu został zaktualizowany przez kogoś innego. Spróbuj ponownie."
           action_failed: "Nie udało się wykonać działania"
         success: "Pomyślnie wykonano działanie „%{action}” na elemencie kolejki przeglądu %{reviewable_id}"
+      add_reviewable_note:
+        errors:
+          not_allowed: "Nie masz dostępu do kolejki przeglądu"
+          not_found: "Nie znaleziono elementu kolejki przeglądu"
+          no_note: "Aby dodać notatkę do elementu kolejki przeglądu, wymagana jest notatka"
+          failed: "Nie udało się dodać notatki"
+        success: "Pomyślnie dodano notatkę do elementu kolejki przeglądu %{reviewable_id}"
     reviewables:
       ai_tool_action:
         title: "Działanie narzędzia AI"
@@ -860,12 +915,16 @@ pl_PL:
           positive: "Pozytywne"
           negative: "Negatywne"
           neutral: "Neutralne"
+    discord:
+      configuration:
+        agent_user_required: "Aby można było włączyć tryb agenta Discord, agent wyszukiwania Discord musi mieć skojarzonego użytkownika."
     llm:
       configuration:
         create_llm: "Przed włączeniem tej funkcji należy skonfigurować LLM"
         disable_modules_first: "Najpierw musisz wyłączyć te moduły: %{settings}"
         set_llm_first: "Najpierw ustaw %{setting}"
         model_unreachable: "Nie mogliśmy uzyskać odpowiedzi od tego modelu. Sprawdź najpierw swoje ustawienia."
+        empty_response: "Model zwrócił pustą odpowiedź."
         invalid_seeded_model: "Nie można używać tego modelu z tą funkcją"
         invalid_agent_response_format: "Wybrany agent musi mieć format odpowiedzi z polem logicznym o nazwie „spam”"
         must_select_model: "Najpierw musisz wybrać LLM"
@@ -915,13 +974,13 @@ pl_PL:
       limit_exceeded_admin: "Osiągnięto limit kredytu AI. Spróbuj ponownie po %{reset_time}."
     errors:
       quota_exceeded: "Przekroczyłeś limit dla tego modelu. Spróbuj ponownie za %{relative_time}."
-      quota_required: "Musisz określić maksymalną liczbę tokenów lub użyć dla tego modelu"
+      quota_required: "Musisz określić maksymalną liczbę tokenów, zastosowań lub koszt dla tego modelu"
       no_query_specified: Parametr zapytania jest wymagany, podaj go.
       no_user_for_agent: Określony agent nie ma powiązanego użytkownika.
-      agent_not_found: "Określony agent nie istnieje. Sprawdź parametry agent_name lub agent_id (starsze: agent_name lub agent_id)."
+      agent_not_found: "Podany agent nie istnieje. Sprawdź parametry agent_name lub agent_id (starsze: persona_name lub persona_id)."
       no_user_specified: Wymagana jest nazwa użytkownika lub parametr user_unique_id, proszę go podać.
       user_not_found: Podany użytkownik nie istnieje. Sprawdź parametr nazwy użytkownika.
-      agent_disabled: "Określony agent jest wyłączony. Sprawdź parametry agent_name lub agent_id (starsze: agent_name lub agent_id)."
+      agent_disabled: "Określony agent jest wyłączony. Sprawdź parametry agent_name lub agent_id (starsze: persona_name lub persona_id)."
       no_default_llm: Agent musi mieć zdefiniowany parametr default_llm.
       user_not_allowed: Użytkownik nie ma prawa brać udziału w dyskusji na ten temat.
       invalid_stream_resume_token: Token resume_token jest nieprawidłowy lub wygasł.

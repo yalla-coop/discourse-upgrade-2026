@@ -199,6 +199,44 @@ RSpec.describe CategorySerializer do
     end
   end
 
+  describe "#topic_posting_review_group_ids" do
+    it "returns group ids when groups exist" do
+      category.update!(
+        topic_posting_review_mode: :everyone_except,
+        topic_posting_review_group_ids: [group.id],
+      )
+
+      json = described_class.new(category, scope: Guardian.new, root: false).as_json
+
+      expect(json[:topic_posting_review_group_ids]).to eq([group.id])
+    end
+
+    it "returns empty array when no groups are associated" do
+      json = described_class.new(category, scope: Guardian.new, root: false).as_json
+
+      expect(json[:topic_posting_review_group_ids]).to eq([])
+    end
+  end
+
+  describe "#reply_posting_review_group_ids" do
+    it "returns group ids when groups exist" do
+      category.update!(
+        reply_posting_review_mode: :no_one_except,
+        reply_posting_review_group_ids: [group.id],
+      )
+
+      json = described_class.new(category, scope: Guardian.new, root: false).as_json
+
+      expect(json[:reply_posting_review_group_ids]).to eq([group.id])
+    end
+
+    it "returns empty array when no groups are associated" do
+      json = described_class.new(category, scope: Guardian.new, root: false).as_json
+
+      expect(json[:reply_posting_review_group_ids]).to eq([])
+    end
+  end
+
   describe "#require_topic_approval" do
     it "returns false when topic approval is not required" do
       category.require_topic_approval = false
@@ -236,6 +274,210 @@ RSpec.describe CategorySerializer do
       json = described_class.new(category, scope: Guardian.new(admin), root: false).as_json
 
       expect(json[:category_setting][:require_reply_approval]).to eq(true)
+    end
+  end
+
+  describe "#category_types" do
+    it "returns the category types" do
+      json = described_class.new(category, scope: admin.guardian, root: false).as_json
+      expect(json[:category_types]).to eq(
+        { discussion: Categories::TypeRegistry.all[:discussion].metadata },
+      )
+    end
+  end
+
+  describe "#available_category_types" do
+    class MockCategoryType < ::Categories::Types::Base
+      type_id :mock_type
+
+      class << self
+        def category_matches?(category)
+          true
+        end
+
+        def find_matches
+          Category.none
+        end
+
+        def visible?
+          false
+        end
+      end
+    end
+
+    before { Categories::TypeRegistry.register(MockCategoryType) }
+
+    after { Categories::TypeRegistry.reset! }
+
+    it "returns the available visible category types" do
+      json = described_class.new(category, scope: admin.guardian, root: false).as_json
+      expect(json[:available_category_types]).to eq(
+        [Categories::TypeRegistry.all[:discussion].metadata],
+      )
+    end
+  end
+
+  describe "#allowed_tags" do
+    subject(:json) { described_class.new(category, scope: scope, root: false).as_json }
+
+    fab!(:attached_tag) { Fabricate(:tag, name: "category-allowed-tag") }
+
+    before { category.tags << attached_tag }
+
+    context "for a non-editor" do
+      let(:scope) { user.guardian }
+
+      it "is not included" do
+        expect(json).not_to have_key(:allowed_tags)
+      end
+    end
+
+    context "for an editor" do
+      let(:scope) { admin.guardian }
+
+      it "is included with all tag entries" do
+        expect(json[:allowed_tags]).to contain_exactly(
+          { id: attached_tag.id, name: attached_tag.name, slug: attached_tag.slug },
+        )
+      end
+    end
+
+    context "when tagging is disabled" do
+      let(:scope) { admin.guardian }
+
+      before { SiteSetting.tagging_enabled = false }
+
+      it "is not included" do
+        expect(json).not_to have_key(:allowed_tags)
+      end
+    end
+  end
+
+  describe "#allowed_tag_groups" do
+    subject(:json) { described_class.new(category, scope: scope, root: false).as_json }
+
+    fab!(:attached_tag_group) { Fabricate(:tag_group, name: "category-allowed-group") }
+
+    before { category.tag_groups << attached_tag_group }
+
+    context "for a non-editor" do
+      let(:scope) { user.guardian }
+
+      it "is not included" do
+        expect(json).not_to have_key(:allowed_tag_groups)
+      end
+    end
+
+    context "for an editor" do
+      let(:scope) { admin.guardian }
+
+      it "is included with all tag-group names" do
+        expect(json[:allowed_tag_groups]).to contain_exactly(attached_tag_group.name)
+      end
+    end
+
+    context "when tagging is disabled" do
+      let(:scope) { admin.guardian }
+
+      before { SiteSetting.tagging_enabled = false }
+
+      it "is not included" do
+        expect(json).not_to have_key(:allowed_tag_groups)
+      end
+    end
+  end
+
+  describe "#required_tag_groups" do
+    subject(:json) { described_class.new(category, scope: scope, root: false).as_json }
+
+    fab!(:required_tag_group) { Fabricate(:tag_group, name: "category-required-group") }
+
+    fab!(:category_required_tag_group) do
+      CategoryRequiredTagGroup.create!(
+        category: category,
+        tag_group: required_tag_group,
+        min_count: 2,
+      )
+    end
+
+    context "for a non-editor" do
+      let(:scope) { user.guardian }
+
+      it "omits the tag-group name from each entry" do
+        expect(json[:required_tag_groups]).to eq([{ min_count: 2 }])
+      end
+    end
+
+    context "for an editor" do
+      let(:scope) { admin.guardian }
+
+      it "includes the tag-group name in each entry" do
+        expect(json[:required_tag_groups]).to eq([{ name: required_tag_group.name, min_count: 2 }])
+      end
+    end
+
+    context "when tagging is disabled" do
+      let(:scope) { admin.guardian }
+
+      before { SiteSetting.tagging_enabled = false }
+
+      it "is not included" do
+        expect(json).not_to have_key(:required_tag_groups)
+      end
+    end
+  end
+
+  describe "#category_type_settings" do
+    let(:type_a) do
+      Class.new(Categories::Types::Base) do
+        type_id :test_type_a
+
+        def self.category_matches?(_category)
+          true
+        end
+
+        def self.read_category_settings(_category)
+          { foo: "from_a" }
+        end
+      end
+    end
+
+    let(:type_b) do
+      Class.new(Categories::Types::Base) do
+        type_id :test_type_b
+
+        def self.category_matches?(_category)
+          true
+        end
+
+        def self.read_category_settings(_category)
+          { bar: "from_b" }
+        end
+      end
+    end
+
+    let(:non_matching_type) do
+      Class.new(Categories::Types::Base) do
+        type_id :test_type_off
+
+        def self.category_matches?(_category)
+          false
+        end
+
+        def self.read_category_settings(_category)
+          { baz: "should_not_appear" }
+        end
+      end
+    end
+
+    before do
+      Categories::TypeRegistry.stubs(:all).returns(a: type_a, b: type_b, off: non_matching_type)
+    end
+
+    it "merges values from each matching type and skips non-matching types" do
+      json = described_class.new(category, scope: admin.guardian, root: false).as_json
+
+      expect(json[:category_type_settings]).to eq(foo: "from_a", bar: "from_b")
     end
   end
 end

@@ -82,7 +82,15 @@ module DiscourseAi
           log = nil
 
           sdk_params = build_converse_params(prompt, model_params, dialect)
-          request_body = sdk_params.to_json
+          # Image bytes in sdk_params are raw binary (ASCII-8BIT) and cannot be
+          # encoded as UTF-8 JSON for logging. Fall back to a placeholder so the
+          # request can still proceed when binary payloads are present.
+          request_body =
+            begin
+              sdk_params.to_json
+            rescue EncodingError, JSON::GeneratorError
+              "[converse params contained binary payload, omitted from log]"
+            end
 
           log =
             start_log(
@@ -168,6 +176,7 @@ module DiscourseAi
               response_data
             end
           rescue Aws::BedrockRuntime::Errors::ServiceError => e
+            log.response_status = e.context&.http_response&.status_code if log
             Rails.logger.error("#{self.class.name}: #{e.class}: #{e.message}")
             raise CompletionFailed, e.message
           ensure
@@ -182,7 +191,8 @@ module DiscourseAi
               log.cache_write_tokens =
                 processor.cache_write_input_tokens if processor.cache_write_input_tokens
               log.response_tokens = tokenizer.size(partials_raw) if log.response_tokens.blank?
-              log.response_status ||= 200
+              log.response_status ||= 200 if call_status == :success
+              log.estimated_cost = estimated_cost_for(log)
               log.created_at = start_time
               log.updated_at = Time.now
               log.duration_msecs = (Time.now - start_time) * 1000
@@ -191,7 +201,15 @@ module DiscourseAi
               execution_context&.token_usage_tracker&.add_from_audit_log(log)
 
               AiApiRequestStat.record_from_audit_log(log, llm_model: @llm_model)
-              LlmQuota.log_usage(@llm_model, user, log.request_tokens, log.response_tokens)
+              LlmQuota.log_usage(
+                @llm_model,
+                user,
+                request_tokens: log.request_tokens,
+                response_tokens: log.response_tokens,
+                cache_read_tokens: log.cache_read_tokens,
+                cache_write_tokens: log.cache_write_tokens,
+                estimated_cost: log.estimated_cost,
+              )
               LlmCreditAllocation.deduct_credits!(
                 @llm_model,
                 feature_name,
@@ -231,7 +249,9 @@ module DiscourseAi
           end
 
           effort = llm_model.lookup_custom_param("effort")
-          options[:output_config] = { effort: effort } if %w[low medium high max].include?(effort)
+          if AnthropicShared::EFFORT_VALUES.include?(effort)
+            options[:output_config] = { effort: effort }
+          end
 
           options
         end
@@ -267,6 +287,9 @@ module DiscourseAi
 
           region = llm_model.lookup_custom_param("region")
           client_options = { region: region, http_read_timeout: TIMEOUT }
+          # AWS SDK already retries modeled throttling, 5xx, and networking failures
+          # by default. Keep Bedrock Converse on SDK-managed retries to avoid
+          # double-retrying request streams in Discourse's HTTP retry loop.
 
           role_arn = llm_model.lookup_custom_param("role_arn")
           access_key_id = llm_model.lookup_custom_param("access_key_id")

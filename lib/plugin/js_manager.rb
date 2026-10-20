@@ -24,7 +24,8 @@ module Plugin
 
     def self.read_manifest(plugin_directory_name)
       maybe_cache("manifest_#{plugin_directory_name}") do
-        manifest_path = "#{Rails.root}/app/assets/generated/#{plugin_directory_name}/manifest.json"
+        manifest_path =
+          "#{Rails.root.join("app/assets/generated/#{plugin_directory_name}/manifest.json")}"
         JSON.parse(File.read(manifest_path))
       rescue Errno::ENOENT
         {}
@@ -47,7 +48,7 @@ module Plugin
       start = Time.now
 
       if !GlobalSetting.mini_racer_single_threaded && AssetProcessor.booted?
-        raise "[Plugin::JSManager] Cannot fork for parallel compilation because AssetProcessor is already booted."
+        raise "Cannot fork Plugin::JsManager for parallel compilation because AssetProcessor is already booted."
       end
 
       parallel_count = [Etc.nprocessors, 4].min
@@ -61,7 +62,7 @@ module Plugin
     end
 
     def compile_js_bundle(plugin)
-      base_output_dir = "#{Rails.root}/app/assets/generated/#{plugin.directory_name}"
+      base_output_dir = "#{Rails.root.join("app/assets/generated/#{plugin.directory_name}")}"
       js_dir = "#{base_output_dir}/js/plugins"
       map_dir = "#{base_output_dir}/map/plugins"
 
@@ -116,12 +117,15 @@ module Plugin
       filename_prefix = "#{plugin.directory_name}_"
       filename_suffix = "-#{base36_digest}.digested"
 
-      expected_entrypoints =
-        entrypoints_config.keys.map do |name|
-          "#{js_dir}/#{filename_prefix}#{name}#{filename_suffix}.js"
-        end
+      existing_files = Dir.glob("#{js_dir}/*").map { |path| File.basename(path) }
 
-      files_exist = expected_entrypoints.all? { |path| File.exist?(path) }
+      files_exist =
+        entrypoints_config.keys.all? do |name|
+          existing_files.any? do |file|
+            file.start_with?("#{filename_prefix}#{name}.") &&
+              file.end_with?("#{filename_suffix}.js")
+          end
+        end
 
       if !cache? || !files_exist
         compiler =
@@ -209,7 +213,7 @@ module Plugin
     end
 
     def log(message)
-      STDERR.puts "[Plugin::JsManager] #{message}"
+      STDERR.puts message
     end
 
     private_class_method def self.maybe_cache(key, &blk)

@@ -33,7 +33,12 @@ class SiteSettings::TypeSupervisor
   # For plugins, so they can tell if a feature is supported
   SUPPORTED_TYPES = %i[email username list enum].freeze
 
-  REQUIRES_CONFIRMATION_TYPES = { simple: "simple", user_option: "user_option" }.freeze
+  REQUIRES_CONFIRMATION_TYPES = {
+    simple: "simple",
+    simple_on_enable: "simple_on_enable",
+    simple_on_disable: "simple_on_disable",
+    user_option: "user_option",
+  }.freeze
 
   def self.types
     @types ||=
@@ -76,17 +81,17 @@ class SiteSettings::TypeSupervisor
   def self.parse_value_type(val)
     case val
     when NilClass
-      self.types[:null]
+      types[:null]
     when String
-      self.types[:string]
+      types[:string]
     when Integer
-      self.types[:integer]
+      types[:integer]
     when Float
-      self.types[:float]
+      types[:float]
     when TrueClass, FalseClass
-      self.types[:bool]
+      types[:bool]
     else
-      raise ArgumentError.new :val
+      raise ArgumentError.new("Invalid value type for site setting: #{val.class}")
     end
   end
 
@@ -142,7 +147,7 @@ class SiteSettings::TypeSupervisor
       @static_types[name] = type.to_sym
 
       if type.to_sym == :list
-        @allow_any[name] = opts[:allow_any] == false ? false : true
+        @allow_any[name] = opts[:allow_any] != false
         @list_type[name] = opts[:list_type] if opts[:list_type]
       end
 
@@ -154,7 +159,7 @@ class SiteSettings::TypeSupervisor
     @types[name] = get_data_type(name, @defaults_provider[name])
 
     opts[:validator] = opts[:validator].try(:constantize)
-    if (validator_type = (opts[:validator] || validator_for(@types[name])))
+    if (validator_type = opts[:validator] || validator_for(@types[name]))
       validator_opts = opts.slice(*VALIDATOR_OPTS)
       validator_opts[:name] = name
       @validators[name] = { class: validator_type, opts: validator_opts }
@@ -164,10 +169,22 @@ class SiteSettings::TypeSupervisor
     @dependencies.change_behavior(name, opts[:depends_behavior]) if opts[:depends_behavior]
   end
 
+  # Converts a site setting value to a Ruby value based on the type of the setting,
+  # which is necessary because the value is stored in the database as a string.
+  #
+  # @param name [Symbol] the name of the setting
+  # @param value [String] the value of the setting
+  # @param override_type [Symbol] the type of the setting to override the type of the setting
+  # @return [Object] the Ruby value of the setting
+  #
+  # @example
+  #   to_rb_value(:enable_badges, "true") # => true
+  #   to_rb_value(:topics_per_period_in_top_page, "50") # => 50
+  #   to_rb_value(:title, "My awesome forum") # => "My awesome forum"
   def to_rb_value(name, value, override_type = nil)
     name = name.to_sym
     @types[name] = (@types[name] || get_data_type(name, value))
-    type = (override_type || @types[name])
+    type = override_type || @types[name]
     case type
     when self.class.types[:float]
       value.to_f
@@ -199,7 +216,6 @@ class SiteSettings::TypeSupervisor
   def type_hash(name)
     name = name.to_sym
     type = get_type(name)
-    list_type = get_list_type(name)
     result = { type: type.to_s }
 
     if type == :enum || (type == :list && get_enum_class(name))
@@ -295,7 +311,7 @@ class SiteSettings::TypeSupervisor
     end
 
     validate_method = "validate_#{name}"
-    public_send(validate_method, val) if self.respond_to? validate_method
+    public_send(validate_method, val) if respond_to? validate_method
   end
 
   private
@@ -331,6 +347,21 @@ class SiteSettings::TypeSupervisor
       val = val.is_a?(String) ? val : val.map(&:id).join("|")
     elsif type == self.class.types[:upload] && val.present?
       val = val.is_a?(Integer) ? val : val.id
+    elsif type == self.class.types[:objects] && val.present?
+      begin
+        objects = val.is_a?(String) ? JSON.parse(val) : val
+
+        if objects.is_a?(Array) && @schemas[name]
+          val =
+            JSON.generate(
+              SchemaSettingsObjectValidator.normalize_uploads(
+                schema: @schemas[name],
+                objects: objects,
+              ),
+            )
+        end
+      rescue JSON::ParserError
+      end
     end
 
     [val, type]

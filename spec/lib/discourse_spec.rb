@@ -67,7 +67,7 @@ RSpec.describe Discourse do
     end
   end
 
-  describe ".after_unicorn_worker_fork" do
+  describe ".apply_worker_db_variables_overrides" do
     around do |example|
       original_env = ENV.to_hash
       original_config = ActiveRecord::Base.configurations
@@ -95,8 +95,6 @@ RSpec.describe Discourse do
     it "applies worker-specific database variable overrides in a production environment" do
       test_database_config = Rails.application.config.database_configuration["test"]
 
-      # In the production environment, `DISCOURSE_` ENV variables are written to the `discourse.conf` file so we need
-      # to simulate that here in the test environment.
       temp_discourse_conf = Tempfile.new("discourse.conf")
       temp_discourse_conf.write <<~TEXT
       db_name = #{test_database_config["database"]}
@@ -110,7 +108,7 @@ RSpec.describe Discourse do
       GlobalSetting.configure!(path: temp_discourse_conf.path, use_blank_provider: false)
       GlobalSetting.load_defaults
 
-      Discourse.after_unicorn_worker_fork
+      Discourse.apply_worker_db_variables_overrides
 
       expect(
         ActiveRecord::Base.connection.execute("SHOW statement_timeout").first["statement_timeout"],
@@ -205,6 +203,13 @@ RSpec.describe Discourse do
       expect(Discourse.find_plugin_css_assets({}).length).to eq(2)
       plugin1.register_asset_filter { |type, request, opts| false }
       expect(Discourse.find_plugin_css_assets({}).length).to eq(1)
+    end
+
+    it "includes admin plugin css assets when include_admin is true" do
+      plugin2.enabled = true
+
+      expect(Discourse.find_plugin_css_assets(include_admin: true).length).to eq(4)
+      expect(Discourse.find_plugin_css_assets({}).length).to eq(2)
     end
   end
 
@@ -552,7 +557,7 @@ RSpec.describe Discourse do
     it "works for individual commands" do
       expect(Discourse::Utils.execute_command("pwd").strip).to eq(Rails.root.to_s)
       expect(Discourse::Utils.execute_command("pwd", chdir: "plugins").strip).to eq(
-        "#{Rails.root}/plugins",
+        "#{Rails.root.join("plugins")}",
       )
     end
 
@@ -578,12 +583,12 @@ RSpec.describe Discourse do
 
       result =
         Discourse::Utils.execute_command(chdir: "plugins") do |runner|
-          expect(runner.exec("pwd").strip).to eq("#{Rails.root}/plugins")
+          expect(runner.exec("pwd").strip).to eq("#{Rails.root.join("plugins")}")
           runner.exec("pwd")
         end
 
       # Should return output of block
-      expect(result.strip).to eq("#{Rails.root}/plugins")
+      expect(result.strip).to eq("#{Rails.root.join("plugins")}")
     end
 
     it "does not leak chdir between threads" do
@@ -685,18 +690,12 @@ RSpec.describe Discourse do
       )
     end
 
-    it "invalidates all JS and CSS caches" do
+    it "invalidates all theme settings and CSS caches" do
       Stylesheet::Manager.clear_theme_cache!
 
       old_upload_url = Discourse.store.cdn_url(upload.url)
 
-      js_file_script =
-        Nokogiri::HTML5
-          .fragment(Theme.lookup_field(theme.id, :extra_js, nil))
-          .css("link[rel=modulepreload]")
-          .first
-      file_js = JavascriptCache.find_by(digest: js_file_script[:href][/\h{40}/]).content
-      expect(file_js).to include(old_upload_url)
+      expect(theme.cached_settings["theme_uploads"]["imajee"]).to eq(old_upload_url)
 
       css_link_tag =
         Nokogiri::HTML5
@@ -711,13 +710,7 @@ RSpec.describe Discourse do
       SiteSetting.s3_cdn_url = "https://new.s3.cdn.com/gg"
       new_upload_url = Discourse.store.cdn_url(upload.url)
 
-      js_file_script =
-        Nokogiri::HTML5
-          .fragment(Theme.lookup_field(theme.id, :extra_js, nil))
-          .css("link[rel=modulepreload]")
-          .first
-      file_js = JavascriptCache.find_by(digest: js_file_script[:href][/\h{40}/]).content
-      expect(file_js).to include(old_upload_url)
+      expect(theme.cached_settings["theme_uploads"]["imajee"]).to eq(old_upload_url)
 
       css_link_tag =
         Nokogiri::HTML5
@@ -731,13 +724,7 @@ RSpec.describe Discourse do
 
       Discourse.clear_all_theme_cache!
 
-      js_file_script =
-        Nokogiri::HTML5
-          .fragment(Theme.lookup_field(theme.id, :extra_js, nil))
-          .css("link[rel=modulepreload]")
-          .first
-      file_js = JavascriptCache.find_by(digest: js_file_script[:href][/\h{40}/]).content
-      expect(file_js).to include(new_upload_url)
+      expect(theme.cached_settings["theme_uploads"]["imajee"]).to eq(new_upload_url)
 
       css_link_tag =
         Nokogiri::HTML5

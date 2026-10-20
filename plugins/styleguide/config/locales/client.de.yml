@@ -95,10 +95,13 @@ de:
           title: "Weitere Themen"
         post_menu:
           title: "Beitrag-Aktionen"
+        docked_composer:
+          title: "Angedockter Editor"
         modal:
           title: "Dialogbox"
           header: "Dialogbox-Titel"
           footer: "Dialogbox-Fußzeile"
+          open: "Dialogbox öffnen"
         user_about:
           title: "Benutzerprofil"
         header_icons:

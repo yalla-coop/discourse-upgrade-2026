@@ -10,9 +10,15 @@ module DiscourseAi
 
       def show_debug_info_by_id
         log = AiApiAuditLog.find(params[:id])
-        raise Discourse::NotFound if !log.topic || log.feature_name != "ai_bot"
+        raise Discourse::NotFound if !log.topic
 
-        guardian.ensure_can_debug_ai_bot_conversation!(log.post || log.topic)
+        if log.post_id.present?
+          raise Discourse::NotFound if !log.post
+
+          guardian.ensure_can_debug_ai_bot_conversation!(log.post)
+        else
+          guardian.ensure_can_debug_ai_bot_conversation!(log.topic)
+        end
         render json: AiApiAuditLogSerializer.new(log, root: false), status: :ok
       end
 
@@ -27,8 +33,14 @@ module DiscourseAi
             .where(topic_id: post.topic_id)
             .order("post_number DESC")
 
+        visible_post_ids = posts.select(:id)
+
         debug_info =
-          AiApiAuditLog.where(post: posts, feature_name: "ai_bot").order(created_at: :desc).first
+          AiApiAuditLog
+            .where(topic_id: post.topic_id)
+            .where("post_id IS NULL OR post_id IN (?)", visible_post_ids)
+            .order(created_at: :desc)
+            .first
 
         render json: AiApiAuditLogSerializer.new(debug_info, root: false), status: :ok
       end

@@ -42,7 +42,6 @@ sk:
     ai_sentiment_enabled: "Povoľte modul sentimentu."
     ai_sentiment_inference_service_api_endpoint: "URL adresa, na ktorej je spustené API pre modul sentimentu"
     ai_sentiment_inference_service_api_key: "Kľúč API pre API sentimentu"
-    ai_sentiment_models: "Modely, ktoré sa majú použiť na odvodzovanie. Sentiment klasifikuje príspevok v priestore pozitívny/neutrálny/negatívny. Emócia klasifikuje príspevok v priestore hnev/znechutenie/strach/radosť/neutrálny/smútok/prekvapenie."
     ai_nsfw_detection_enabled: "Povoľte modul NSFW."
     ai_nsfw_inference_service_api_endpoint: "URL adresa, na ktorej je spustené API pre modul NSFW"
     ai_nsfw_inference_service_api_key: "Kľúč API pre rozhranie NSFW API"
@@ -87,7 +86,6 @@ sk:
     ai_discord_app_public_key: "Verejný kľúč aplikácie Discord, ku ktorej chcete prepojiť vyhľadávanie Discord"
     ai_discord_search_mode: "Vyberte režim vyhľadávania, ktorý chcete použiť na vyhľadávanie v službe Discord"
     ai_discord_allowed_guilds: "Discord cechy (servery), kde môže bot vyhľadávať"
-    ai_translation_backfill_limit_to_public_content: "Ak je táto možnosť povolená, preloží sa iba obsah verejných kategórií. Ak je vypnuté, na preklad sa bude posielať aj obsah v skupinových PM a súkromných kategóriách."
     ai_translation_backfill_max_age_days: "Maximálny vek príspevku a témy, ktoré sa majú preložiť. Príspevky a témy staršie ako táto hodnota nebudú preložené. Hodnota 0 zakáže spätné dopĺňanie, ale nezakáže preklad nových príspevkov."
   reviewables:
     reasons:
@@ -604,7 +602,6 @@ sk:
       removed: "odstránené"
     errors:
       quota_exceeded: "Prekročili ste kvótu pre tento model. Skúste to prosím znova na stránke %{relative_time}."
-      quota_required: "Pre tento model je potrebné zadať maximálny počet tokenov alebo použití"
       no_query_specified: Parameter dopytu je povinný, prosím, zadajte ho.
       no_user_specified: Používateľské meno alebo parameter user_unique_id je povinný, prosím, zadajte ho.
       user_not_found: Zadaný používateľ neexistuje. Skontrolujte parameter používateľské meno.

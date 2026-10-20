@@ -5,27 +5,33 @@ import { cloneJSON } from "discourse/lib/object";
 import User from "discourse/models/user";
 
 export function parsePostData(query) {
-  const result = {};
-  if (query) {
-    query.split("&").forEach(function (part) {
-      const item = part.split("=");
-      const firstSeg = decodeURIComponent(item[0]);
-      const m = /^([^\[]+)\[(.+)\]/.exec(firstSeg);
-      const val = decodeURIComponent(item[1]).replace(/\+/g, " ");
-      const isArray = firstSeg.endsWith("[]");
-
-      if (m) {
-        let key = m[1];
-        result[key] = result[key] || {};
-        result[key][m[2].replace("][", ".")] = val;
-      } else if (isArray) {
-        result[firstSeg] ||= [];
-        result[firstSeg].push(val);
-      } else {
-        result[firstSeg] = val;
-      }
-    });
+  if (!query) {
+    return {};
   }
+
+  if (query.startsWith("{") || query.startsWith("[")) {
+    return JSON.parse(query);
+  }
+
+  const result = {};
+  query.split("&").forEach(function (part) {
+    const item = part.split("=");
+    const firstSeg = decodeURIComponent(item[0]);
+    const m = /^([^\[]+)\[(.+)\]/.exec(firstSeg);
+    const val = decodeURIComponent(item[1]).replace(/\+/g, " ");
+    const isArray = firstSeg.endsWith("[]");
+
+    if (m) {
+      let key = m[1];
+      result[key] = result[key] || {};
+      result[key][m[2].replace("][", ".")] = val;
+    } else if (isArray) {
+      result[firstSeg] ||= [];
+      result[firstSeg].push(val);
+    } else {
+      result[firstSeg] = val;
+    }
+  });
   return result;
 }
 
@@ -48,14 +54,23 @@ export function OK(resp = {}, headers = {}) {
 const loggedIn = () => !!User.current();
 const helpers = { response, success, parsePostData };
 
-export let fixturesByUrl = {};
+export const fixturesByUrl = {};
+const fixturesByUrlForHandlers = {};
 
-function replacesFixturesByUrl(newFixtures) {
-  for (const member of Object.keys(fixturesByUrl)) {
-    delete fixturesByUrl[member];
+for (const module of Object.values(
+  import.meta.glob("../fixtures/**/*", { eager: true })
+)) {
+  if (module.default) {
+    const obj = module.default;
+    Object.keys(obj).forEach((url) => {
+      let fixtureUrl = url;
+      if (fixtureUrl[0] !== "/") {
+        fixtureUrl = "/" + fixtureUrl;
+      }
+      fixturesByUrl[url] = obj[url];
+      fixturesByUrlForHandlers[fixtureUrl] = obj[url];
+    });
   }
-
-  Object.assign(fixturesByUrl, newFixtures);
 }
 
 const pretender = new Pretender();
@@ -73,16 +88,23 @@ export function pretenderHelpers() {
 }
 
 export function applyDefaultHandlers() {
-  // Autoload any `*-pretender` files
-  Object.keys(requirejs.entries).forEach((e) => {
-    let m = e.match(/^.*helpers\/([a-z-]+)\-pretender$/);
-    if (m && m[1] !== "create") {
-      let result = requirejs(e).default.call(pretender, helpers);
-      if (m[1] === "fixture") {
-        replacesFixturesByUrl(result);
-      }
+  const pretenderModules = import.meta.glob("./**/*-pretender.{js,gjs}", {
+    eager: true,
+  });
+
+  Object.keys(requirejs.entries).forEach((entry) => {
+    if (/^discourse\/plugins\/.*helpers\/[a-z-]+\-pretender$/.test(entry)) {
+      pretenderModules[entry] = requirejs(entry);
     }
   });
+
+  for (const module of Object.values(pretenderModules)) {
+    module.default.call(pretender, helpers);
+  }
+
+  for (const [url, data] of Object.entries(fixturesByUrlForHandlers)) {
+    pretender.get(url, () => response(data));
+  }
 
   pretender.get("/admin/plugins", () => response({ plugins: [] }));
 
@@ -212,6 +234,22 @@ export function applyDefaultHandlers() {
           },
         ],
       },
+    });
+  });
+
+  pretender.get("/tag/:tag_id/info.json", (request) => {
+    return response({
+      tag_info: {
+        id: parseInt(request.params.tag_id, 10) || request.params.tag_id,
+        name: request.params.tag_id,
+        slug: request.params.tag_id,
+        topic_count: 0,
+        staff: false,
+        synonyms: [],
+        tag_group_names: [],
+        category_ids: [],
+      },
+      categories: [],
     });
   });
 
@@ -569,6 +607,41 @@ export function applyDefaultHandlers() {
     response(fixturesByUrl["/c/2481/show.json"])
   );
 
+  pretender.get("/c/:category_id/show.json", (request) => {
+    const fixture = fixturesByUrl[request.url];
+
+    if (fixture) {
+      return response(fixture);
+    }
+
+    const categoryId = parseInt(request.params.category_id, 10);
+    const siteCategory = fixturesByUrl["site.json"].site.categories.find(
+      (category) => category.id === categoryId
+    );
+
+    if (!siteCategory) {
+      return response(404, { errors: ["category not found"] });
+    }
+
+    const category = cloneJSON(siteCategory);
+
+    category.available_groups ||= ["admins", "everyone", "moderators", "staff"];
+    category.group_permissions ||= [
+      { permission_type: 1, group_name: "everyone", group_id: 0 },
+    ];
+    category.custom_fields ||= {};
+    category.category_types ||= {
+      discussion: {
+        id: "discussion",
+        name: "Discussion",
+        configuration_schema: {},
+      },
+    };
+    category.available_category_types ||= [];
+
+    return response({ category });
+  });
+
   pretender.put("/categories/:category_id", (request) => {
     const category = JSON.parse(request.requestBody);
     category.id = parseInt(request.params.category_id, 10);
@@ -588,11 +661,42 @@ export function applyDefaultHandlers() {
     // Category model expects `permissions` to be an array (@autoTrackedArray).
     delete category.permissions;
 
+    // The simplified flow sends `category_types` as an array of IDs but the
+    // real response is a hash `{type_id: metadata}`; other flows send the
+    // hash unchanged.
+    if (Array.isArray(category.category_types)) {
+      category.category_types = Object.fromEntries(
+        category.category_types.map((id) => [
+          id,
+          { id, name: id, configuration_schema: {} },
+        ])
+      );
+    }
+
     return response({ category });
   });
 
   pretender.post("/categories", () =>
     response(fixturesByUrl["/c/11/show.json"])
+  );
+
+  pretender.get("/categories/types", () =>
+    response({
+      types: [
+        {
+          id: "discussion",
+          name: "Discussion",
+          title: "discussion",
+          icon: "comments",
+          description: "General discussion",
+          configuration_schema: {},
+          available: true,
+        },
+      ],
+      counts: {
+        discussion: 1,
+      },
+    })
   );
 
   pretender.get("/categories/find", () => {
@@ -704,6 +808,8 @@ export function applyDefaultHandlers() {
 
   pretender.post("/u/action/send_activation_email", success);
   pretender.put("/u/update-activation-email", success);
+
+  pretender.post("/anonymous-action", success);
 
   pretender.get("/session/hp.json", function () {
     return response({

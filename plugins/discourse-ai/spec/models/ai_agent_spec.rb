@@ -16,6 +16,31 @@ RSpec.describe AiAgent do
 
   before { enable_current_plugin }
 
+  it "clears AI helper prompt permissions after changes" do
+    agent = AiAgent.find(SiteSetting.ai_helper_proofreader_agent)
+    DiscourseAi::AiHelper::Assistant.prompt_cache[:value] = "cached prompts"
+
+    agent.update!(allowed_group_ids: [Group::AUTO_GROUPS[:staff]])
+
+    expect(DiscourseAi::AiHelper::Assistant.prompt_cache[:value]).to be_nil
+  end
+
+  it "keeps AI helper prompt permissions after unrelated changes" do
+    agent =
+      AiAgent.create!(
+        name: "unrelated agent",
+        description: "test",
+        system_prompt: "test",
+        tools: [],
+        allowed_group_ids: [],
+      )
+    DiscourseAi::AiHelper::Assistant.prompt_cache[:value] = "cached prompts"
+
+    agent.update!(allowed_group_ids: [Group::AUTO_GROUPS[:staff]])
+
+    expect(DiscourseAi::AiHelper::Assistant.prompt_cache[:value]).to eq("cached prompts")
+  end
+
   it "validates context settings" do
     expect(basic_agent.valid?).to eq(true)
 
@@ -72,6 +97,35 @@ RSpec.describe AiAgent do
     ]
     expect(basic_agent.valid?).to eq(false)
     expect(basic_agent.errors[:tools]).to eq(["Can not have duplicate tools"])
+  end
+
+  describe "provider-native tools" do
+    fab!(:gemini_model)
+    fab!(:openai_chat_model) do
+      Fabricate(:llm_model, url: "https://api.openai.com/v1/chat/completions")
+    end
+
+    it "requires a forced default LLM that supports the native tool" do
+      basic_agent.tools = ["native-web_search"]
+
+      # no forced default LLM
+      expect(basic_agent.valid?).to eq(false)
+      expect(basic_agent.errors[:tools]).to include(
+        I18n.t("discourse_ai.ai_bot.agents.native_tool_requires_forced_llm"),
+      )
+
+      # forced LLM whose provider does not support web search (chat completions)
+      basic_agent.default_llm = openai_chat_model
+      basic_agent.force_default_llm = true
+      expect(basic_agent.valid?).to eq(false)
+      expect(basic_agent.errors[:tools]).to include(
+        I18n.t("discourse_ai.ai_bot.agents.native_tool_unsupported_by_llm"),
+      )
+
+      # forced LLM that supports web search
+      basic_agent.default_llm = gemini_model
+      expect(basic_agent.valid?).to eq(true)
+    end
   end
 
   it "allows creation of user" do
@@ -281,7 +335,7 @@ RSpec.describe AiAgent do
 
     AiAgent.all_agents
 
-    expect(AiAgent.agent_cache[:value].length).to be > (0)
+    expect(AiAgent.agent_cache[:value].length).to be > 0
     RailsMultisite::ConnectionManagement.stubs(:current_db) { "abc" }
     expect(AiAgent.agent_cache[:value]).to eq(nil)
   end

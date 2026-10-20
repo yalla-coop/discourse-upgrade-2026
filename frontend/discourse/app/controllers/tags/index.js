@@ -1,13 +1,10 @@
 import { tracked } from "@glimmer/tracking";
 import Controller from "@ember/controller";
-import { action, computed } from "@ember/object";
-import { alias, notEmpty } from "@ember/object/computed";
-import { schedule } from "@ember/runloop";
+import { action, computed, set } from "@ember/object";
 import { service } from "@ember/service";
-import autosize from "autosize";
+import { isEmpty } from "@ember/utils";
 import { ajax } from "discourse/lib/ajax";
 import { popupAjaxError } from "discourse/lib/ajax-error";
-import { optionalRequire } from "discourse/lib/utilities";
 
 export default class TagsIndexController extends Controller {
   @service router;
@@ -16,15 +13,8 @@ export default class TagsIndexController extends Controller {
   @tracked isCreatingTags = false;
   @tracked bulkCreateResults = null;
 
-  bulkTagTextarea = null;
-
   sortedByCount = true;
   sortedByName = false;
-
-  @alias("siteSettings.tags_sort_alphabetically") sortAlphabetically;
-  @alias("currentUser.staff") canAdminTags;
-  @notEmpty("model.extras.categories") groupedByCategory;
-  @notEmpty("model.extras.tag_groups") groupedByTagGroup;
 
   init() {
     super.init(...arguments);
@@ -38,8 +28,32 @@ export default class TagsIndexController extends Controller {
     });
   }
 
-  get TagsAdminDropdownComponent() {
-    return optionalRequire("discourse/admin/components/tags-admin-dropdown");
+  @computed("siteSettings.tags_sort_alphabetically")
+  get sortAlphabetically() {
+    return this.siteSettings?.tags_sort_alphabetically;
+  }
+
+  set sortAlphabetically(value) {
+    set(this, "siteSettings.tags_sort_alphabetically", value);
+  }
+
+  @computed("currentUser.staff")
+  get canAdminTags() {
+    return this.currentUser?.staff;
+  }
+
+  set canAdminTags(value) {
+    set(this, "currentUser.staff", value);
+  }
+
+  @computed("model.extras.categories.length")
+  get groupedByCategory() {
+    return !isEmpty(this.model?.extras?.categories);
+  }
+
+  @computed("model.extras.tag_groups.length")
+  get groupedByTagGroup() {
+    return !isEmpty(this.model?.extras?.tag_groups);
   }
 
   get canCreateTags() {
@@ -83,11 +97,6 @@ export default class TagsIndexController extends Controller {
   }
 
   @action
-  registerTextarea(element) {
-    this.bulkTagTextarea = element;
-  }
-
-  @action
   async bulkCreateTags(event) {
     event?.preventDefault();
 
@@ -115,11 +124,6 @@ export default class TagsIndexController extends Controller {
       this.bulkTagInput = "";
       this.bulkCreateResults = response;
 
-      schedule("afterRender", () => {
-        if (this.bulkTagTextarea) {
-          autosize.update(this.bulkTagTextarea);
-        }
-      });
       this.router.refresh();
     } catch (error) {
       popupAjaxError(error);

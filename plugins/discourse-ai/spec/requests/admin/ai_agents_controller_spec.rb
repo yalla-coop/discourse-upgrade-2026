@@ -20,9 +20,30 @@ RSpec.describe DiscourseAi::Admin::AiAgentsController do
       expect(response).to be_successful
 
       expect(response.parsed_body["ai_agents"].length).to eq(AiAgent.count)
-      expect(response.parsed_body["meta"]["tools"].length).to eq(
-        DiscourseAi::Agents::Agent.all_available_tools.length,
-      )
+
+      expected_tool_count =
+        DiscourseAi::Agents::Agent.all_available_tools.length +
+          DiscourseAi::Agents::Agent.external_tools.length +
+          DiscourseAi::Completions::NativeTools.all.length
+      expect(response.parsed_body["meta"]["tools"].length).to eq(expected_tool_count)
+    end
+
+    it "includes provider-native tools in the tools list" do
+      get "/admin/plugins/discourse-ai/ai-agents.json"
+      tools = response.parsed_body["meta"]["tools"]
+      native_tool = tools.find { |t| t["id"] == "native-web_search" }
+      native_fetch_tool = tools.find { |t| t["id"] == "native-web_fetch" }
+      expect(native_tool).to be_present
+      expect(native_tool["native"]).to eq(true)
+      expect(native_fetch_tool).to be_present
+      expect(native_fetch_tool["native"]).to eq(true)
+    end
+
+    it "includes external plugin tools in the tools list" do
+      get "/admin/plugins/discourse-ai/ai-agents.json"
+      tools = response.parsed_body["meta"]["tools"]
+      tool_ids = tools.map { |t| t["id"] }
+      expect(tool_ids).to include("RunSql")
     end
 
     it "includes token_count for custom tools" do
@@ -57,6 +78,7 @@ RSpec.describe DiscourseAi::Admin::AiAgentsController do
             id: llm_model.id,
             name: llm_model.display_name,
             vision_enabled: llm_model.vision_enabled,
+            supported_native_tools: [],
           }.stringify_keys,
         ],
       )
@@ -195,17 +217,6 @@ RSpec.describe DiscourseAi::Admin::AiAgentsController do
         )
       end
 
-      after do
-        TranslationOverride.revert!(
-          SiteSetting.default_locale,
-          "discourse_ai.ai_bot.agents.general.name",
-        )
-        TranslationOverride.revert!(
-          SiteSetting.default_locale,
-          "discourse_ai.ai_bot.agents.general.description",
-        )
-      end
-
       it "returns localized agent names and descriptions" do
         get "/admin/plugins/discourse-ai/ai-agents.json"
 
@@ -310,6 +321,9 @@ RSpec.describe DiscourseAi::Admin::AiAgentsController do
           agent = AiAgent.find(agent_json["id"])
 
           expect(agent.tools).to eq([["search", { "base_query" => "test" }, true]])
+          expect(agent.user).to be_present
+          expect(agent_json["user_id"]).to eq(agent.user_id)
+          expect(agent_json["user"]["id"]).to eq(agent.user_id)
           expect(agent.ai_mcp_servers.pluck(:name)).to eq(["Jira"])
           expect(agent.ai_agent_mcp_servers.first.selected_tool_names).to eq(["search_issues"])
           expect(agent.top_p).to eq(0.1)
@@ -417,6 +431,65 @@ RSpec.describe DiscourseAi::Admin::AiAgentsController do
 
         expect(response).not_to have_http_status(:ok)
       end
+    end
+
+    it "creates a missing bot user when forcing the default LLM" do
+      agent = Fabricate(:ai_agent, name: "test_bot2", user_id: nil, default_llm_id: llm_model.id)
+
+      put "/admin/plugins/discourse-ai/ai-agents/#{agent.id}.json",
+          params: {
+            ai_agent: {
+              force_default_llm: true,
+            },
+          }
+
+      expect(response).to have_http_status(:ok)
+      agent.reload
+      expect(agent.user).to be_present
+      expect(response.parsed_body.dig("ai_agent", "user", "id")).to eq(agent.user_id)
+    end
+
+    it "creates a missing bot user when enabling mention/chat entry points" do
+      %i[
+        allow_topic_mentions
+        allow_chat_direct_messages
+        allow_chat_channel_mentions
+      ].each do |field|
+        agent =
+          Fabricate(:ai_agent, name: "#{field}_bot", user_id: nil, default_llm_id: llm_model.id)
+
+        put "/admin/plugins/discourse-ai/ai-agents/#{agent.id}.json",
+            params: {
+              ai_agent: {
+                field => true,
+              },
+            }
+
+        expect(response).to have_http_status(:ok)
+        agent.reload
+        expect(agent.user).to be_present
+        expect(response.parsed_body.dig("ai_agent", "user", "id")).to eq(agent.user_id)
+      end
+    end
+
+    it "does not create a missing bot user for personal messages alone" do
+      agent =
+        Fabricate(
+          :ai_agent,
+          name: "personal_only_bot",
+          user_id: nil,
+          allow_personal_messages: false,
+        )
+
+      put "/admin/plugins/discourse-ai/ai-agents/#{agent.id}.json",
+          params: {
+            ai_agent: {
+              allow_personal_messages: true,
+            },
+          }
+
+      expect(response).to have_http_status(:ok)
+      expect(agent.reload.user).to be_nil
     end
 
     it "allows us to trivially clear top_p and temperature" do
@@ -1133,7 +1206,7 @@ RSpec.describe DiscourseAi::Admin::AiAgentsController do
 
       header_lines, _, payload_lines = lines.chunk { |l| l == "" }.map(&:last)
 
-      preamble = (<<~PREAMBLE).strip
+      preamble = <<~PREAMBLE.strip
         HTTP/1.1 200 OK
         Content-Type: text/plain; charset=utf-8
         Transfer-Encoding: chunked

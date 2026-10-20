@@ -77,10 +77,10 @@ say "Making the restored copy safe"
 say "Starting the server on the restored data (background jobs on)"
 docker exec -d -u discourse:discourse -w /src -e LOAD_PLUGINS=1 -e DISCOURSE_DEV_DB="$DB" \
   -e UNICORN_PORT=3000 -e UNICORN_WORKERS=2 -e UNICORN_SIDEKIQS=1 -e UNICORN_BIND_ALL=true \
-  --env-file "$REPO/deploy/forward-trust.env" "$CONTAINER" bash -lc 'bin/unicorn > log/restore-server.log 2>&1' 2>/dev/null \
+  --env-file "$REPO/deploy/forward-trust.env" "$CONTAINER" bash -lc 'if [ -x bin/pitchfork ]; then s=bin/pitchfork; else s=bin/unicorn; fi; $s > log/restore-server.log 2>&1' 2>/dev/null \
   || docker exec -d -u discourse:discourse -w /src -e LOAD_PLUGINS=1 -e DISCOURSE_DEV_DB="$DB" \
     -e UNICORN_PORT=3000 -e UNICORN_WORKERS=2 -e UNICORN_SIDEKIQS=1 -e UNICORN_BIND_ALL=true \
-    "$CONTAINER" bash -lc 'bin/unicorn > log/restore-server.log 2>&1'
+    "$CONTAINER" bash -lc 'if [ -x bin/pitchfork ]; then s=bin/pitchfork; else s=bin/unicorn; fi; $s > log/restore-server.log 2>&1'
 for _ in $(seq 1 40); do
   sleep 3
   docker exec "$CONTAINER" curl -s -o /dev/null -f http://localhost:3000/session/csrf.json && break

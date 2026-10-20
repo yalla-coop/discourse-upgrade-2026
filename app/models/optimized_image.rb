@@ -37,7 +37,7 @@ class OptimizedImage < ActiveRecord::Base
     return if upload.try(:sha1).blank?
 
     # no extension so try to guess it
-    upload.fix_image_extension if (!upload.extension)
+    upload.fix_image_extension if !upload.extension
 
     if !upload.extension.match?(IM_DECODERS)
       if opts[:raise_on_error]
@@ -152,7 +152,7 @@ class OptimizedImage < ActiveRecord::Base
 
   def destroy
     OptimizedImage.transaction do
-      Discourse.store.remove_optimized_image(self) if self.upload
+      Discourse.store.remove_optimized_image(self) if upload
       super
     end
   end
@@ -206,7 +206,7 @@ class OptimizedImage < ActiveRecord::Base
     # such as generating the loading upload thumbnail, we force the format,
     # and this allows us to use the forced format in that case.
     extension = nil
-    if (opts[:format] && path != ext_path)
+    if opts[:format] && path != ext_path
       extension = File.extname(path)[1..-1]
     else
       extension = File.extname(opts[:filename] || ext_path || path)[1..-1]
@@ -229,7 +229,7 @@ class OptimizedImage < ActiveRecord::Base
     from = prepend_decoder!(from, to, opts)
     to = prepend_decoder!(to, to, opts)
 
-    instructions = ["convert", "#{from}[0]"]
+    instructions = ["#{from}[0]"]
 
     instructions << "-colors" << opts[:colors].to_s if opts[:colors]
 
@@ -254,7 +254,7 @@ class OptimizedImage < ActiveRecord::Base
         -interlace
         none
         -profile
-        #{File.join(Rails.root, "vendor", "data", "RT_sRGB.icm")}
+        #{Rails.root.join("vendor/data/RT_sRGB.icm")}
         #{to}
       ],
     )
@@ -267,7 +267,6 @@ class OptimizedImage < ActiveRecord::Base
     to = prepend_decoder!(to, to, opts)
 
     instructions = %W{
-      convert
       #{from}[0]
       -auto-orient
       -gravity
@@ -283,7 +282,7 @@ class OptimizedImage < ActiveRecord::Base
       -interlace
       none
       -profile
-      #{File.join(Rails.root, "vendor", "data", "RT_sRGB.icm")}
+      #{Rails.root.join("vendor/data/RT_sRGB.icm")}
     }
 
     instructions << "-quality" << opts[:quality].to_s if opts[:quality]
@@ -298,7 +297,6 @@ class OptimizedImage < ActiveRecord::Base
     to = prepend_decoder!(to, to, opts)
 
     %W{
-      convert
       #{from}[0]
       -auto-orient
       -gravity
@@ -310,7 +308,7 @@ class OptimizedImage < ActiveRecord::Base
       -resize
       #{dimensions}
       -profile
-      #{File.join(Rails.root, "vendor", "data", "RT_sRGB.icm")}
+      #{Rails.root.join("vendor/data/RT_sRGB.icm")}
       #{to}
     }
   end
@@ -330,19 +328,19 @@ class OptimizedImage < ActiveRecord::Base
   def self.optimize(operation, from, to, dimensions, opts = {})
     method_name = "#{operation}_instructions"
 
-    instructions = self.public_send(method_name.to_sym, from, to, dimensions, opts)
-    convert_with(instructions, to, opts)
+    instructions = public_send(method_name.to_sym, from, to, dimensions, opts)
+    convert_with(instructions, from, to, opts)
   end
 
   MAX_PNGQUANT_SIZE = 500_000
   MAX_CONVERT_SECONDS = 20
 
-  def self.convert_with(instructions, to, opts = {})
-    Discourse::Utils.execute_command(
-      "nice",
-      "-n",
-      "10",
+  def self.convert_with(instructions, from, to, opts = {})
+    ImageMagick.magick(
       *instructions,
+      read: [from],
+      write: [File.dirname(to)],
+      nice: 10,
       timeout: MAX_CONVERT_SECONDS,
     )
 
@@ -355,7 +353,7 @@ class OptimizedImage < ActiveRecord::Base
     else
       error = +"Failed to optimize image:"
 
-      if e.message =~ /\Aconvert:([^`]+)/
+      if e.message =~ /\A(?:convert|magick):([^`]+)/
         error << $1
       else
         error << " unknown reason"
@@ -378,17 +376,17 @@ end
 # Table name: optimized_images
 #
 #  id         :integer          not null, primary key
-#  sha1       :string(40)       not null
-#  extension  :string(10)       not null
-#  width      :integer          not null
-#  height     :integer          not null
-#  upload_id  :integer          not null
-#  url        :string           not null
-#  filesize   :integer
 #  etag       :string
+#  extension  :string(10)       not null
+#  filesize   :integer
+#  height     :integer          not null
+#  sha1       :string(40)       not null
+#  url        :string           not null
 #  version    :integer
+#  width      :integer          not null
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
+#  upload_id  :integer          not null
 #
 # Indexes
 #

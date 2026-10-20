@@ -43,7 +43,6 @@ fr:
     ai_sentiment_enabled: "Activez le module de sentiment."
     ai_sentiment_inference_service_api_endpoint: "Adresse URL où s'exécute l'API pour le module de sentiment"
     ai_sentiment_inference_service_api_key: "Clé d'API pour l'API de sentiment"
-    ai_sentiment_models: "Modèles à utiliser pour l'inférence. Le sentiment classe les publications dans la plage positif/neutre/négatif. Les émotions se classent dans la plage colère/dégoût/peur/joie/neutre/tristesse/surprise."
     ai_nsfw_detection_enabled: "Activez le module NSFW."
     ai_nsfw_inference_service_api_endpoint: "Adresse URL où l'API s'exécute pour le module NSFW"
     ai_nsfw_inference_service_api_key: "Clé d'API pour l'API NSFW"
@@ -89,7 +88,6 @@ fr:
     ai_discord_app_public_key: "La clé publique de l'application Discord à laquelle vous souhaitez connecter la recherche Discord"
     ai_discord_search_mode: "Sélectionnez le mode de recherche à utiliser pour la recherche Discord"
     ai_discord_allowed_guilds: "Guildes Discord (serveurs) dans lesquelles le robot est autorisé à effectuer des recherches"
-    ai_translation_backfill_limit_to_public_content: "Lorsque cette option est activée, seul le contenu des catégories publiques sera traduit. Lorsque cette option est désactivée, le contenu des MP de groupe et des catégories privées sera également envoyé pour traduction."
     ai_translation_backfill_max_age_days: "L'âge maximal des publications et sujets à traduire. Les publications et sujets antérieurs à cette date ne seront pas traduits. 0 désactive le remplissage, mais ne désactive pas la traduction des nouvelles publications."
   reviewables:
     reasons:
@@ -430,7 +428,7 @@ fr:
         github_file_content: "Récupérer le contenu des fichiers depuis un dépôt GitHub"
         random_picker: "Choisissez un nombre aléatoire ou un élément aléatoire d'une liste"
         categories: "Répertorier toutes les catégories visibles publiquement sur le forum"
-        delete_topic: "Supprimez un sujet"
+        delete_topic: "Supprimer un sujet"
         search: "Rechercher dans tous les sujets publics sur le forum"
         tags: "Répertorier toutes les étiquettes du forum"
         time: "Trouver l'heure dans différents fuseaux horaires"
@@ -496,32 +494,32 @@ fr:
           raw: "Lors de ma recherche pour %{query}, vous m'avez montré les informations suivantes :\n\n%{context}\n\nPoursuivons la conversation."
       close_topic:
         errors:
-          not_found: "Sujet non trouvé."
+          not_found: "Sujet introuvable."
       unlist_topic:
         errors:
-          not_found: "Sujet non trouvé."
+          not_found: "Sujet introuvable."
       delete_topic:
         errors:
-          not_found: "Sujet non trouvé."
+          not_found: "Sujet introuvable."
       edit_tags:
         errors:
-          not_found: "Sujet non trouvé."
+          not_found: "Sujet introuvable."
       edit_category:
         errors:
-          not_found: "Sujet non trouvé."
-          category_not_found: "Catégorie non trouvée ."
+          not_found: "Sujet introuvable."
+          category_not_found: "Catégorie introuvable."
       set_topic_timer:
         errors:
-          not_found: "Sujet non trouvé."
+          not_found: "Sujet introuvable."
       set_slow_mode:
         errors:
-          not_found: "Sujet non trouvé."
+          not_found: "Sujet introuvable."
       move_posts:
         errors:
-          not_found: "Sujet non trouvé."
+          not_found: "Sujet introuvable."
       assign:
         errors:
-          not_found: "Sujet non trouvé."
+          not_found: "Sujet introuvable."
     reviewables:
       ai_tool_action:
         approve:
@@ -583,7 +581,6 @@ fr:
       removed: "supprimé"
     errors:
       quota_exceeded: "Vous avez dépassé le quota pour ce modèle. Veuillez réessayer dans %{relative_time}."
-      quota_required: "Vous devez spécifier un nombre maximal de jetons ou d'utilisations pour ce modèle"
       no_query_specified: Le paramètre de requête est obligatoire, veuillez le spécifier.
       no_user_specified: Le nom d'utilisateur ou le paramètre user_unique_id est obligatoire. Veuillez le préciser.
       user_not_found: L'utilisateur spécifié n'existe pas. Vérifiez le paramètre du nom d'utilisateur.

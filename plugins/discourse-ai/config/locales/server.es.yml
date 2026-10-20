@@ -36,10 +36,6 @@ es:
       llm_triage:
         title: Triaje de publicaciones mediante IA
         description: "Triaje de publicaciones utilizando un gran modelo lingüístico"
-        flagged_post: |
-          <div>Respuesta del modelo:</div>
-          <p>%{llm_response}</p>
-          <b>Activada por la regla <a href="%{base_path}/admin/plugins/automation/%{automation_id}">%{automation_name}</a>.</b>
         notify_author_pm:
           subject: "Tu publicación se ha eliminado temporalmente para revisarse"
           body: |
@@ -74,7 +70,6 @@ es:
     ai_sentiment_enabled: "Activar el módulo de sentimientos."
     ai_sentiment_inference_service_api_endpoint: "URL donde se ejecuta la API para el módulo de sentimientos"
     ai_sentiment_inference_service_api_key: "Clave API para la API de sentimientos"
-    ai_sentiment_models: "Modelos que se utilizarán para la inferencia. El sentimiento clasifica las publicaciones en el espacio positivo/neutral/negativo. La emoción se clasifica en el espacio enfado/asco/miedo/alegría/neutro/tristeza/sorpresa."
     ai_nsfw_detection_enabled: "Activar el módulo NSFW."
     ai_nsfw_inference_service_api_endpoint: "URL donde se ejecuta la API para el módulo NSFW"
     ai_nsfw_inference_service_api_key: "Clave API para la API NSFW"
@@ -135,11 +130,12 @@ es:
     ai_discord_search_agent: "El agente que se usará para la búsqueda de Discord."
     ai_discord_allowed_guilds: "Gremios (servidores) de Discord en los que el bot puede buscar"
     ai_translation_enabled: "Activar la función de traducción de IA"
-    ai_translation_backfill_limit_to_public_content: "Al activar esta función, solo se traducirá el contenido de las categorías públicas. Al desactivarla, también se enviará a traducir el contenido de los mensajes privados grupales y las categorías privadas."
+    ai_translation_personal_messages: "Controla qué mensajes personales se traducen. «none» desactiva la traducción de MP. «group» traduce solo los MP de grupo. «all» traduce todos los MP."
     ai_translation_include_bot_content: "Si está activada, el contenido escrito por bots (ID de usuario inferiores a 0) también se enviará para su traducción."
     ai_translation_max_post_length: "El número máximo de caracteres de una publicación para traducir. Las publicaciones más largas no se traducirán."
     ai_translation_backfill_max_age_days: "La antigüedad máxima de una publicación y tema que se traducirá. Las publicaciones y temas más antiguos no se traducirán. 0 desactiva el relleno, pero no desactivará la traducción de publicaciones nuevas."
     ai_translation_backfill_hourly_rate: "El número de publicaciones y temas para traducir por hora durante las operaciones de relleno. Déjalo en 0 para desactivar el relleno automático de las traducciones para el contenido existente."
+    ai_translation_backfill_parallel_jobs: "El número de trabajos paralelos de postlocalización que se deben ejecutar por ciclo de relleno. Los valores más altos aumentan el rendimiento, pero consumen más recursos."
     ai_usage_rollup_after_days: "Número de días que se conservarán las estadísticas de uso de IA por solicitud antes de incluirlas en los agregados diarios. Deja el valor en 0 para desactivar la agregación."
     ai_audit_logs_purge_after_days: "Elimina los registros de auditoría de la API de IA que tengan más de esta cantidad de días. Por defecto es de unos 6 meses. Déjalo en 0 para mantener indefinidamente."
   reviewables:
@@ -314,10 +310,16 @@ es:
         oauth_token_exchange_failed: "El intercambio de tokens OAuth ha fallado con el estado %{status}."
         oauth_https_required: "OAuth requiere que tu sitio se sirva a través de HTTPS."
         oauth_callback_failed: "Error en la conexión OAuth: %{message}"
+        oauth_refresh_token_required: "El servidor de autorización OAuth no devolvió un token de actualización. Ajusta las opciones avanzadas de OAuth y vuelve a conectar este servidor MCP."
         oauth_client_metadata_public_https_required: "El registro del documento de metadatos del cliente requiere una URL HTTPS pública del sitio. URL actual de los metadatos del cliente: %{url}"
         oauth_registration_endpoint_missing: "El servidor de autorización OAuth no anuncia un terminal de registro."
+        oauth_manual_client_registration_required: "El servidor de autorización OAuth %{issuer} no anuncia el registro dinámico de clientes. Cambia este servidor MCP a Credenciales de cliente manuales y proporciona un ID de cliente OAuth registrado."
+        oauth_client_secret_required: "El servidor de autorización OAuth %{issuer} requiere autenticación del cliente de terminal del token (%{methods}). Configura manualmente las credenciales del cliente con un secreto del cliente."
+        oauth_token_endpoint_auth_method_unsupported: "El servidor de autorización OAuth %{issuer} solo anuncia métodos de autenticación del cliente de terminal del token no compatibles (%{methods}). Este servidor MCP actualmente admite none, client_secret_basic y client_secret_post."
         oauth_client_registration_failed: "El registro dinámico del cliente ha fallado con el estado %{status}."
         oauth_client_registration_failed_no_id: "El registro dinámico del cliente se ha realizado correctamente, pero no se ha devuelto ningún client_id."
+      oauth_authorization_params_invalid: "Los parámetros de autorización OAuth deben ser un objeto JSON."
+      oauth_token_params_invalid: "Los parámetros de token OAuth deben ser un objeto JSON."
     ai_helper:
       errors:
         completion_request_failed: "Algo ha ido mal al intentar proporcionar sugerencias. Inténtalo de nuevo."
@@ -802,6 +804,10 @@ es:
           conflict: "Otra persona ha actualizado este elemento de la cola de revisión. Inténtalo de nuevo."
           action_failed: "Error al realizar la acción"
         success: "Se ha realizado correctamente «%{action}» en el elemento de la cola de revisión %{reviewable_id}."
+      add_reviewable_note:
+        errors:
+          not_allowed: "No tienes permiso para acceder a la cola de revisión"
+          not_found: "No se ha encontrado el elemento en la cola de revisión"
     reviewables:
       ai_tool_action:
         title: "Acción de herramienta de IA"
@@ -885,13 +891,10 @@ es:
       limit_exceeded_admin: "Has alcanzado tu límite de créditos de IA. Vuelve a intentarlo en %{reset_time}."
     errors:
       quota_exceeded: "Has superado la cuota para este modelo. Inténtalo de nuevo en %{relative_time}."
-      quota_required: "Debes especificar los tokens o usos máximos para este modelo"
       no_query_specified: El parámetro de consulta es obligatorio, especifícalo.
       no_user_for_agent: El agente especificado no tiene ningún usuario asociado.
-      agent_not_found: "El agente especificado no existe. Comprueba los parámetros agent_name o agent_id (anteriormente: agent_name o agent_id)."
       no_user_specified: El nombre de usuario o user_unique_id es obligatorio, por favor, especifícalo.
       user_not_found: El usuario especificado no existe. Comprueba el parámetro username.
-      agent_disabled: "El agente especificado está desactivado. Comprueba los parámetros agent_name o agent_id (anteriormente: agent_name o agent_id)."
       no_default_llm: El agente debe tener un default_llm definido.
       user_not_allowed: El usuario no está autorizado a participar en el tema.
       invalid_stream_resume_token: El resume_token no es válido o ha caducado.

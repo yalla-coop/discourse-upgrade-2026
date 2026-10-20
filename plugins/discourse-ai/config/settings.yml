@@ -25,6 +25,26 @@ discourse_ai:
     default: ""
     secret: true
     json_schema: DiscourseAi::Sentiment::SentimentSiteSettingJsonSchema
+  ai_sentiment_sentiment_classification_strategy:
+    default: "classification_model"
+    type: enum
+    choices:
+      - classification_model
+      - agent
+  ai_sentiment_sentiment_agent:
+    default: "-36"
+    type: enum
+    enum: "DiscourseAi::Configuration::AgentEnumerator"
+  ai_sentiment_emotion_classification_strategy:
+    default: "classification_model"
+    type: enum
+    choices:
+      - classification_model
+      - agent
+  ai_sentiment_emotion_agent:
+    default: "-37"
+    type: enum
+    enum: "DiscourseAi::Configuration::AgentEnumerator"
   ai_sentiment_backfill_maximum_posts_per_hour:
     default: 2500
     min: 0
@@ -268,6 +288,16 @@ discourse_ai:
     default: ""
     hidden: true
 
+  ai_admin_dashboard_enabled:
+    default: false
+    client: true
+    validator: "DiscourseAi::Configuration::LlmDependencyValidator"
+    area: "ai-features/admin_dashboard"
+  ai_admin_dashboard_highlights_agent:
+    default: "-38"
+    type: enum
+    enum: "DiscourseAi::Configuration::AgentEnumerator"
+    area: "ai-features/admin_dashboard"
   ai_summarization_enabled:
     default: false
     client: true
@@ -310,6 +340,14 @@ discourse_ai:
     default: false
     client: true
     area: "ai-features/bot"
+  enable_ai_bot_starred_conversations:
+    default: false
+    hidden: true
+    client: true
+    upcoming_change:
+      status: "alpha"
+      impact: "feature,all_members"
+      learn_more_url: "https://meta.discourse.org/t/-/403285"
   ai_bot_enabled_llms:
     default: ""
     client: true
@@ -354,6 +392,15 @@ discourse_ai:
     default: ""
     secret: true
     area: "ai-features/bot"
+  ai_bot_enable_docked_composer:
+    default: false
+    hidden: true
+    client: true
+    area: "ai-features/bot"
+    upcoming_change:
+      status: "alpha"
+      impact: "feature,all_members"
+      learn_more_url: "https://meta.discourse.org/t/-/403327"
   ai_discover_enabled:
     default: false
     client: true
@@ -373,6 +420,7 @@ discourse_ai:
   ai_discord_search_enabled:
     default: false
     client: true
+    validator: "DiscourseAi::Configuration::DiscordSearchAgentValidator"
     area: "ai-features/discord"
   ai_discord_app_id:
     default: ""
@@ -388,11 +436,13 @@ discourse_ai:
     choices:
       - search
       - agent
+    validator: "DiscourseAi::Configuration::DiscordSearchAgentValidator"
     area: "ai-features/discord"
   ai_discord_search_agent:
     default: ""
     type: enum
     enum: "DiscourseAi::Configuration::AgentEnumerator"
+    validator: "DiscourseAi::Configuration::DiscordSearchAgentValidator"
     area: "ai-features/discord"
   ai_discord_allowed_guilds:
     type: list
@@ -454,8 +504,18 @@ discourse_ai:
     max: 100000
     client: false
     area: "ai-features/translation"
-  ai_translation_backfill_limit_to_public_content:
-    default: true
+  ai_translation_excluded_categories:
+    type: category_list
+    default: ""
+    client: false
+    area: "ai-features/translation"
+  ai_translation_personal_messages:
+    type: enum
+    default: "none"
+    choices:
+      - "none"
+      - "group"
+      - "all"
     client: false
     area: "ai-features/translation"
   ai_translation_include_bot_content:
@@ -471,6 +531,13 @@ discourse_ai:
     min: 0
     max: 20000
     client: false
+    area: "ai-features/translation"
+
+  ai_translation_backfill_parallel_jobs:
+    default: 1
+    min: 1
+    max: 10
+    hidden: true
     area: "ai-features/translation"
 
   ai_translation_verbose_logs:

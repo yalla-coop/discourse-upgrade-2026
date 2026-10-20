@@ -215,12 +215,7 @@ module DiscourseAi
           feature_context: feature_context,
         )
       rescue => e
-        if Rails.env.test?
-          p e
-          puts e.backtrace[0..10]
-        else
-          raise e
-        end
+        raise e
       end
 
       def initialize(bot)
@@ -237,7 +232,9 @@ module DiscourseAi
             post,
             max_posts: 5,
             bot_usernames: available_bot_usernames,
-            include_uploads: bot.agent.class.vision_enabled,
+            include_image_uploads: include_image_uploads?,
+            include_document_uploads: include_document_uploads?,
+            allowed_attachment_types: bot.model.allowed_attachment_types,
           )
 
         # conversation context may contain tool calls, and confusing user names
@@ -330,7 +327,9 @@ module DiscourseAi
                 message,
                 channel: channel,
                 context_post_ids: context_post_ids,
-                include_uploads: bot.agent.class.vision_enabled,
+                include_image_uploads: include_image_uploads?,
+                include_document_uploads: include_document_uploads?,
+                allowed_attachment_types: bot.model.allowed_attachment_types,
                 max_messages: max_chat_messages,
                 bot_user_ids: available_bot_user_ids,
                 instruction_message: instruction_message,
@@ -437,10 +436,12 @@ module DiscourseAi
 
         reply = +""
         post_streamer = nil
+        stream_user_ids = nil
+        stream_group_ids = nil
 
         post_type =
           (
-            if (whisper || post.post_type == Post.types[:whisper])
+            if whisper || post.post_type == Post.types[:whisper]
               Post.types[:whisper]
             else
               Post.types[:regular]
@@ -465,7 +466,9 @@ module DiscourseAi
                 post,
                 style: context_style,
                 max_posts: max_context_posts,
-                include_uploads: bot.agent.class.vision_enabled,
+                include_image_uploads: include_image_uploads?,
+                include_document_uploads: include_document_uploads?,
+                allowed_attachment_types: bot.model.allowed_attachment_types,
                 bot_usernames: available_bot_usernames,
               ),
           )
@@ -537,7 +540,17 @@ module DiscourseAi
           reply_post.custom_fields[DiscourseAi::AiBot::POST_AI_AGENT_ID_FIELD] = bot.agent.id
           reply_post.save_custom_fields
 
-          publish_update(reply_post, { raw: "" })
+          stream_user_ids = reply_post.topic.allowed_users.pluck(:id)
+          stream_group_ids = reply_post.topic.allowed_groups.pluck(:id)
+
+          publish_update(
+            reply_post,
+            payload: {
+              raw: "",
+            },
+            user_ids: stream_user_ids,
+            group_ids: stream_group_ids,
+          )
 
           redis_stream_key = "gpt_cancel:#{reply_post.id}"
           Discourse.redis.setex(redis_stream_key, MAX_STREAM_DELAY_SECONDS, 1)
@@ -567,11 +580,17 @@ module DiscourseAi
             next if type == :structured_output && !partial.finished?
 
             if should_start_thinking?(partial:, context:, type:, started_thinking:, placeholder:)
+              reply << "\n\n" if reply.present? && !reply.end_with?("\n")
               reply << "<details class='ai-thinking'><summary>#{I18n.t("discourse_ai.ai_bot.thinking")}</summary>\n\n"
               started_thinking = true
             elsif should_stop_thinking?(partial:, context:, type:, started_thinking:, placeholder:)
               reply << "</details>\n\n"
               started_thinking = false
+            end
+
+            if type == :thinking && partial.present? && placeholder.blank? && started_thinking &&
+                 !reply.end_with?("\n")
+              reply << "\n\n"
             end
 
             reply << partial
@@ -585,12 +604,24 @@ module DiscourseAi
             if post_streamer
               post_streamer.run_later do
                 Discourse.redis.expire(redis_stream_key, MAX_STREAM_DELAY_SECONDS)
-                publish_update(reply_post, { raw: raw })
+                publish_update(
+                  reply_post,
+                  payload: {
+                    raw: raw,
+                  },
+                  user_ids: stream_user_ids,
+                  group_ids: stream_group_ids,
+                )
               end
             end
           end
 
         return if reply.blank? || silent_mode
+
+        if started_thinking
+          reply << "\n\n</details>"
+          started_thinking = false
+        end
 
         if stream_reply
           post_streamer.finish
@@ -598,7 +629,7 @@ module DiscourseAi
 
           # land the final message prior to saving so we don't clash
           reply_post.cooked = PrettyText.cook(reply)
-          publish_final_update(reply_post)
+          publish_final_update(reply_post, user_ids: stream_user_ids, group_ids: stream_group_ids)
 
           reply_post.revise(
             bot.bot_user,
@@ -684,7 +715,9 @@ module DiscourseAi
           reply_post.topic.update!(participant_count: 2)
         end
         post_streamer&.finish(skip_callback: true)
-        publish_final_update(reply_post) if stream_reply
+        if stream_reply
+          publish_final_update(reply_post, user_ids: stream_user_ids, group_ids: stream_group_ids)
+        end
         if reply_post && post.post_number == 1 && post.topic.private_message? && auto_set_title
           title_playground(reply_post, post.user)
         end
@@ -697,6 +730,14 @@ module DiscourseAi
 
       def available_bot_user_ids
         @bot_ids ||= AiAgent.joins(:user).pluck("users.id").concat(available_bot_users.map(&:id))
+      end
+
+      def include_image_uploads?
+        bot.agent.class.vision_enabled
+      end
+
+      def include_document_uploads?
+        bot.model.allowed_attachment_types.present?
       end
 
       private
@@ -724,15 +765,30 @@ module DiscourseAi
           User.joins("INNER JOIN llm_models llm ON llm.user_id = users.id").where(active: true)
       end
 
-      def publish_final_update(reply_post)
+      def publish_final_update(reply_post, user_ids:, group_ids:)
         return if @published_final_update
         if reply_post
-          publish_update(reply_post, { cooked: reply_post.cooked, done: true })
+          publish_update(
+            reply_post,
+            payload: {
+              cooked: reply_post.cooked,
+              done: true,
+            },
+            user_ids: user_ids,
+            group_ids: group_ids,
+          )
           # we subscribe at position -2 so we will always get this message
           # moving all cooked on every page load is wasteful ... this means
           # we have a benign message at the end, 2 is set to ensure last message
           # is delivered
-          publish_update(reply_post, { noop: true })
+          publish_update(
+            reply_post,
+            payload: {
+              noop: true,
+            },
+            user_ids: user_ids,
+            group_ids: group_ids,
+          )
           @published_final_update = true
         end
       end
@@ -766,14 +822,18 @@ module DiscourseAi
         }
       end
 
-      def publish_update(bot_reply_post, payload)
+      def publish_update(bot_reply_post, payload:, user_ids:, group_ids:)
+        return if user_ids.blank? && group_ids.blank?
+
         payload = { post_id: bot_reply_post.id, post_number: bot_reply_post.post_number }.merge(
           payload,
         )
+
         MessageBus.publish(
           "discourse-ai/ai-bot/topic/#{bot_reply_post.topic_id}",
           payload,
-          user_ids: bot_reply_post.topic.allowed_user_ids,
+          user_ids: user_ids.presence,
+          group_ids: group_ids.presence,
           max_backlog_size: 2,
           max_backlog_age: MAX_STREAM_DELAY_SECONDS,
         )

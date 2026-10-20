@@ -10,11 +10,17 @@ fr:
       site_settings:
         categories:
           discourse_solved: "Discourse résolu"
+      dashboard:
+        highlights:
+          kpi:
+            accepted_solutions:
+              label: "Solutions acceptées"
   js:
     notifications:
       alt:
         solved:
           accepted_notification: "accepté"
+          topic_solved_notification: "résolu"
     solutions: "Solutions"
     solved:
       title: "Résolus"
@@ -29,7 +35,7 @@ fr:
       solution_summary:
         one: "solution"
         other: "solutions"
-      accepted_answer_post_number: "message %{post_number}"
+      accepted_answer_post_number: "publication %{post_number}"
       accepted_notification: "<p><span>%{username}</span> %{description}</p>"
       topic_status_filter:
         all: "tous"
@@ -41,13 +47,16 @@ fr:
       move_post_cancel: "Annuler"
       confirm_solved_removal_confirm: "Confirmer"
       confirm_solved_removal_cancel: "Annuler"
+      shared_issue:
+        label_with_count: "%{label} (%{count})"
       no_answer:
         title: Votre question a-t-elle reçu une réponse ?
         description: "Mettez la réponse en surbrillance et aidez les autres utilisateurs en utilisant le bouton de solution sous la réponse adéquate."
+      topic_solved_notification: "<p><span>%{username}</span> %{description}</p>"
       notification:
         title: "votre message a été marqué comme solution"
       category_type_support:
-        title: "Soutenir"
+        title: "Assistance"
     topic_statuses:
       solved:
         help: "Ce sujet a une solution"

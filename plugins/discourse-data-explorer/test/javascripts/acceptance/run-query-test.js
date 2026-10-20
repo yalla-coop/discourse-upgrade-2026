@@ -4,7 +4,7 @@ import sinon from "sinon";
 import { acceptance } from "discourse/tests/helpers/qunit-helpers";
 import { i18n } from "discourse-i18n";
 
-acceptance("Data Explorer Plugin | Run Query", function (needs) {
+acceptance("Run Query", function (needs) {
   needs.user();
   needs.settings({ data_explorer_enabled: true });
 
@@ -296,28 +296,28 @@ acceptance("Data Explorer Plugin | Run Query", function (needs) {
     assert.dom("div.query-edit").exists("the query code was rendered");
 
     assert
-      .dom("form.query-run button span")
+      .dom(".query-run-split__primary span")
       .hasText(i18n("explorer.run"), "the run button was rendered");
 
-    await click("form.query-run button");
+    await click(".query-run-split__primary");
+
+    assert.dom("canvas").exists("the chart was rendered by default");
+
+    await click(".query-results-modes input[value='table']");
 
     assert
       .dom("div.query-results table tbody tr")
       .exists({ count: 2 }, "the table with query results was rendered");
 
     assert
-      .dom("div.result-info button:nth-child(3) span")
-      .hasText(i18n("explorer.show_graph"), "the chart button was rendered");
-
-    await click("div.result-info button:nth-child(3)");
-
-    assert.dom("canvas").exists("the chart was rendered");
+      .dom(".query-results-modes")
+      .exists("the chart/table toggle buttons were rendered");
   });
 
   test("runs query and is able to download the results", async function (assert) {
     await visit("/admin/plugins/discourse-data-explorer/queries/-6");
 
-    await click("form.query-run button");
+    await click(".query-run-split__primary");
 
     const createElement = document.createElement.bind(document);
     const appendChild = document.body.appendChild.bind(document.body);
@@ -360,7 +360,8 @@ acceptance("Data Explorer Plugin | Run Query", function (needs) {
         }
       });
 
-    await click("div.result-info button:nth-child(1)");
+    await click(".query-action-bar__right .query-result-download-buttons");
+    await click(".query-result-export__results-json");
 
     await finishedForm;
 
@@ -393,10 +394,15 @@ acceptance("Data Explorer Plugin | Run Query", function (needs) {
       .hasText("What about 0?", "the query name was rendered");
 
     assert
-      .dom("form.query-run button span")
+      .dom(".query-run-split__primary span")
       .hasText(i18n("explorer.run"), "the run button was rendered");
 
-    await click("form.query-run button");
+    await click(".query-run-split__primary");
+
+    // Default view is chart for chartable data; switch to table to inspect cells.
+    if (document.querySelector(".query-results-modes input[value='table']")) {
+      await click(".query-results-modes input[value='table']");
+    }
 
     assert
       .dom("div.query-results tbody td:nth-child(1)")
@@ -414,9 +420,7 @@ acceptance("Data Explorer Plugin | Run Query", function (needs) {
   test("automatically runs query when run query parameter is present", async function (assert) {
     await visit("/admin/plugins/discourse-data-explorer/queries/2?run");
 
-    assert
-      .dom("div.query-results table tbody tr")
-      .exists({ count: 1 }, "query results should be displayed");
+    assert.dom("div.query-results").exists("query results should be displayed");
   });
 
   test("automatically runs query when run query parameter is present on group report route", async function (assert) {

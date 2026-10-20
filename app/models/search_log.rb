@@ -66,7 +66,7 @@ class SearchLog < ActiveRecord::Base
 
     if !result
       log =
-        self.create!(
+        create!(
           term: term,
           search_type: search_type,
           ip_address: ip_address,
@@ -95,6 +95,7 @@ class SearchLog < ActiveRecord::Base
     result = result.where("search_type = ?", search_types[search_type]) if search_type == :header ||
       search_type == :full_page
     result = result.where.not(search_result_id: nil) if search_type == :click_through_only
+    result = result.where.not(user_id: nil) if search_type == :logged_in_only
 
     result
       .order("date")
@@ -133,7 +134,11 @@ class SearchLog < ActiveRecord::Base
 
     result = result.where("created_at < ?", end_date) if end_date
 
-    result = result.where("search_type = ?", search_types[search_type]) unless search_type == :all
+    if search_type == :logged_in_only
+      result = result.where.not(user_id: nil)
+    elsif search_type != :all
+      result = result.where("search_type = ?", search_types[search_type])
+    end
 
     result.group("lower(term)").order("searches DESC, click_through DESC, term ASC").limit(limit)
   end
@@ -175,14 +180,14 @@ end
 # Table name: search_logs
 #
 #  id                 :integer          not null, primary key
-#  term               :string           not null
-#  user_id            :integer
 #  ip_address         :inet
-#  search_result_id   :integer
-#  search_type        :integer          not null
-#  created_at         :datetime         not null
 #  search_result_type :integer
+#  search_type        :integer          not null
+#  term               :string           not null
 #  user_agent         :string(2000)
+#  created_at         :datetime         not null
+#  search_result_id   :integer
+#  user_id            :integer
 #
 # Indexes
 #

@@ -60,7 +60,7 @@ after_initialize do
   TopicView.default_post_custom_fields << DiscoursePolicy::HAS_POLICY
 
   validate(:post, :validate_policy) do
-    return unless self.raw_changed?
+    return unless raw_changed?
 
     validator = DiscoursePolicy::PostValidator.new(self)
     return unless validator.validate_post
@@ -106,7 +106,7 @@ after_initialize do
         post_policy.post_policy_groups = new_relations
 
         renew_days = policy["data-renew"]
-        if (renew_days.to_i) > 0 || PostPolicy.renew_intervals.keys.include?(renew_days)
+        if renew_days.to_i > 0 || PostPolicy.renew_intervals.keys.include?(renew_days)
           post_policy.renew_days =
             PostPolicy.renew_intervals.keys.include?(renew_days) ? nil : renew_days
           post_policy.renew_interval = post_policy.renew_days.present? ? nil : renew_days
@@ -160,6 +160,8 @@ after_initialize do
             if add_to_group && Guardian.new(post.user).can_edit_group?(add_to_group)
               add_to_group.id
             end
+        else
+          post_policy.add_users_to_group = nil
         end
 
         if has_group

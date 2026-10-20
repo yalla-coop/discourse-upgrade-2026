@@ -52,6 +52,8 @@ cs:
           many: "(%{count} další)"
           other: "(%{count} další)"
         collapse_list: "(zobrazit méně)"
+        nav:
+          enabled: "Zapnuto"
         filters:
           all: "Vše"
           reset: "obnovit výchozí"
@@ -195,7 +197,7 @@ cs:
           ai_summarization: "Shrnout"
           ai_spam: "Spam"
         model_description:
-          anthropic-claude-opus-4-6: "Nejinteligentnější model společnosti Anthropic"
+          anthropic-claude-opus-4-7: "Nejinteligentnější model společnosti Anthropic"
           anthropic-claude-sonnet-4-6: "Optimální poměr rychlosti a nákladů"
         next:
           title: "Další"
@@ -224,7 +226,6 @@ cs:
         title: "Navrhněte změny pomocí AI"
         description: "Vyberte jednu z níže uvedených možností a umělá inteligence vám navrhne novou verzi textu."
         selection_hint: "Tip: Před otevřením pomocníka můžete také vybrat část textu a přepsat pouze tuto část."
-        suggest: "Navrhnout s AI"
         suggest_errors:
           too_many_tags:
             one: "Můžete mít max. %{count} štítek"
@@ -310,8 +311,6 @@ cs:
           title: "Zobrazit interakci s umělou inteligencí"
           copy_request: "Kopírovat požadavek"
           copy_response: "Kopírovat odpověď"
-          request_tokens: "Tokeny požadavku:"
-          response_tokens: "Tokeny odpovědi:"
           request: "Požadavek"
           response: "Odpověď"
           next_log: "Další"
@@ -356,10 +355,13 @@ cs:
           placeholder: "Zeptejte se..."
           new: "Nová otázka"
           messages_sidebar_title: "Konverzace"
+          starred: "Oblíbené"
           today: "Dnes"
           last_7_days: "Posledních 7 dní"
           last_30_days: "Posledních 30 dní"
           upload_files: "Nahrát soubory"
+          scroll_to_bottom: "Přejít na konec"
+          editing_post: "Příspěvek je upravován"
       sentiments:
         dashboard:
           title: "Sentiment"

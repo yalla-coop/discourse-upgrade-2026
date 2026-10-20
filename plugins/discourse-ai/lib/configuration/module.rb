@@ -14,6 +14,7 @@ module DiscourseAi
       EMBEDDINGS = "embeddings"
       AUTOMATION_REPORTS = "automation_reports"
       AUTOMATION_TRIAGE = "automation_triage"
+      ADMIN_DASHBOARD = "admin_dashboard"
 
       NAMES = [
         SUMMARIZATION,
@@ -27,6 +28,7 @@ module DiscourseAi
         EMBEDDINGS,
         AUTOMATION_REPORTS,
         AUTOMATION_TRIAGE,
+        ADMIN_DASHBOARD,
       ].freeze
 
       SUMMARIZATION_ID = 1
@@ -40,8 +42,13 @@ module DiscourseAi
       EMBEDDINGS_ID = 9
       AUTOMATION_REPORTS_ID = 10
       AUTOMATION_TRIAGE_ID = 11
+      ADMIN_DASHBOARD_ID = 12
 
       class << self
+        def external_module_id(module_name)
+          Digest::SHA1.hexdigest(module_name.to_s).to_i(16) % 100_000 + 1000
+        end
+
         def all
           base_modules = [
             new(
@@ -99,6 +106,16 @@ module DiscourseAi
               features: DiscourseAi::Configuration::Feature.embeddings_features,
               extra_check: -> { SiteSetting.ai_embeddings_semantic_search_enabled },
             ),
+            new(
+              ADMIN_DASHBOARD_ID,
+              ADMIN_DASHBOARD,
+              enabled_by_setting: "ai_admin_dashboard_enabled",
+              features: DiscourseAi::Configuration::Feature.admin_dashboard_features,
+              extra_check: -> do
+                DiscourseAi::Configuration::Feature.admin_dashboard_features.any?(&:enabled?)
+              end,
+              visible: false,
+            ),
           ]
 
           if SiteSetting.discourse_automation_enabled
@@ -118,10 +135,35 @@ module DiscourseAi
             )
           end
 
+          # external modules from plugin registry
+          DiscoursePluginRegistry
+            .external_ai_features
+            .group_by { |e| e[:module_name] }
+            .each do |mod_name, entries|
+              module_id = external_module_id(mod_name)
+              features =
+                entries.map do |e|
+                  setting_name = "#{mod_name}_#{e[:feature]}_agent"
+                  DiscourseAi::Configuration::Feature.new(
+                    e[:feature].to_s,
+                    setting_name,
+                    module_id,
+                    mod_name.to_s,
+                    enabled_by_setting: e[:enabled_by_setting],
+                  )
+                end
+              base_modules << new(
+                module_id,
+                mod_name,
+                features:,
+                extra_check: -> { features.any?(&:enabled?) },
+                visible: entries.any? { |e| e.fetch(:visible, true) },
+              )
+            end
+
           base_modules
         end
 
-        # Private
         def has_scripts?(script_names)
           DB
             .query_single(
@@ -137,18 +179,30 @@ module DiscourseAi
         end
       end
 
-      def initialize(id, name, enabled_by_setting: nil, features: [], extra_check: nil)
+      def initialize(
+        id,
+        name,
+        enabled_by_setting: nil,
+        features: [],
+        extra_check: nil,
+        visible: true
+      )
         @id = id
         @name = name
         @enabled_by_setting = enabled_by_setting
         @features = features
         @extra_check = extra_check
+        @visible = visible
       end
 
       attr_reader :id, :name, :enabled_by_setting, :features
 
+      def visible?
+        @visible
+      end
+
       def enabled?
-        return @extra_check.call if enabled_by_setting.blank? && @extra_check.present?
+        return @extra_check.present? ? @extra_check.call : true if enabled_by_setting.blank?
 
         enabled_setting = SiteSetting.get(enabled_by_setting)
 

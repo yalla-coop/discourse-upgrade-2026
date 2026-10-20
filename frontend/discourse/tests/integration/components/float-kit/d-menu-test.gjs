@@ -1,23 +1,24 @@
-import { hash } from "@ember/helper";
+import { array, hash } from "@ember/helper";
 import { getOwner } from "@ember/owner";
 import didInsert from "@ember/render-modifiers/modifiers/did-insert";
 import willDestroy from "@ember/render-modifiers/modifiers/will-destroy";
 import {
   click,
   render,
+  settled,
   triggerEvent,
   triggerKeyEvent,
 } from "@ember/test-helpers";
 import { module, test } from "qunit";
-import DButton from "discourse/components/d-button";
 import DDefaultToast from "discourse/float-kit/components/d-default-toast";
 import DMenu from "discourse/float-kit/components/d-menu";
 import DMenuInstance from "discourse/float-kit/lib/d-menu-instance";
-import element_ from "discourse/helpers/element";
 import { forceMobile } from "discourse/lib/mobile";
 import { setupRenderingTest } from "discourse/tests/helpers/component-test";
+import DButton from "discourse/ui-kit/d-button";
+import dElement from "discourse/ui-kit/helpers/d-element";
 
-module("Integration | Component | FloatKit | d-menu", function (hooks) {
+module("Integration | Component | FloatKit | DMenu", function (hooks) {
   setupRenderingTest(hooks);
 
   async function open() {
@@ -26,6 +27,21 @@ module("Integration | Component | FloatKit | d-menu", function (hooks) {
 
   async function close() {
     await triggerEvent(".fk-d-menu__trigger.-expanded", "click");
+  }
+
+  async function swipeDown(selector) {
+    await triggerEvent(selector, "touchstart", {
+      touches: [{ clientX: 0, clientY: 0 }],
+      changedTouches: [{ clientX: 0, clientY: 0 }],
+    });
+    await triggerEvent(selector, "touchmove", {
+      touches: [{ clientX: 0, clientY: 200 }],
+      changedTouches: [{ clientX: 0, clientY: 200 }],
+    });
+    await triggerEvent(selector, "touchend", {
+      touches: [],
+      changedTouches: [{ clientX: 0, clientY: 200 }],
+    });
   }
 
   test("@label", async function (assert) {
@@ -69,6 +85,49 @@ module("Integration | Component | FloatKit | d-menu", function (hooks) {
     await open();
 
     assert.dom(".fk-d-menu-modal[data-identifier='foo']").hasText("content");
+  });
+
+  test("@modalForMobile - swipe down to close", async function (assert) {
+    forceMobile();
+
+    await render(
+      <template>
+        <DMenu
+          @identifier="foo"
+          @inline={{true}}
+          @modalForMobile={{true}}
+          @content="content"
+        />
+      </template>
+    );
+    await open();
+
+    assert.dom(".fk-d-menu-modal").exists();
+
+    await swipeDown(".fk-d-menu-modal .d-modal__container");
+
+    assert.dom(".fk-d-menu-modal").doesNotExist();
+  });
+
+  test("@modalForMobile - swipe down defers to scrolled content", async function (assert) {
+    forceMobile();
+
+    await render(
+      <template>
+        <DMenu @identifier="foo" @inline={{true}} @modalForMobile={{true}}>
+          <div class="test-scroll-area" style="height: 50px; overflow-y: auto">
+            <div style="height: 500px">tall content</div>
+          </div>
+        </DMenu>
+      </template>
+    );
+    await open();
+
+    document.querySelector(".test-scroll-area").scrollTop = 100;
+
+    await swipeDown(".test-scroll-area");
+
+    assert.dom(".fk-d-menu-modal").exists();
   });
 
   test("@onRegisterApi", async function (assert) {
@@ -559,7 +618,7 @@ module("Integration | Component | FloatKit | d-menu", function (hooks) {
   test("@triggerComponent", async function (assert) {
     await render(
       <template>
-        <DMenu @inline={{true}} @triggerComponent={{element_ "span"}}>1</DMenu>
+        <DMenu @inline={{true}} @triggerComponent={{dElement "span"}}>1</DMenu>
       </template>
     );
 
@@ -585,6 +644,64 @@ module("Integration | Component | FloatKit | d-menu", function (hooks) {
     assert.dom(".fk-d-menu.-content").hasStyle({
       width: "200px",
     });
+  });
+
+  test("delayed-hover opens menu after delay", async function (assert) {
+    await render(
+      <template>
+        <DMenu
+          @inline={{true}}
+          @label="label"
+          @triggers={{array "delayed-hover"}}
+          @content="content"
+        />
+      </template>
+    );
+
+    triggerEvent(".fk-d-menu__trigger", "pointerenter");
+    assert.dom(".fk-d-menu").doesNotExist("menu not open before delay");
+
+    await settled();
+
+    assert.dom(".fk-d-menu").exists("menu opens after delay");
+  });
+
+  test("delayed-hover cancels when pointer leaves before delay", async function (assert) {
+    await render(
+      <template>
+        <DMenu
+          @inline={{true}}
+          @label="label"
+          @triggers={{array "delayed-hover"}}
+          @content="content"
+        />
+      </template>
+    );
+
+    triggerEvent(".fk-d-menu__trigger", "pointerenter");
+    await triggerEvent(".fk-d-menu__trigger", "pointerleave");
+
+    assert.dom(".fk-d-menu").doesNotExist("menu does not open after leave");
+  });
+
+  test("delayed-hover click during pending delay opens menu", async function (assert) {
+    await render(
+      <template>
+        <DMenu
+          @inline={{true}}
+          @label="label"
+          @triggers={{array "delayed-hover" "click"}}
+          @content="content"
+        />
+      </template>
+    );
+
+    triggerEvent(".fk-d-menu__trigger", "pointerenter");
+    await click(".fk-d-menu__trigger");
+
+    assert
+      .dom(".fk-d-menu")
+      .exists("menu opens via click during pending hover");
   });
 
   test("@matchTriggerMinWidth", async function (assert) {

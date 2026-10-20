@@ -171,6 +171,55 @@ RSpec.describe DiscourseAi::AiBot::Playground do
       expect(prompts[0].tool_choice).to eq(nil)
     end
 
+    it "separates consecutive thinking messages" do
+      ai_agent.update!(show_thinking: true)
+      agent_klass = AiAgent.all_agents.find { |agent_class| agent_class.name == ai_agent.name }
+      bot = DiscourseAi::Agents::Bot.as(bot_user, agent: agent_klass.new)
+      playground = described_class.new(bot)
+      responses = [
+        [
+          DiscourseAi::Completions::Thinking.new(message: "Web search: Anthropic AI news 2026"),
+          DiscourseAi::Completions::Thinking.new(message: "Web search: OpenAI AI news 2026"),
+          "Done",
+        ],
+      ]
+
+      reply_post = nil
+      DiscourseAi::Completions::Llm.with_prepared_responses(responses) do
+        new_post = Fabricate(:post, raw: "Search AI news")
+        reply_post = playground.reply_to(new_post)
+      end
+
+      expect(reply_post.raw).to include(
+        "Web search: Anthropic AI news 2026\n\nWeb search: OpenAI AI news 2026",
+      )
+      thinking = PostCustomPrompt.find_by(post_id: reply_post.id).custom_prompt.first[4]
+      expect(thinking["message"]).to eq(
+        "Web search: Anthropic AI news 2026\n\nWeb search: OpenAI AI news 2026",
+      )
+    end
+
+    it "keeps trailing thinking outside the response text" do
+      ai_agent.update!(show_thinking: true)
+      agent_klass = AiAgent.all_agents.find { |agent_class| agent_class.name == ai_agent.name }
+      bot = DiscourseAi::Agents::Bot.as(bot_user, agent: agent_klass.new)
+      playground = described_class.new(bot)
+      responses = [
+        ["Done", DiscourseAi::Completions::Thinking.new(message: "Web search: OpenAI news")],
+      ]
+
+      reply_post = nil
+      DiscourseAi::Completions::Llm.with_prepared_responses(responses) do
+        new_post = Fabricate(:post, raw: "Search AI news")
+        reply_post = playground.reply_to(new_post)
+      end
+
+      expect(reply_post.raw).to include("Done\n\n<details")
+      expect(reply_post.raw).to end_with("</details>")
+      thinking = PostCustomPrompt.find_by(post_id: reply_post.id).custom_prompt.first[4]
+      expect(thinking["message"]).to eq("Web search: OpenAI news")
+    end
+
     it "uses custom tool in conversation" do
       ai_agent.update!(show_thinking: true)
       agent_klass = AiAgent.all_agents.find { |p| p.name == ai_agent.name }
@@ -385,7 +434,7 @@ RSpec.describe DiscourseAi::AiBot::Playground do
 
         content = prompt.messages[1][:content]
         # this is fragile by design, mainly so the example can be ultra clear
-        expected = (<<~TEXT).strip
+        expected = <<~TEXT.strip
           You are replying inside a Discourse chat channel. Here is a summary of the conversation so far:
           {{{
           #{user.username}: (a magic thread)
@@ -691,7 +740,7 @@ RSpec.describe DiscourseAi::AiBot::Playground do
         # 1. we set context to 4
         # 2. however PromptMessagesBuilder will enforce rules of starting with :user and ending with it
         # so one of the model messages is dropped
-        expected = (<<~TEXT).strip
+        expected = <<~TEXT.strip
           user: request 3
           model: response 3
           user: Hello
@@ -1070,6 +1119,53 @@ RSpec.describe DiscourseAi::AiBot::Playground do
       end
     end
 
+    it "only streams the reply to the PM's participants" do
+      messages =
+        DiscourseAi::Completions::Llm.with_prepared_responses(["the secret bot reply"]) do
+          MessageBus.track_publish("discourse-ai/ai-bot/topic/#{pm.id}") do
+            playground.reply_to(third_post)
+          end
+        end
+
+      message = messages.first
+      expect(message.user_ids).to contain_exactly(user.id, bot_user.id)
+      expect(message.group_ids).to be_nil
+    end
+
+    it "streams the reply to a participant authorized through an allowed group" do
+      group = Fabricate(:group)
+      group_pm =
+        Fabricate(
+          :private_message_topic,
+          user: user,
+          topic_allowed_users: [
+            Fabricate.build(:topic_allowed_user, user: user),
+            Fabricate.build(:topic_allowed_user, user: bot_user),
+          ],
+          topic_allowed_groups: [Fabricate.build(:topic_allowed_group, group: group)],
+        )
+      Fabricate(:post, topic: group_pm, user: user, post_number: 1, raw: "group opening message")
+      group_post =
+        Fabricate(
+          :post,
+          topic: group_pm,
+          user: user,
+          post_number: 2,
+          raw: "a private group question",
+        )
+
+      messages =
+        DiscourseAi::Completions::Llm.with_prepared_responses(["a reply to the group"]) do
+          MessageBus.track_publish("discourse-ai/ai-bot/topic/#{group_pm.id}") do
+            playground.reply_to(group_post)
+          end
+        end
+
+      message = messages.first
+      expect(message.user_ids).to contain_exactly(user.id, bot_user.id)
+      expect(message.group_ids).to contain_exactly(group.id)
+    end
+
     it "supports multiple function calls" do
       tool_call1 =
         DiscourseAi::Completions::ToolCall.new(
@@ -1234,7 +1330,7 @@ RSpec.describe DiscourseAi::AiBot::Playground do
     after { DiscourseAi::AiBot::PostStreamer.on_callback = nil }
 
     it "should be able to cancel a completion halfway through" do
-      body = (<<~STRING).strip
+      body = <<~STRING.strip
       event: message_start
       data: {"type": "message_start", "message": {"id": "msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY", "type": "message", "role": "assistant", "content": [], "model": "claude-3-opus-20240229", "stop_reason": null, "stop_sequence": null, "usage": {"input_tokens": 25, "output_tokens": 1}}}
 

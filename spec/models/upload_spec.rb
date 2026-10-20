@@ -333,14 +333,12 @@ RSpec.describe Upload do
     end
 
     it "works when using a cdn" do
-      begin
-        original_asset_host = Rails.configuration.action_controller.asset_host
-        Rails.configuration.action_controller.asset_host = "http://my.cdn.com"
+      original_asset_host = Rails.configuration.action_controller.asset_host
+      Rails.configuration.action_controller.asset_host = "http://my.cdn.com"
 
-        expect(Upload.get_from_url(URI.join("http://my.cdn.com", upload.url).to_s)).to eq(upload)
-      ensure
-        Rails.configuration.action_controller.asset_host = original_asset_host
-      end
+      expect(Upload.get_from_url(URI.join("http://my.cdn.com", upload.url).to_s)).to eq(upload)
+    ensure
+      Rails.configuration.action_controller.asset_host = original_asset_host
     end
 
     it "should return the right upload when using the full URL" do
@@ -393,17 +391,15 @@ RSpec.describe Upload do
       end
 
       it "should return the right upload when using one CDN for both s3 and assets" do
-        begin
-          original_asset_host = Rails.configuration.action_controller.asset_host
-          cdn_url = "http://my.cdn.com"
-          Rails.configuration.action_controller.asset_host = cdn_url
-          SiteSetting.s3_cdn_url = cdn_url
-          upload
+        original_asset_host = Rails.configuration.action_controller.asset_host
+        cdn_url = "http://my.cdn.com"
+        Rails.configuration.action_controller.asset_host = cdn_url
+        SiteSetting.s3_cdn_url = cdn_url
+        upload
 
-          expect(Upload.get_from_url(URI.join(cdn_url, path).to_s)).to eq(upload)
-        ensure
-          Rails.configuration.action_controller.asset_host = original_asset_host
-        end
+        expect(Upload.get_from_url(URI.join(cdn_url, path).to_s)).to eq(upload)
+      ensure
+        Rails.configuration.action_controller.asset_host = original_asset_host
       end
     end
   end
@@ -436,16 +432,14 @@ RSpec.describe Upload do
     end
 
     it "works when using a CDN" do
-      begin
-        original_asset_host = Rails.configuration.action_controller.asset_host
-        Rails.configuration.action_controller.asset_host = "http://my.cdn.com"
+      original_asset_host = Rails.configuration.action_controller.asset_host
+      Rails.configuration.action_controller.asset_host = "http://my.cdn.com"
 
-        expect(
-          Upload.get_from_urls([URI.join("http://my.cdn.com", upload.url).to_s]),
-        ).to contain_exactly(upload)
-      ensure
-        Rails.configuration.action_controller.asset_host = original_asset_host
-      end
+      expect(
+        Upload.get_from_urls([URI.join("http://my.cdn.com", upload.url).to_s]),
+      ).to contain_exactly(upload)
+    ensure
+      Rails.configuration.action_controller.asset_host = original_asset_host
     end
 
     it "works with full URLs" do
@@ -1007,6 +1001,14 @@ RSpec.describe Upload do
       expect(not_an_image.dominant_color).to eq("")
     end
 
+    it "stores an empty string when the file is missing from the store" do
+      File.delete(Discourse.store.path_for(white_image))
+
+      expect(white_image.dominant_color).to eq(nil)
+      expect(white_image.dominant_color(calculate_if_missing: true)).to eq("")
+      expect(white_image.dominant_color).to eq("")
+    end
+
     it "correctly handles invalid image files" do
       expect(invalid_image.dominant_color).to eq(nil)
       expect(invalid_image.dominant_color(calculate_if_missing: true)).to eq("")
@@ -1014,7 +1016,7 @@ RSpec.describe Upload do
     end
 
     it "correctly handles unparsable ImageMagick output" do
-      Discourse::Utils.stubs(:execute_command).returns("someinvalidoutput")
+      ImageMagick.stubs(:magick).returns("someinvalidoutput")
 
       expect(invalid_image.dominant_color).to eq(nil)
 

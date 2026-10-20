@@ -54,10 +54,17 @@ export function checkShape(body, expectations) {
     const results = [];
     resolve(body, path.split("."), "", results);
 
+    // Only unverified when nothing at all could be checked: an empty array in one
+    // place (for example a group with no members) is fine if others had values.
+    const checkedSomewhere = results.some((r) => !r.empty);
+    let reportedEmpty = false;
     for (const result of results) {
       if (result.empty) {
         // An optional path inside an empty array simply has nothing to check.
-        if (!optional) unverified.push(`${path} (array was empty)`);
+        if (!optional && !checkedSomewhere && !reportedEmpty) {
+          unverified.push(`${path} (array was empty)`);
+          reportedEmpty = true;
+        }
       } else if (result.notArray) {
         problems.push(`${path}: expected an array, got ${typeOf(result.value)}`);
       } else if (!result.present) {

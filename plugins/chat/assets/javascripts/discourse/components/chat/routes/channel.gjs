@@ -11,6 +11,8 @@ export default class ChatRoutesChannel extends Component {
   @service siteSettings;
   @service chat;
   @service chatHistory;
+  @service chatTrackingStateManager;
+  @service currentUser;
 
   @tracked isFiltering = false;
 
@@ -18,6 +20,10 @@ export default class ChatRoutesChannel extends Component {
   toggleIsFiltering() {
     this.isFiltering = !this.isFiltering;
     this.chat.activeMessage = null;
+  }
+
+  get canSearchChat() {
+    return this.currentUser && this.siteSettings.chat_search_enabled;
   }
 
   get getChannelsRoute() {
@@ -34,15 +40,45 @@ export default class ChatRoutesChannel extends Component {
     }
   }
 
+  get otherChannelsUrgentCount() {
+    return this.chatTrackingStateManager.allChannelUrgentCount({
+      exclude: this.args.channel,
+    });
+  }
+
+  get otherChannelsMentionCount() {
+    return this.chatTrackingStateManager.allChannelMentionCount({
+      exclude: this.args.channel,
+    });
+  }
+
+  get otherChannelsUnreadCount() {
+    return this.chatTrackingStateManager.publicChannelUnreadCount({
+      exclude: this.args.channel,
+    });
+  }
+
+  get otherChannelsHasUnreadThreads() {
+    return this.chatTrackingStateManager.hasUnreadThreads({
+      exclude: this.args.channel,
+    });
+  }
+
   <template>
     <div class="c-routes --channel">
       <Navbar as |navbar|>
         {{#if this.site.mobileView}}
-          <navbar.BackButton @route={{this.getChannelsRoute}} />
+          <navbar.BackButton
+            @route={{this.getChannelsRoute}}
+            @urgentCount={{this.otherChannelsUrgentCount}}
+            @unreadCount={{this.otherChannelsUnreadCount}}
+            @mentionCount={{this.otherChannelsMentionCount}}
+            @hasUnreadThreads={{this.otherChannelsHasUnreadThreads}}
+          />
         {{/if}}
         <navbar.ChannelTitle @channel={{@channel}} />
         <navbar.Actions as |a|>
-          {{#if this.siteSettings.chat_search_enabled}}
+          {{#if this.canSearchChat}}
             <a.Filter
               @channel={{@channel}}
               @isFiltering={{this.isFiltering}}
