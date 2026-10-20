@@ -98,6 +98,34 @@ RSpec.describe "Yalla safety net: core changes", type: :request do
     end
   end
 
+  # PostItemExcerpt (activity, drafts, bookmarks): the plugin returns the full
+  # cooked HTML instead of a 300-character excerpt. From Discourse 2026.x the
+  # stock module also checks that the viewer can see the post (bookmarks of a
+  # post that has since become private); the plugin must keep that check.
+  describe "post item previews (bookmarks)" do
+    fab!(:author) { Fabricate(:user, trust_level: TrustLevel[2]) }
+    let(:raw) { "Read the [support guide](https://example.com/guide) before the meeting." }
+    let(:post) { Fabricate(:post, user: author, raw: raw) }
+    let!(:bookmark) { Fabricate(:bookmark, user: user, bookmarkable: post) }
+
+    it "shows the full cooked HTML of a post the member can see" do
+      serializer = UserPostBookmarkSerializer.new(bookmark, scope: Guardian.new(user), root: false)
+
+      expect(serializer.excerpt).to eq(post.cooked)
+      expect(serializer.as_json[:excerpt]).to include('href="https://example.com/guide"')
+    end
+
+    it "shows nothing for a bookmarked post the member can no longer see" do
+      private_category = Fabricate(:private_category, group: Fabricate(:group))
+      post.topic.update!(category: private_category)
+      serializer =
+        UserPostBookmarkSerializer.new(bookmark.reload, scope: Guardian.new(user), root: false)
+
+      expect(serializer.excerpt).to be_nil
+      expect(serializer.as_json).not_to have_key(:excerpt)
+    end
+  end
+
   describe "post previews keep full HTML, links and images" do
     let(:raw) { "Read the [support guide](https://example.com/guide) before the meeting." }
     let(:post) { Fabricate(:post, raw: raw) }
