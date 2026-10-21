@@ -47,12 +47,14 @@ Prose was the app repo's `staging` branch, with the CSRF and both tag fixes.
 - **Admin notices on 2026.9:** Lexicon's deep-link page used `.js.es6` and `.hbs` files. Converted on `upgrade-2026` (`83a747c`); 5 / 5 of its tests pass.
 - **Run the robot headless and keep the Mac awake** (`caffeinate`). Sleep stretched flows to 30 minutes and caused 3 timing failures.
 
-## Making the clone the new staging
+## Real staging, upgraded in place (2026-10-21)
 
-1. Deploy staging Prose (#658, #660).
-2. Attach a static IP.
-3. Point the staging DNS at it.
-4. Switch the clone's `app.yml` to the real name with SSL (keep emails off), then rebuild.
-5. Stop the old staging instance and keep it as the way back.
-6. QA and PM test with the existing staging app builds.
-7. Turn email, push and webhooks back on later.
+The clone proved the procedure, so real staging was upgraded in place instead of swapping the clone in.
+
+1. Old `containers/app.yml` kept as `containers/app.yml.old-fork` (the way back, with the PostgreSQL 13 data in `/shared/postgres_data_old`).
+2. New `app.yml`: as the clone, but with the real host name, SSL (`web.ssl` and `web.letsencrypt.ssl`) and staging's SendGrid settings copied on the server.
+3. Launcher moved to `1deba5f`, two rebuilds (PostgreSQL 13 → 18, then Discourse).
+4. Checked from outside at 12:02 (-03): HTTPS 200, Discourse 2026.9.0 (`343b20f`), 36 users and 80 topics, Let's Encrypt certificate valid to 21 Nov 2026.
+5. Email, push and webhooks stay on. All staging users are internal.
+6. QA and PM test with the existing staging app builds. No new app builds are needed.
+7. The clone instance is stopped and kept for now, then deleted with `postgres_data_old` once staging is signed off.
