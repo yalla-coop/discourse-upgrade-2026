@@ -40,8 +40,15 @@ DATA="${DATA:-seed}"
 case "$DATA" in
   seed) KEY_FILE="$LOGS/docker.json"; MAESTRO_ENV="docker" ;;
   staging) KEY_FILE="$LOGS/staging-data.json"; MAESTRO_ENV="docker-staging" ;;
-  *) echo "DATA must be seed or staging"; exit 2 ;;
+  # A real server (for example the upgraded staging clone). The key file holds
+  # its admin key and its address: {"admin": {...}, "discourse_url": "http://..."}.
+  remote) KEY_FILE="${REMOTE_KEY_FILE:-$LOGS/staging-next.json}"; MAESTRO_ENV="docker-staging" ;;
+  *) echo "DATA must be seed, staging or remote"; exit 2 ;;
 esac
+DISCOURSE_URL="http://localhost:3000"
+if [ "$DATA" = remote ]; then
+  DISCOURSE_URL="$(node -e 'console.log(require(process.argv[1]).discourse_url)' "$KEY_FILE")"
+fi
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 export PATH="$PATH:$ANDROID_HOME/platform-tools:$HOME/.maestro/bin"
 ADB="$ANDROID_HOME/platform-tools/adb"
@@ -59,6 +66,9 @@ forward() {
   echo "Discourse ($CONTAINER) is on http://localhost:3000"
 }
 
+# Prose uses the STAGING_* keys whenever the Discourse host contains "staging"
+# (api/src/helpers/apiKeys.ts isStaging), as the staging clone's name does, so
+# both key sets get the same local key.
 start_prose() {
   local key
   local admin_user
@@ -67,17 +77,17 @@ start_prose() {
   pkill -f "$APP_REPO/api.*src/index.ts" >/dev/null 2>&1
   (
     cd "$APP_REPO/api" || exit 1
-    PROSE_DISCOURSE_HOST="http://localhost:3000" \
+    PROSE_DISCOURSE_HOST="$DISCOURSE_URL" \
     PROSE_APP_HOSTNAME="0.0.0.0" \
     PROSE_APP_PORT="$PROSE_PORT" \
     SETTINGS_ADMIN_API_KEY="$key" \
     ADD_USERS_TO_GROUP_API_KEY="$key" \
     GET_USER_BY_ADMIN_API_KEY="$key" \
     SETTINGS_API_USERNAME="$admin_user" \
-    STAGING_SETTINGS_ADMIN_API_KEY="" \
-    STAGING_ADD_USERS_TO_GROUP_API_KEY="" \
-    STAGING_GET_USER_BY_ADMIN_API_KEY="" \
-    STAGING_SETTINGS_API_USERNAME="" \
+    STAGING_SETTINGS_ADMIN_API_KEY="$key" \
+    STAGING_ADD_USERS_TO_GROUP_API_KEY="$key" \
+    STAGING_GET_USER_BY_ADMIN_API_KEY="$key" \
+    STAGING_SETTINGS_API_USERNAME="$admin_user" \
     SENDGRID_API_KEY="" \
     SENTRY_DSN="" \
     DISCOURSE_WEBHOOK_SECRET="" \
@@ -100,7 +110,8 @@ start_prose() {
 
 write_env() {
   local file="$APP_REPO/.maestro/env/$MAESTRO_ENV.env"
-  if [ "$DATA" = staging ]; then
+  # Staging data (local restore or the remote clone) uses staging's own test accounts.
+  if [ "$DATA" = staging ] || [ "$DATA" = remote ]; then
     # Staging's test accounts exist in the restored copy with the same passwords.
     # Only the Prose address changes, to the local Prose.
     { echo "# Restored staging data on the local Docker copy (written by discourse-upgrade/script/layer-c.sh). Git-ignored."
@@ -250,7 +261,11 @@ run_flows() {
 
 run_all() {
   rm -f "$LOGS/layer-c-last.json"
-  say "Exposing $CONTAINER's Discourse"; forward || return 1
+  if [ "$DATA" = remote ]; then
+    say "Using the Discourse at $DISCOURSE_URL"
+  else
+    say "Exposing $CONTAINER's Discourse"; forward || return 1
+  fi
   say "Starting Prose against it"; start_prose || return 1
   write_env
   android_http_on || return 1
@@ -271,7 +286,7 @@ case "${1:-status}" in
   android-http) android_http_on ;;
   android-http-off) android_http_off ;;
   up)
-    say "Exposing $CONTAINER's Discourse"; forward
+    if [ "$DATA" = remote ]; then say "Using the Discourse at $DISCOURSE_URL"; else say "Exposing $CONTAINER's Discourse"; forward; fi
     say "Starting Prose against it"; start_prose
     say "Maestro settings"; write_env
     ;;
