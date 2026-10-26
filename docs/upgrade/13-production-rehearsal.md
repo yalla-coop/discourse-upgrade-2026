@@ -337,3 +337,5 @@ Two ways were weighed:
 - **B. Blue/green**: upgrade a copy on a new server while production is read-only (30 to 45 minutes, app stays up), then move the static IP. Instant way back, but more steps and one more rehearsal (the certificate step at start-up while the IP still points at the old server).
 
 **Mahmoud chose A**: simpler and fully rehearsed.
+
+**Changed on 26 Oct: Option B.** Untapped's plan, already agreed with Alex, is the new-server route ("create a new production environment from a snapshot, do the upgrade for real on it, check the app works, then cut over the IP", call of 12 Aug), with a fresh snapshot and a database export as the rollback point. Production's address is a **Lightsail static IP in our account** (`StaticIp-1`, 51.24.109.181, attached to `forwardtrust-prod-4gb`), so the switch is moving that IP: seconds, no DNS change, nothing needed from Forward Trust (their DNS for `app.forwardtrust.org.uk` has a 6-hour cache time, so a DNS change is avoided on purpose). Way back: move the IP back. The switch-day runbook (`14-production-switch.md`) is rewritten for B.
