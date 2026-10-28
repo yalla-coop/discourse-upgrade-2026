@@ -2,6 +2,8 @@
 
 The plan for upgrading production (`app.forwardtrust.org.uk`) from the old fork (Discourse `3.4.0.beta4-dev`, PostgreSQL 13) to stock Discourse **2026.9.0** with PostgreSQL 18 and the `discourse-forward-trust` plugin.
 
+**Done on 27 Oct 2026**: what happened, the numbers and the lessons are in `15-production-switch-results.md`.
+
 This is Untapped's plan, agreed with Alex: build a new server from a production snapshot, upgrade it there, check it, then switch over. The upgrade steps themselves were rehearsed on a copy of production on 22 Oct 2026 (`13-production-rehearsal.md`).
 
 - **Members can keep reading the whole time.** Posting is paused (read-only) from the snapshot until the switch, about **60 to 90 minutes**. Ask Forward Trust for a **1 to 2 hour window** at a quiet time.
@@ -73,7 +75,7 @@ Rehearsal values: 798 users, 2,664 topics, 3,348 posts, 1,708 uploads, 6,969 fil
 
 ### 4. OLD: snapshot (the rollback point)
 
-So that NEW does **not** start Discourse by itself at boot (with production's email and push on), tell Docker on OLD not to auto-start the container on boot while the snapshot is taken. OLD keeps running as normal; this only matters after a reboot.
+So that NEW does **not** start Discourse by itself at boot (with production's email and push on), tell Docker on OLD not to auto-start the container on boot while the snapshot is taken. OLD keeps running as normal; this only matters after a reboot. **Run it before creating the snapshot**: a snapshot taken first keeps `--restart=always`, and a server built from it starts Discourse straight away (on 27 Oct the first snapshot was taken too early, so a second one was needed; check with `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}' app`, which must print `no`).
 
 ```
 docker update --restart=no app
@@ -109,7 +111,7 @@ exit
 ./launcher stop app
 ```
 
-Expected: `{"disable_emails":"yes","push":false,"active_webhooks":0,"queued":0,"read_only":true}`. (Read-only came over with the snapshot, which is what we want until the switch.) If `rails r` says it cannot connect to Redis, the services have not started yet: see `13-production-rehearsal.md` step 4.
+Expected: `{"disable_emails":"yes","push":false,"active_webhooks":0,"queued":0,"read_only":true}`. (Read-only should come over with the snapshot, which is what we want until the switch. On 27 Oct it did not: the setting lives in Redis and had not been saved to disk when the snapshot was taken. If it says `false`, switch it on: `rails r 'Discourse.enable_readonly_mode(Discourse::USER_READONLY_MODE_KEY); puts Discourse.readonly_mode?'`.) If `rails r` says it cannot connect to Redis, the services have not started yet: see `13-production-rehearsal.md` step 4.
 
 ### 6. NEW: launcher and `app.yml`
 
@@ -188,6 +190,16 @@ rails r 'SiteSetting.disable_emails = "no"; SiteSetting.lexicon_push_notificatio
 exit
 ```
 
+Then **restart the forum processes** (about 30 to 60 seconds of downtime):
+
+```
+docker exec app sv restart unicorn
+sleep 45
+docker exec app sv status unicorn   # run:
+```
+
+Lexicon only sets up push (its job and its `before_create_notification` listener) when the forum starts, and only if `lexicon_push_notifications_enabled` is on at that moment. NEW started with push off (silenced in step 5), so switching the setting back on does nothing until a restart. Found on the production switch, 27 Oct 2026: notifications were created but no push was sent until this restart. Check: `rails r 'puts PushNotification.where("created_at > ?", 10.minutes.ago).count'` goes above 0 after a test reply.
+
 Posting works again. **Window ends** when the checks below pass.
 
 ### 10. NEW: checks on the live address (real phones, store app 1.0.48)
@@ -205,7 +217,7 @@ Then tell members it is done.
 ## If something goes wrong
 
 - **Before step 9:** nothing has changed for members. Delete NEW if needed, and on OLD: `rails r 'Discourse.disable_readonly_mode(Discourse::USER_READONLY_MODE_KEY)'`.
-- **After step 9:** move `StaticIp-1` back to `forwardtrust-prod-4gb`, then on OLD `./launcher start app`, and switch read-only off there. Seconds plus about a minute for Discourse to start. Posts made on NEW after the switch are not on OLD, so decide quickly: QA right after the switch is part of the window.
+- **After step 9:** move `StaticIp-1` back to `forwardtrust-prod-4gb`, then on OLD `./launcher start app`, and switch read-only off there. OLD's push setting was never turned off, so push works there after the start. Seconds plus about a minute for Discourse to start. Posts made on NEW after the switch are not on OLD, so decide quickly: QA right after the switch is part of the window.
 
 ## After the day
 
